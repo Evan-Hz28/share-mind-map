@@ -1,0 +1,803 @@
+{
+  "components": {
+    "parameters": {
+      "RequestIdHeader": {
+        "description": "Optional caller-provided request correlation identifier.",
+        "in": "header",
+        "name": "X-Request-ID",
+        "required": false,
+        "schema": {
+          "maxLength": 64,
+          "minLength": 16,
+          "type": "string"
+        }
+      }
+    },
+    "schemas": {
+      "ApiErrorEnvelope": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "details": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "message": {
+                "type": "string"
+              },
+              "requestId": {
+                "maxLength": 64,
+                "minLength": 16,
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "details",
+              "message",
+              "requestId"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "ChangeAccountStatusDto": {
+        "properties": {
+          "status": {
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "ChangePasswordDto": {
+        "properties": {
+          "currentPassword": {
+            "format": "password",
+            "type": "string",
+            "writeOnly": true
+          },
+          "newPassword": {
+            "format": "password",
+            "maxLength": 128,
+            "minLength": 12,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "type": "object"
+      },
+      "CreatedMemberResponseDto": {
+        "properties": {
+          "member": {
+            "$ref": "#/components/schemas/MemberResponseDto"
+          },
+          "temporaryPassword": {
+            "readOnly": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "member",
+          "temporaryPassword"
+        ],
+        "type": "object"
+      },
+      "CreateMemberDto": {
+        "properties": {
+          "displayName": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "loginName": {
+            "example": "reader.one",
+            "maxLength": 64,
+            "minLength": 3,
+            "type": "string"
+          }
+        },
+        "required": [
+          "displayName",
+          "loginName"
+        ],
+        "type": "object"
+      },
+      "CsrfResponseDto": {
+        "properties": {
+          "csrfToken": {
+            "readOnly": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "csrfToken"
+        ],
+        "type": "object"
+      },
+      "LoginDto": {
+        "properties": {
+          "loginName": {
+            "example": "reader.one",
+            "maxLength": 64,
+            "minLength": 3,
+            "type": "string"
+          },
+          "password": {
+            "format": "password",
+            "maxLength": 128,
+            "minLength": 12,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "loginName",
+          "password"
+        ],
+        "type": "object"
+      },
+      "LoginResponseDto": {
+        "properties": {
+          "csrfToken": {
+            "readOnly": true,
+            "type": "string"
+          },
+          "defaultWorkspace": {
+            "$ref": "#/components/schemas/SafeWorkspaceDto"
+          },
+          "effectivePermissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mustChangePassword": {
+            "type": "boolean"
+          },
+          "organization": {
+            "$ref": "#/components/schemas/SafeOrganizationDto"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "editor",
+              "reader"
+            ],
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/SafeUserDto"
+          }
+        },
+        "required": [
+          "csrfToken",
+          "defaultWorkspace",
+          "effectivePermissions",
+          "mustChangePassword",
+          "organization",
+          "role",
+          "user"
+        ],
+        "type": "object"
+      },
+      "MemberListResponseDto": {
+        "properties": {
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/MemberResponseDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "members"
+        ],
+        "type": "object"
+      },
+      "MemberResponseDto": {
+        "properties": {
+          "accountStatus": {
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "lastLoginAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "loginName": {
+            "type": "string"
+          },
+          "mustChangePassword": {
+            "type": "boolean"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "editor",
+              "reader"
+            ],
+            "type": "string"
+          },
+          "userId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accountStatus",
+          "displayName",
+          "id",
+          "lastLoginAt",
+          "loginName",
+          "mustChangePassword",
+          "role",
+          "userId"
+        ],
+        "type": "object"
+      },
+      "SafeOrganizationDto": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "SafeUserDto": {
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "displayName",
+          "id"
+        ],
+        "type": "object"
+      },
+      "SafeWorkspaceDto": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "SessionResponseDto": {
+        "properties": {
+          "defaultWorkspace": {
+            "$ref": "#/components/schemas/SafeWorkspaceDto"
+          },
+          "effectivePermissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mustChangePassword": {
+            "type": "boolean"
+          },
+          "organization": {
+            "$ref": "#/components/schemas/SafeOrganizationDto"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "editor",
+              "reader"
+            ],
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/SafeUserDto"
+          }
+        },
+        "required": [
+          "defaultWorkspace",
+          "effectivePermissions",
+          "mustChangePassword",
+          "organization",
+          "role",
+          "user"
+        ],
+        "type": "object"
+      },
+      "TemporaryPasswordResponseDto": {
+        "properties": {
+          "temporaryPassword": {
+            "readOnly": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "temporaryPassword"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "csrfToken": {
+        "in": "header",
+        "name": "X-CSRF-Token",
+        "type": "apiKey"
+      },
+      "requestId": {
+        "in": "header",
+        "name": "X-Request-ID",
+        "type": "apiKey"
+      },
+      "sessionCookie": {
+        "in": "cookie",
+        "name": "smm_session",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "contact": {},
+    "description": "",
+    "title": "Share Mind Map API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/admin/members": {
+      "get": {
+        "operationId": "adminListMembers",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberListResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "administration"
+        ]
+      },
+      "post": {
+        "operationId": "adminCreateMember",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMemberDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedMemberResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/members/{id}/account-status": {
+      "patch": {
+        "operationId": "adminChangeAccountStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeAccountStatusDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/members/{id}/password/reset": {
+      "post": {
+        "operationId": "adminResetMemberPassword",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemporaryPasswordResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/members/{id}/sessions/revoke": {
+      "post": {
+        "operationId": "adminRevokeMemberSessions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/auth/csrf": {
+      "get": {
+        "operationId": "authCsrf",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CsrfResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "authLogin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "",
+        "tags": [
+          "authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "authLogout",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/password": {
+      "put": {
+        "operationId": "authChangePassword",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "authentication"
+        ]
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "operationId": "getMe",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "authentication"
+        ]
+      }
+    },
+    "/health/live": {
+      "get": {
+        "operationId": "healthLive",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The API event loop is serving requests."
+          }
+        },
+        "servers": [
+          {
+            "url": "/"
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "healthReady",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All required API dependencies are ready."
+          },
+          "503": {
+            "description": "At least one required dependency is unavailable."
+          }
+        },
+        "servers": [
+          {
+            "url": "/"
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "health"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "tags": []
+}

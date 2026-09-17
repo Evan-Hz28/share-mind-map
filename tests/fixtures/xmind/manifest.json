@@ -1,0 +1,113 @@
+{
+  "generatorVersion": 1,
+  "fixtures": [
+    {
+      "file": "corrupt.xmind",
+      "provenance": "synthetic",
+      "sha256": "c5890f367678a84ca964472751f7a3802b7f966a5abf0b1365dce66dfed0a925",
+      "expected": {
+        "status": "rejected",
+        "errorCode": "FILE_DAMAGED"
+      }
+    },
+    {
+      "file": "current-json.xmind",
+      "provenance": "synthetic",
+      "sha256": "3b54f6c00433b48b05c3f5b99bbc0d3489408371725c9204c342472e06b18006",
+      "expected": {
+        "status": "accepted",
+        "nodeCount": 3
+      }
+    },
+    {
+      "file": "duplicate-path.xmind",
+      "provenance": "synthetic",
+      "sha256": "c05472d3d41f4ea9651bd7468eeba62a958a2803932ff428e17e20965cbdc7c2",
+      "expected": {
+        "status": "rejected",
+        "errorCode": "ARCHIVE_DUPLICATE_PATH"
+      }
+    },
+    {
+      "file": "encrypted.xmind",
+      "provenance": "synthetic",
+      "sha256": "d9b39d8ef73f28f978704ed6f25acf7a520ed3b4f5314f64d6104ba39995fb9c",
+      "expected": {
+        "status": "rejected",
+        "errorCode": "ARCHIVE_ENCRYPTED"
+      }
+    },
+    {
+      "file": "legacy-xml.xmind",
+      "provenance": "synthetic",
+      "sha256": "66d52a737ab73cfd1118e29fa2565173b25cab5b4cf992c916e1248f0b2c8427",
+      "expected": {
+        "status": "accepted",
+        "nodeCount": 2
+      }
+    },
+    {
+      "file": "multi-sheet.xmind",
+      "provenance": "synthetic",
+      "sha256": "bb1e9650407f59bd154a76f04e69dd51cf9b547e9b32198571900ae289452ea9",
+      "expected": {
+        "status": "accepted",
+        "nodeCount": 2
+      }
+    },
+    {
+      "file": "nodes-20000.xmind",
+      "provenance": "synthetic",
+      "sha256": "f0d271182b86983d325799f8de475a36edd3b0cee8cd53db4451c1e3b7b51bed",
+      "expected": {
+        "status": "accepted",
+        "nodeCount": 20000
+      }
+    },
+    {
+      "file": "nodes-5000.xmind",
+      "provenance": "synthetic",
+      "sha256": "d31fd3edf3586806ec31e33fe184151fab3a0d85fac0110993131a0e705f6591",
+      "expected": {
+        "status": "accepted",
+        "nodeCount": 5000
+      }
+    },
+    {
+      "file": "path-traversal.xmind",
+      "provenance": "synthetic",
+      "sha256": "f642e00881e2f684e7e02c37d6ddf4cddf4fdd7c8460524bb4ecb55961a943c1",
+      "expected": {
+        "status": "rejected",
+        "errorCode": "ARCHIVE_PATH_UNSAFE"
+      }
+    },
+    {
+      "file": "unknown-extension.xmind",
+      "provenance": "synthetic",
+      "sha256": "f40332308a9939976dddb2fbff95a75e8111e285fb9fbf9fa64c71a8fdf3c8d5",
+      "expected": {
+        "status": "accepted",
+        "nodeCount": 3
+      }
+    },
+    {
+      "file": "with-png.xmind",
+      "provenance": "synthetic",
+      "sha256": "572f00d35fa63fe2d18f1715ef189d682399f44ee835dbf02567d87e0df5dc70",
+      "expected": {
+        "status": "accepted",
+        "nodeCount": 3
+      }
+    },
+    {
+      "file": "zip-bomb.xmind",
+      "provenance": "synthetic",
+      "sha256": "23082242b116ee88db76dd3c1be10b7b02d1a84cf5a45b4ac7a8a98a1db7db2f",
+      "expected": {
+        "status": "rejected",
+        "errorCode": "ARCHIVE_LIMIT_EXCEEDED"
+      }
+    }
+  ]
+}

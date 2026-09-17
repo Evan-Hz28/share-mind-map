@@ -1,0 +1,50 @@
+{
+  "name": "share-mind-map",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "api:check": "pnpm --filter @share-mind-map/api build && tsx scripts/check-api-client.mts",
+    "api:generate": "pnpm --filter @share-mind-map/api build && tsx scripts/generate-api-client.mts",
+    "build": "pnpm -r --if-present build",
+    "canvas:adr": "tsx scripts/render-canvas-adr.mts",
+    "canvas:benchmark": "tsx scripts/canvas-benchmark.mts",
+    "canvas:check": "tsx scripts/check-canvas-evidence.mts",
+    "canvas:licenses": "tsx scripts/canvas-license-check.mts",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "check:workspace": "node scripts/check-workspace.mjs",
+    "compose:health": "tsx scripts/compose-health.mts",
+    "format": "prettier --write --ignore-unknown .",
+    "format:check": "prettier --check --ignore-unknown .",
+    "generate:xmind-fixtures": "tsx scripts/generate-xmind-fixtures.ts",
+    "check:xmind-fixtures": "tsx scripts/generate-xmind-fixtures.ts --check",
+    "lint": "eslint .",
+    "test": "node --test tests/workspace/*.test.mjs && vitest run tests/compose tests/verification && pnpm -r --workspace-concurrency=1 --if-present test",
+    "test:compose-structure": "vitest run tests/compose/compose-structure.test.ts",
+    "test:integration": "pnpm -r --if-present test:integration",
+    "test:unit": "node --test tests/workspace/*.test.mjs && vitest run tests/compose tests/verification && pnpm -r --workspace-concurrency=1 --if-present test:unit",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "verify:phase-0-1": "tsx scripts/verify-phase-0-1.mts",
+    "verify:xmind-worker": "docker compose --env-file .env.example exec -T worker node dist/verify-fixtures.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@hey-api/openapi-ts": "0.99.0",
+    "@playwright/test": "1.63.0",
+    "@types/node": "^24.0.0",
+    "@types/yazl": "^3.3.1",
+    "eslint": "^10.0.0",
+    "eslint-plugin-vue": "^10.0.0",
+    "globals": "^16.0.0",
+    "prettier": "^3.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^4.0.0",
+    "yazl": "^3.3.1"
+  }
+}

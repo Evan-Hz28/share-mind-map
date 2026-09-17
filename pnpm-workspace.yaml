@@ -1,0 +1,17 @@
+packages:
+  - apps/web
+  - apps/api
+  - apps/worker
+  - packages/database
+  - packages/document-model
+  - packages/xmind
+  - packages/api-client
+
+allowBuilds:
+  argon2: true
+  cpu-features: false
+  esbuild: true
+  msgpackr-extract: false
+  protobufjs: false
+  "@scarf/scarf": false
+  ssh2: false

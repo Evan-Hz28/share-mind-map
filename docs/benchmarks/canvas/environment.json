@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-16T15:16:47.679Z",
+  "os": {
+    "platform": "linux",
+    "release": "6.18.33.2-microsoft-standard-WSL2",
+    "architecture": "x64"
+  },
+  "cpu": {
+    "model": "AMD Ryzen 9 7940H w/ Radeon 780M Graphics",
+    "logicalCores": 16
+  },
+  "memory": {
+    "totalBytes": 7912194048,
+    "freeBytesAtCapture": 2241261568
+  },
+  "runtime": {
+    "node": "v24.16.0",
+    "pnpm": "11.5.0",
+    "playwright": "1.63.0",
+    "chromium": "153.0.8010.12"
+  },
+  "packageVersions": {
+    "jsmind": "0.9.1",
+    "mind-elixir": "6.0.0-next.4",
+    "simple-mind-map": "0.14.0-fix.3"
+  },
+  "launchArguments": [
+    "--enable-precise-memory-info",
+    "--js-flags=--expose-gc"
+  ],
+  "syntheticSamples": true
+}

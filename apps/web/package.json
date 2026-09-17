@@ -1,0 +1,37 @@
+{
+  "name": "@share-mind-map/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vue-tsc -p tsconfig.json --noEmit && vite build",
+    "dev": "vite --host 127.0.0.1",
+    "dev:poc": "vite --host 127.0.0.1",
+    "lint": "eslint src test vite.config.ts vitest.config.ts",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "typecheck": "vue-tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "2.3.2",
+    "@share-mind-map/api-client": "workspace:*",
+    "@share-mind-map/document-model": "workspace:*",
+    "element-plus": "2.14.5",
+    "jsmind": "0.9.1",
+    "mind-elixir": "6.0.0-next.4",
+    "pinia": "4.0.3",
+    "simple-mind-map": "0.14.0-fix.3",
+    "vue": "3.5.21",
+    "vue-router": "4.6.4"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/user-event": "14.6.7",
+    "@testing-library/vue": "8.1.0",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "jsdom": "^30.0.1",
+    "vite": "^8.3.0",
+    "vitest": "^4.1.11",
+    "vue-tsc": "^3.3.11"
+  }
+}

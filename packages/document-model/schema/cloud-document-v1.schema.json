@@ -1,0 +1,336 @@
+{
+  "$defs": {
+    "__schema0": {
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+      "type": "string"
+    },
+    "__schema1": {
+      "additionalProperties": false,
+      "properties": {
+        "extensions": {
+          "$ref": "#/$defs/__schema5"
+        },
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "nodes": {
+          "additionalProperties": {
+            "additionalProperties": false,
+            "properties": {
+              "childIds": {
+                "items": {
+                  "$ref": "#/$defs/__schema0"
+                },
+                "type": "array"
+              },
+              "extensions": {
+                "$ref": "#/$defs/__schema5"
+              },
+              "icons": {
+                "items": {
+                  "$ref": "#/$defs/__schema3"
+                },
+                "maxItems": 1000,
+                "type": "array"
+              },
+              "id": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "imageAssetId": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "labels": {
+                "items": {
+                  "$ref": "#/$defs/__schema2"
+                },
+                "maxItems": 1000,
+                "type": "array"
+              },
+              "notes": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "format": {
+                        "const": "plain",
+                        "type": "string"
+                      },
+                      "text": {
+                        "maxLength": 1000000,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "format",
+                      "text"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "parentId": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "priority": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "P0",
+                      "P1",
+                      "P2"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "style": {
+                "additionalProperties": false,
+                "properties": {
+                  "backgroundColor": {
+                    "$ref": "#/$defs/__schema4"
+                  },
+                  "fontFamily": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "fontSize": {
+                    "maximum": 144,
+                    "minimum": 6,
+                    "type": "number"
+                  },
+                  "fontWeight": {
+                    "maximum": 900,
+                    "minimum": 100,
+                    "type": "integer"
+                  },
+                  "textColor": {
+                    "$ref": "#/$defs/__schema4"
+                  }
+                },
+                "type": "object"
+              },
+              "title": {
+                "maxLength": 20000,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "parentId",
+              "childIds",
+              "title",
+              "priority",
+              "notes",
+              "labels",
+              "icons",
+              "style",
+              "imageAssetId",
+              "extensions"
+            ],
+            "type": "object"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "type": "object"
+        },
+        "relationships": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "extensions": {
+                "$ref": "#/$defs/__schema5"
+              },
+              "id": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "sourceNodeId": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "style": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "color": {
+                        "$ref": "#/$defs/__schema4"
+                      },
+                      "pattern": {
+                        "enum": [
+                          "solid",
+                          "dashed",
+                          "dotted"
+                        ],
+                        "type": "string"
+                      },
+                      "width": {
+                        "exclusiveMinimum": 0,
+                        "maximum": 100,
+                        "type": "number"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "targetNodeId": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "title": {
+                "anyOf": [
+                  {
+                    "maxLength": 20000,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "sourceNodeId",
+              "targetNodeId",
+              "title",
+              "style",
+              "extensions"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "rootNodeId": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "title": {
+          "maxLength": 20000,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "rootNodeId",
+        "nodes",
+        "relationships",
+        "extensions"
+      ],
+      "type": "object"
+    },
+    "__schema2": {
+      "maxLength": 255,
+      "type": "string"
+    },
+    "__schema3": {
+      "maxLength": 255,
+      "type": "string"
+    },
+    "__schema4": {
+      "pattern": "^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$",
+      "type": "string"
+    },
+    "__schema5": {
+      "additionalProperties": {
+        "$ref": "#/$defs/__schema6"
+      },
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$",
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "__schema6": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/__schema6"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema6"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "documentId": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "extensions": {
+      "$ref": "#/$defs/__schema5"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "sheets": {
+      "items": {
+        "$ref": "#/$defs/__schema1"
+      },
+      "maxItems": 100,
+      "minItems": 1,
+      "type": "array"
+    },
+    "version": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "documentId",
+    "version",
+    "sheets",
+    "extensions"
+  ],
+  "title": "CloudDocumentV1",
+  "type": "object"
+}

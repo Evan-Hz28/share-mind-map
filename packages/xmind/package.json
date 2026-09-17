@@ -1,0 +1,28 @@
+{
+  "name": "@share-mind-map/xmind",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@share-mind-map/document-model": "workspace:*",
+    "fast-xml-parser": "^5.11.1",
+    "uuid": "^14.0.2",
+    "yauzl": "^3.4.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/yauzl": "^3.4.0"
+  }
+}

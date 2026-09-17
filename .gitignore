@@ -12,3 +12,9 @@ pnpm-debug.log*
 .DS_Store
 .idea/
 
+.superpowers/
+.worktrees/
+playwright-report/
+test-results/
+.vitest-reports/
+.tmp/

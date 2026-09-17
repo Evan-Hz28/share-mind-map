@@ -1,0 +1,1337 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-16T15:16:47.679Z",
+  "browser": {
+    "name": "chromium",
+    "version": "153.0.8010.12"
+  },
+  "protocol": {
+    "warmupRuns": 1,
+    "recordedRuns": 3,
+    "nodeCounts": [
+      100,
+      5000,
+      20000
+    ]
+  },
+  "candidates": [
+    {
+      "candidate": "simple-mind-map",
+      "packageVersion": "0.14.0-fix.3",
+      "licenseCompatible": false,
+      "license": {
+        "packageName": "simple-mind-map",
+        "version": "0.14.0-fix.3",
+        "spdx": "MIT",
+        "packageDirectory": "node_modules/.pnpm/simple-mind-map@0.14.0-fix.3/node_modules/simple-mind-map",
+        "licenseFiles": [],
+        "compatible": false,
+        "conclusion": "missing-bundled-license"
+      },
+      "externalCloudRequests": [],
+      "capabilities": {
+        "readOnly": true,
+        "stableIds": true,
+        "createDelete": true,
+        "reparenting": true,
+        "reordering": true,
+        "collapse": true,
+        "keyboardHooks": true,
+        "zoomPan": true,
+        "undoHook": true,
+        "image": true,
+        "label": true,
+        "icon": true,
+        "basicStyle": true,
+        "snapshotReplacement": true,
+        "stateRestoration": true,
+        "deterministicExport": true,
+        "cleanup": true,
+        "noCloudDependency": true
+      },
+      "samples": [
+        {
+          "nodeCount": 100,
+          "warmup": {
+            "status": "succeeded",
+            "measurement": {
+              "mountMs": 202.5,
+              "firstUsableMs": 283.2000000011176,
+              "replacementMs": 81.70000000111759,
+              "interactionMs": 169.30000000074506,
+              "heap": {
+                "beforeMount": 17141400,
+                "afterMount": 18733173,
+                "afterReplacement": 19248975,
+                "afterDestroy": 19883471
+              },
+              "exportChecksum": "d885d1eb6761941fe358292e805670455d3828c688979029f94c439b75588b4c",
+              "functional": {
+                "readOnly": true,
+                "focus": true,
+                "zoomPan": true,
+                "collapse": true,
+                "snapshotReplacement": true,
+                "stateRestoration": true,
+                "deterministicExport": true,
+                "cleanup": true
+              }
+            },
+            "consoleErrors": [],
+            "failedRequests": [],
+            "externalCloudRequests": []
+          },
+          "runs": [
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 162.5,
+                "firstUsableMs": 206.19999999925494,
+                "replacementMs": 88,
+                "interactionMs": 156.40000000037253,
+                "heap": {
+                  "beforeMount": 16110488,
+                  "afterMount": 18839193,
+                  "afterReplacement": 19383135,
+                  "afterDestroy": 20112563
+                },
+                "exportChecksum": "d885d1eb6761941fe358292e805670455d3828c688979029f94c439b75588b4c",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 136.59999999962747,
+                "firstUsableMs": 177.5,
+                "replacementMs": 71.40000000037253,
+                "interactionMs": 136.2999999988824,
+                "heap": {
+                  "beforeMount": 16061076,
+                  "afterMount": 18791489,
+                  "afterReplacement": 19325435,
+                  "afterDestroy": 19874195
+                },
+                "exportChecksum": "d885d1eb6761941fe358292e805670455d3828c688979029f94c439b75588b4c",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 140,
+                "firstUsableMs": 184,
+                "replacementMs": 78.19999999925494,
+                "interactionMs": 135.59999999962747,
+                "heap": {
+                  "beforeMount": 16097660,
+                  "afterMount": 18790081,
+                  "afterReplacement": 19325423,
+                  "afterDestroy": 19963491
+                },
+                "exportChecksum": "d885d1eb6761941fe358292e805670455d3828c688979029f94c439b75588b4c",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            }
+          ],
+          "successfulRuns": 3,
+          "failedRuns": 0,
+          "medians": {
+            "mountMs": 140,
+            "firstUsableMs": 184,
+            "replacementMs": 78.2,
+            "interactionMs": 136.3,
+            "heapAfterMount": 18791489,
+            "heapAfterDestroy": 19963491
+          },
+          "medianFirstUsableMs": 184,
+          "medianHeapAfterMount": 18791489
+        },
+        {
+          "nodeCount": 5000,
+          "warmup": {
+            "status": "succeeded",
+            "measurement": {
+              "mountMs": 175.40000000037253,
+              "firstUsableMs": 299.2999999988824,
+              "replacementMs": 107,
+              "interactionMs": 143.7000000011176,
+              "heap": {
+                "beforeMount": 21051754,
+                "afterMount": 27147284,
+                "afterReplacement": 30575398,
+                "afterDestroy": 50025793
+              },
+              "exportChecksum": "c212b46140d0210698c4b6188d4754cb5090a6ecd148d16908532870079f272b",
+              "functional": {
+                "readOnly": true,
+                "focus": true,
+                "zoomPan": true,
+                "collapse": true,
+                "snapshotReplacement": true,
+                "stateRestoration": true,
+                "deterministicExport": true,
+                "cleanup": true
+              }
+            },
+            "consoleErrors": [],
+            "failedRequests": [],
+            "externalCloudRequests": []
+          },
+          "runs": [
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 212.2999999988824,
+                "firstUsableMs": 330.40000000037253,
+                "replacementMs": 99.19999999925494,
+                "interactionMs": 131.80000000074506,
+                "heap": {
+                  "beforeMount": 19749702,
+                  "afterMount": 26394060,
+                  "afterReplacement": 29687278,
+                  "afterDestroy": 46704037
+                },
+                "exportChecksum": "c212b46140d0210698c4b6188d4754cb5090a6ecd148d16908532870079f272b",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 181.59999999962747,
+                "firstUsableMs": 300.7999999988824,
+                "replacementMs": 125.5,
+                "interactionMs": 149,
+                "heap": {
+                  "beforeMount": 19771438,
+                  "afterMount": 26296896,
+                  "afterReplacement": 29616610,
+                  "afterDestroy": 46452145
+                },
+                "exportChecksum": "c212b46140d0210698c4b6188d4754cb5090a6ecd148d16908532870079f272b",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 198.80000000074506,
+                "firstUsableMs": 317.2999999988824,
+                "replacementMs": 96.5,
+                "interactionMs": 131.19999999925494,
+                "heap": {
+                  "beforeMount": 19741406,
+                  "afterMount": 26202064,
+                  "afterReplacement": 29569646,
+                  "afterDestroy": 46526981
+                },
+                "exportChecksum": "c212b46140d0210698c4b6188d4754cb5090a6ecd148d16908532870079f272b",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            }
+          ],
+          "successfulRuns": 3,
+          "failedRuns": 0,
+          "medians": {
+            "mountMs": 198.8,
+            "firstUsableMs": 317.3,
+            "replacementMs": 99.2,
+            "interactionMs": 131.8,
+            "heapAfterMount": 26296896,
+            "heapAfterDestroy": 46526981
+          },
+          "medianFirstUsableMs": 317.3,
+          "medianHeapAfterMount": 26296896
+        },
+        {
+          "nodeCount": 20000,
+          "warmup": {
+            "status": "succeeded",
+            "measurement": {
+              "mountMs": 328.80000000074506,
+              "firstUsableMs": 630,
+              "replacementMs": 308.5,
+              "interactionMs": 188.19999999925494,
+              "heap": {
+                "beforeMount": 36237452,
+                "afterMount": 66114172,
+                "afterReplacement": 71426706,
+                "afterDestroy": 115219274
+              },
+              "exportChecksum": "0079f6e8e54ea86982b083f2237cf7e0de72933798edca20780b7179ce34d439",
+              "functional": {
+                "readOnly": true,
+                "focus": true,
+                "zoomPan": true,
+                "collapse": true,
+                "snapshotReplacement": true,
+                "stateRestoration": true,
+                "deterministicExport": true,
+                "cleanup": true
+              }
+            },
+            "consoleErrors": [],
+            "failedRequests": [],
+            "externalCloudRequests": []
+          },
+          "runs": [
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 377.8999999985099,
+                "firstUsableMs": 706.5,
+                "replacementMs": 290.59999999962747,
+                "interactionMs": 202,
+                "heap": {
+                  "beforeMount": 35785240,
+                  "afterMount": 66680088,
+                  "afterReplacement": 72089522,
+                  "afterDestroy": 115219214
+                },
+                "exportChecksum": "0079f6e8e54ea86982b083f2237cf7e0de72933798edca20780b7179ce34d439",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 356.19999999925494,
+                "firstUsableMs": 649.6999999992549,
+                "replacementMs": 259.69999999925494,
+                "interactionMs": 194.5,
+                "heap": {
+                  "beforeMount": 36040980,
+                  "afterMount": 66119144,
+                  "afterReplacement": 71382298,
+                  "afterDestroy": 115219422
+                },
+                "exportChecksum": "0079f6e8e54ea86982b083f2237cf7e0de72933798edca20780b7179ce34d439",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 324.5,
+                "firstUsableMs": 598,
+                "replacementMs": 270.19999999925494,
+                "interactionMs": 170.5,
+                "heap": {
+                  "beforeMount": 36236440,
+                  "afterMount": 66101444,
+                  "afterReplacement": 71428910,
+                  "afterDestroy": 115274175
+                },
+                "exportChecksum": "0079f6e8e54ea86982b083f2237cf7e0de72933798edca20780b7179ce34d439",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            }
+          ],
+          "successfulRuns": 3,
+          "failedRuns": 0,
+          "medians": {
+            "mountMs": 356.2,
+            "firstUsableMs": 649.7,
+            "replacementMs": 270.2,
+            "interactionMs": 194.5,
+            "heapAfterMount": 66119144,
+            "heapAfterDestroy": 115219422
+          },
+          "medianFirstUsableMs": 649.7,
+          "medianHeapAfterMount": 66119144
+        }
+      ]
+    },
+    {
+      "candidate": "mind-elixir",
+      "packageVersion": "6.0.0-next.4",
+      "licenseCompatible": true,
+      "license": {
+        "packageName": "mind-elixir",
+        "version": "6.0.0-next.4",
+        "spdx": "MIT",
+        "packageDirectory": "node_modules/.pnpm/mind-elixir@6.0.0-next.4/node_modules/mind-elixir",
+        "licenseFiles": [
+          {
+            "path": "LICENSE",
+            "sha256": "945ce1477efcf5e45be0b8901176a5b0361215df462961f6b6d0f7370f8a5a4d"
+          }
+        ],
+        "compatible": true,
+        "conclusion": "compatible"
+      },
+      "externalCloudRequests": [],
+      "capabilities": {
+        "readOnly": true,
+        "stableIds": true,
+        "createDelete": true,
+        "reparenting": true,
+        "reordering": true,
+        "collapse": true,
+        "keyboardHooks": true,
+        "zoomPan": true,
+        "undoHook": true,
+        "image": true,
+        "label": true,
+        "icon": true,
+        "basicStyle": true,
+        "snapshotReplacement": true,
+        "stateRestoration": true,
+        "deterministicExport": true,
+        "cleanup": true,
+        "noCloudDependency": true
+      },
+      "samples": [
+        {
+          "nodeCount": 100,
+          "warmup": {
+            "status": "succeeded",
+            "measurement": {
+              "mountMs": 46.899999998509884,
+              "firstUsableMs": 91.30000000074506,
+              "replacementMs": 5.199999999254942,
+              "interactionMs": 37.899999998509884,
+              "heap": {
+                "beforeMount": 17155780,
+                "afterMount": 17303483,
+                "afterReplacement": 17433251,
+                "afterDestroy": 17919928
+              },
+              "exportChecksum": "d885d1eb6761941fe358292e805670455d3828c688979029f94c439b75588b4c",
+              "functional": {
+                "readOnly": true,
+                "focus": true,
+                "zoomPan": true,
+                "collapse": true,
+                "snapshotReplacement": true,
+                "stateRestoration": true,
+                "deterministicExport": true,
+                "cleanup": true
+              }
+            },
+            "consoleErrors": [],
+            "failedRequests": [],
+            "externalCloudRequests": []
+          },
+          "runs": [
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 35.40000000037253,
+                "firstUsableMs": 78.30000000074506,
+                "replacementMs": 7.400000000372529,
+                "interactionMs": 39.59999999962747,
+                "heap": {
+                  "beforeMount": 16093600,
+                  "afterMount": 17348663,
+                  "afterReplacement": 17487083,
+                  "afterDestroy": 17268324
+                },
+                "exportChecksum": "d885d1eb6761941fe358292e805670455d3828c688979029f94c439b75588b4c",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 31.09999999962747,
+                "firstUsableMs": 71.29999999888241,
+                "replacementMs": 6.200000001117587,
+                "interactionMs": 37.29999999888241,
+                "heap": {
+                  "beforeMount": 16040992,
+                  "afterMount": 17296103,
+                  "afterReplacement": 17425883,
+                  "afterDestroy": 17920168
+                },
+                "exportChecksum": "d885d1eb6761941fe358292e805670455d3828c688979029f94c439b75588b4c",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 49.59999999962747,
+                "firstUsableMs": 102.70000000111759,
+                "replacementMs": 6,
+                "interactionMs": 40.59999999962747,
+                "heap": {
+                  "beforeMount": 16087860,
+                  "afterMount": 17342891,
+                  "afterReplacement": 17472703,
+                  "afterDestroy": 17271856
+                },
+                "exportChecksum": "d885d1eb6761941fe358292e805670455d3828c688979029f94c439b75588b4c",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            }
+          ],
+          "successfulRuns": 3,
+          "failedRuns": 0,
+          "medians": {
+            "mountMs": 35.4,
+            "firstUsableMs": 78.3,
+            "replacementMs": 6.2,
+            "interactionMs": 39.6,
+            "heapAfterMount": 17342891,
+            "heapAfterDestroy": 17271856
+          },
+          "medianFirstUsableMs": 78.3,
+          "medianHeapAfterMount": 17342891
+        },
+        {
+          "nodeCount": 5000,
+          "warmup": {
+            "status": "succeeded",
+            "measurement": {
+              "mountMs": 122.80000000074506,
+              "firstUsableMs": 278.40000000037253,
+              "replacementMs": 47,
+              "interactionMs": 25.59999999962747,
+              "heap": {
+                "beforeMount": 19791902,
+                "afterMount": 26626828,
+                "afterReplacement": 30389488,
+                "afterDestroy": 51635069
+              },
+              "exportChecksum": "c212b46140d0210698c4b6188d4754cb5090a6ecd148d16908532870079f272b",
+              "functional": {
+                "readOnly": true,
+                "focus": true,
+                "zoomPan": true,
+                "collapse": true,
+                "snapshotReplacement": true,
+                "stateRestoration": true,
+                "deterministicExport": true,
+                "cleanup": true
+              }
+            },
+            "consoleErrors": [],
+            "failedRequests": [],
+            "externalCloudRequests": []
+          },
+          "runs": [
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 105.80000000074506,
+                "firstUsableMs": 224.39999999850988,
+                "replacementMs": 54.40000000037253,
+                "interactionMs": 40,
+                "heap": {
+                  "beforeMount": 19756986,
+                  "afterMount": 26438128,
+                  "afterReplacement": 30382276,
+                  "afterDestroy": 31901829
+                },
+                "exportChecksum": "c212b46140d0210698c4b6188d4754cb5090a6ecd148d16908532870079f272b",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 129.60000000149012,
+                "firstUsableMs": 262.09999999962747,
+                "replacementMs": 54.20000000111759,
+                "interactionMs": 32.09999999962747,
+                "heap": {
+                  "beforeMount": 19720326,
+                  "afterMount": 26383184,
+                  "afterReplacement": 30412620,
+                  "afterDestroy": 51651601
+                },
+                "exportChecksum": "c212b46140d0210698c4b6188d4754cb5090a6ecd148d16908532870079f272b",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 114.40000000037253,
+                "firstUsableMs": 262,
+                "replacementMs": 42.69999999925494,
+                "interactionMs": 21,
+                "heap": {
+                  "beforeMount": 19746130,
+                  "afterMount": 26431256,
+                  "afterReplacement": 30380876,
+                  "afterDestroy": 31846349
+                },
+                "exportChecksum": "c212b46140d0210698c4b6188d4754cb5090a6ecd148d16908532870079f272b",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            }
+          ],
+          "successfulRuns": 3,
+          "failedRuns": 0,
+          "medians": {
+            "mountMs": 114.4,
+            "firstUsableMs": 262,
+            "replacementMs": 54.2,
+            "interactionMs": 32.1,
+            "heapAfterMount": 26431256,
+            "heapAfterDestroy": 31901829
+          },
+          "medianFirstUsableMs": 262,
+          "medianHeapAfterMount": 26431256
+        },
+        {
+          "nodeCount": 20000,
+          "warmup": {
+            "status": "succeeded",
+            "measurement": {
+              "mountMs": 305.19999999925494,
+              "firstUsableMs": 630,
+              "replacementMs": 231.5,
+              "interactionMs": 85.90000000037253,
+              "heap": {
+                "beforeMount": 35985604,
+                "afterMount": 55905666,
+                "afterReplacement": 79528250,
+                "afterDestroy": 98757315
+              },
+              "exportChecksum": "0079f6e8e54ea86982b083f2237cf7e0de72933798edca20780b7179ce34d439",
+              "functional": {
+                "readOnly": true,
+                "focus": true,
+                "zoomPan": true,
+                "collapse": true,
+                "snapshotReplacement": true,
+                "stateRestoration": true,
+                "deterministicExport": true,
+                "cleanup": true
+              }
+            },
+            "consoleErrors": [],
+            "failedRequests": [],
+            "externalCloudRequests": []
+          },
+          "runs": [
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 381.7999999988824,
+                "firstUsableMs": 806.4000000003725,
+                "replacementMs": 241.39999999850988,
+                "interactionMs": 96.29999999888241,
+                "heap": {
+                  "beforeMount": 36066472,
+                  "afterMount": 55914114,
+                  "afterReplacement": 79396562,
+                  "afterDestroy": 98757303
+                },
+                "exportChecksum": "0079f6e8e54ea86982b083f2237cf7e0de72933798edca20780b7179ce34d439",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 321.2000000011176,
+                "firstUsableMs": 673.5,
+                "replacementMs": 246.40000000037253,
+                "interactionMs": 72.59999999962747,
+                "heap": {
+                  "beforeMount": 35990764,
+                  "afterMount": 55876178,
+                  "afterReplacement": 79359946,
+                  "afterDestroy": 98757351
+                },
+                "exportChecksum": "0079f6e8e54ea86982b083f2237cf7e0de72933798edca20780b7179ce34d439",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 308.19999999925494,
+                "firstUsableMs": 702.8000000007451,
+                "replacementMs": 218,
+                "interactionMs": 65.30000000074506,
+                "heap": {
+                  "beforeMount": 35743424,
+                  "afterMount": 55819282,
+                  "afterReplacement": 79346602,
+                  "afterDestroy": 98757315
+                },
+                "exportChecksum": "0079f6e8e54ea86982b083f2237cf7e0de72933798edca20780b7179ce34d439",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            }
+          ],
+          "successfulRuns": 3,
+          "failedRuns": 0,
+          "medians": {
+            "mountMs": 321.2,
+            "firstUsableMs": 702.8,
+            "replacementMs": 241.4,
+            "interactionMs": 72.6,
+            "heapAfterMount": 55876178,
+            "heapAfterDestroy": 98757315
+          },
+          "medianFirstUsableMs": 702.8,
+          "medianHeapAfterMount": 55876178
+        }
+      ]
+    },
+    {
+      "candidate": "jsmind",
+      "packageVersion": "0.9.1",
+      "licenseCompatible": true,
+      "license": {
+        "packageName": "jsmind",
+        "version": "0.9.1",
+        "spdx": "BSD-3-Clause",
+        "packageDirectory": "node_modules/.pnpm/jsmind@0.9.1/node_modules/jsmind",
+        "licenseFiles": [
+          {
+            "path": "LICENSE",
+            "sha256": "b5088659ac4f03876619297664303d619f5fea1a492b42810fa8d45e851b4f20"
+          }
+        ],
+        "compatible": true,
+        "conclusion": "compatible"
+      },
+      "externalCloudRequests": [],
+      "capabilities": {
+        "readOnly": true,
+        "stableIds": true,
+        "createDelete": true,
+        "reparenting": true,
+        "reordering": true,
+        "collapse": true,
+        "keyboardHooks": true,
+        "zoomPan": true,
+        "undoHook": false,
+        "image": true,
+        "label": false,
+        "icon": false,
+        "basicStyle": true,
+        "snapshotReplacement": true,
+        "stateRestoration": true,
+        "deterministicExport": true,
+        "cleanup": true,
+        "noCloudDependency": true
+      },
+      "samples": [
+        {
+          "nodeCount": 100,
+          "warmup": {
+            "status": "succeeded",
+            "measurement": {
+              "mountMs": 45.29999999888241,
+              "firstUsableMs": 93.69999999925494,
+              "replacementMs": 10.600000001490116,
+              "interactionMs": 31.5,
+              "heap": {
+                "beforeMount": 16063334,
+                "afterMount": 17478124,
+                "afterReplacement": 17692516,
+                "afterDestroy": 17320698
+              },
+              "exportChecksum": "d885d1eb6761941fe358292e805670455d3828c688979029f94c439b75588b4c",
+              "functional": {
+                "readOnly": true,
+                "focus": true,
+                "zoomPan": true,
+                "collapse": true,
+                "snapshotReplacement": true,
+                "stateRestoration": true,
+                "deterministicExport": true,
+                "cleanup": true
+              }
+            },
+            "consoleErrors": [],
+            "failedRequests": [],
+            "externalCloudRequests": []
+          },
+          "runs": [
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 37.09999999962747,
+                "firstUsableMs": 83.5,
+                "replacementMs": 11.199999999254942,
+                "interactionMs": 33,
+                "heap": {
+                  "beforeMount": 16081702,
+                  "afterMount": 17496356,
+                  "afterReplacement": 17710772,
+                  "afterDestroy": 17341974
+                },
+                "exportChecksum": "d885d1eb6761941fe358292e805670455d3828c688979029f94c439b75588b4c",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 32.59999999962747,
+                "firstUsableMs": 76,
+                "replacementMs": 11.700000001117587,
+                "interactionMs": 33.29999999888241,
+                "heap": {
+                  "beforeMount": 17157118,
+                  "afterMount": 17489532,
+                  "afterReplacement": 17703180,
+                  "afterDestroy": 17342998
+                },
+                "exportChecksum": "d885d1eb6761941fe358292e805670455d3828c688979029f94c439b75588b4c",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 28.700000001117587,
+                "firstUsableMs": 67.80000000074506,
+                "replacementMs": 10.199999999254942,
+                "interactionMs": 29.399999998509884,
+                "heap": {
+                  "beforeMount": 17153194,
+                  "afterMount": 17471664,
+                  "afterReplacement": 17685288,
+                  "afterDestroy": 17336542
+                },
+                "exportChecksum": "d885d1eb6761941fe358292e805670455d3828c688979029f94c439b75588b4c",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            }
+          ],
+          "successfulRuns": 3,
+          "failedRuns": 0,
+          "medians": {
+            "mountMs": 32.6,
+            "firstUsableMs": 76,
+            "replacementMs": 11.2,
+            "interactionMs": 33,
+            "heapAfterMount": 17489532,
+            "heapAfterDestroy": 17341974
+          },
+          "medianFirstUsableMs": 76,
+          "medianHeapAfterMount": 17489532
+        },
+        {
+          "nodeCount": 5000,
+          "warmup": {
+            "status": "succeeded",
+            "measurement": {
+              "mountMs": 1038.300000000745,
+              "firstUsableMs": 1152,
+              "replacementMs": 1013.4000000003725,
+              "interactionMs": 120.5,
+              "heap": {
+                "beforeMount": 19961980,
+                "afterMount": 26754125,
+                "afterReplacement": 24826931,
+                "afterDestroy": 44765017
+              },
+              "exportChecksum": "c212b46140d0210698c4b6188d4754cb5090a6ecd148d16908532870079f272b",
+              "functional": {
+                "readOnly": true,
+                "focus": true,
+                "zoomPan": true,
+                "collapse": true,
+                "snapshotReplacement": true,
+                "stateRestoration": true,
+                "deterministicExport": true,
+                "cleanup": true
+              }
+            },
+            "consoleErrors": [],
+            "failedRequests": [],
+            "externalCloudRequests": []
+          },
+          "runs": [
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 930.4000000003725,
+                "firstUsableMs": 1057.2000000011176,
+                "replacementMs": 977.7999999988824,
+                "interactionMs": 87.09999999962747,
+                "heap": {
+                  "beforeMount": 19752208,
+                  "afterMount": 26536949,
+                  "afterReplacement": 24826027,
+                  "afterDestroy": 44768977
+                },
+                "exportChecksum": "c212b46140d0210698c4b6188d4754cb5090a6ecd148d16908532870079f272b",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 910.0999999996275,
+                "firstUsableMs": 1020.8000000007451,
+                "replacementMs": 889.2000000011176,
+                "interactionMs": 89.59999999962747,
+                "heap": {
+                  "beforeMount": 19745060,
+                  "afterMount": 26623197,
+                  "afterReplacement": 24824643,
+                  "afterDestroy": 44768157
+                },
+                "exportChecksum": "c212b46140d0210698c4b6188d4754cb5090a6ecd148d16908532870079f272b",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 874.3000000007451,
+                "firstUsableMs": 986.6999999992549,
+                "replacementMs": 942.7999999988824,
+                "interactionMs": 94.30000000074506,
+                "heap": {
+                  "beforeMount": 19730476,
+                  "afterMount": 26597549,
+                  "afterReplacement": 24826955,
+                  "afterDestroy": 44788697
+                },
+                "exportChecksum": "c212b46140d0210698c4b6188d4754cb5090a6ecd148d16908532870079f272b",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            }
+          ],
+          "successfulRuns": 3,
+          "failedRuns": 0,
+          "medians": {
+            "mountMs": 910.1,
+            "firstUsableMs": 1020.8,
+            "replacementMs": 942.8,
+            "interactionMs": 89.6,
+            "heapAfterMount": 26597549,
+            "heapAfterDestroy": 44768977
+          },
+          "medianFirstUsableMs": 1020.8,
+          "medianHeapAfterMount": 26597549
+        },
+        {
+          "nodeCount": 20000,
+          "warmup": {
+            "status": "succeeded",
+            "measurement": {
+              "mountMs": 17782.699999999255,
+              "firstUsableMs": 18104.099999999627,
+              "replacementMs": 16716.199999999255,
+              "interactionMs": 459.69999999925494,
+              "heap": {
+                "beforeMount": 36059834,
+                "afterMount": 60432146,
+                "afterReplacement": 53030773,
+                "afterDestroy": 100680919
+              },
+              "exportChecksum": "0079f6e8e54ea86982b083f2237cf7e0de72933798edca20780b7179ce34d439",
+              "functional": {
+                "readOnly": true,
+                "focus": true,
+                "zoomPan": true,
+                "collapse": true,
+                "snapshotReplacement": true,
+                "stateRestoration": true,
+                "deterministicExport": true,
+                "cleanup": true
+              }
+            },
+            "consoleErrors": [],
+            "failedRequests": [],
+            "externalCloudRequests": []
+          },
+          "runs": [
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 15697.5,
+                "firstUsableMs": 16067.10000000149,
+                "replacementMs": 15611.099999999627,
+                "interactionMs": 337.69999999925494,
+                "heap": {
+                  "beforeMount": 35735106,
+                  "afterMount": 60367986,
+                  "afterReplacement": 52923443,
+                  "afterDestroy": 100747093
+                },
+                "exportChecksum": "0079f6e8e54ea86982b083f2237cf7e0de72933798edca20780b7179ce34d439",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 16645.099999999627,
+                "firstUsableMs": 16961.5,
+                "replacementMs": 16506.300000000745,
+                "interactionMs": 290,
+                "heap": {
+                  "beforeMount": 35988930,
+                  "afterMount": 60439791,
+                  "afterReplacement": 52950391,
+                  "afterDestroy": 100674605
+                },
+                "exportChecksum": "0079f6e8e54ea86982b083f2237cf7e0de72933798edca20780b7179ce34d439",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            },
+            {
+              "status": "succeeded",
+              "measurement": {
+                "mountMs": 16085.5,
+                "firstUsableMs": 16371.5,
+                "replacementMs": 15577.900000000373,
+                "interactionMs": 332.5,
+                "heap": {
+                  "beforeMount": 36237614,
+                  "afterMount": 60439561,
+                  "afterReplacement": 53031171,
+                  "afterDestroy": 100589741
+                },
+                "exportChecksum": "0079f6e8e54ea86982b083f2237cf7e0de72933798edca20780b7179ce34d439",
+                "functional": {
+                  "readOnly": true,
+                  "focus": true,
+                  "zoomPan": true,
+                  "collapse": true,
+                  "snapshotReplacement": true,
+                  "stateRestoration": true,
+                  "deterministicExport": true,
+                  "cleanup": true
+                }
+              },
+              "consoleErrors": [],
+              "failedRequests": [],
+              "externalCloudRequests": []
+            }
+          ],
+          "successfulRuns": 3,
+          "failedRuns": 0,
+          "medians": {
+            "mountMs": 16085.5,
+            "firstUsableMs": 16371.5,
+            "replacementMs": 15611.1,
+            "interactionMs": 332.5,
+            "heapAfterMount": 60439561,
+            "heapAfterDestroy": 100674605
+          },
+          "medianFirstUsableMs": 16371.5,
+          "medianHeapAfterMount": 60439561
+        }
+      ]
+    }
+  ]
+}
