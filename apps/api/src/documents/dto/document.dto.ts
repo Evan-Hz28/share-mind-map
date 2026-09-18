@@ -19,6 +19,9 @@ export class DocumentDto {
   @ApiProperty()
   public schemaVersion!: number;
 
+  @ApiProperty({ enum: ["full", "partial", "unsupported_online"] })
+  public compatibilityStatus!: "full" | "partial" | "unsupported_online";
+
   @ApiProperty()
   public nodeCount!: number;
 

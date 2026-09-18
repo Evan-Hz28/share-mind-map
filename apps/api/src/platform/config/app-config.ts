@@ -45,6 +45,10 @@ const environmentSchema = z
     ARGON2_ITERATIONS: z.coerce.number().int().min(1).default(3),
     ARGON2_PARALLELISM: z.coerce.number().int().min(1).max(4).default(1),
     TRUST_PROXY_COUNT: z.coerce.number().int().min(0).default(0),
+    XMIND_QUEUE_PREFIX: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,64}$/)
+      .default("smm"),
     LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]),
   })
   .superRefine((environment, context) => {
@@ -173,6 +177,7 @@ export interface AppConfig {
   cookie: { secure: boolean; sameSite: CookieSameSite };
   argon2: { memoryKiB: number; iterations: number; parallelism: number };
   trustProxyCount: number;
+  queuePrefix: string;
   logLevel: LogLevel;
 }
 
@@ -224,6 +229,7 @@ export function parseAppConfig(environment: Record<string, string | undefined>):
       parallelism: result.data.ARGON2_PARALLELISM,
     },
     trustProxyCount: result.data.TRUST_PROXY_COUNT,
+    queuePrefix: result.data.XMIND_QUEUE_PREFIX,
     logLevel: result.data.LOG_LEVEL,
   };
 }

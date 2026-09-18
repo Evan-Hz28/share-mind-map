@@ -14,6 +14,59 @@
       }
     },
     "schemas": {
+      "AdminImportFailureDto": {
+        "properties": {
+          "batchId": {
+            "type": "string"
+          },
+          "clientFileName": {
+            "type": "string"
+          },
+          "completedAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "errorCode": {
+            "nullable": true,
+            "type": "string"
+          },
+          "errorMessage": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "targetName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "batchId",
+          "clientFileName",
+          "id",
+          "targetName"
+        ],
+        "type": "object"
+      },
+      "AdminImportFailureListDto": {
+        "properties": {
+          "failures": {
+            "items": {
+              "$ref": "#/components/schemas/AdminImportFailureDto"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "failures"
+        ],
+        "type": "object"
+      },
       "ApiErrorEnvelope": {
         "properties": {
           "error": {
@@ -184,6 +237,22 @@
         ],
         "type": "object"
       },
+      "CreateImportBatchDto": {
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/ImportFilePreflightDto"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "type": "object"
+      },
       "CreateMemberDto": {
         "properties": {
           "displayName": {
@@ -218,6 +287,14 @@
       },
       "DocumentDetailDto": {
         "properties": {
+          "compatibilityStatus": {
+            "enum": [
+              "full",
+              "partial",
+              "unsupported_online"
+            ],
+            "type": "string"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -259,6 +336,7 @@
           }
         },
         "required": [
+          "compatibilityStatus",
           "createdAt",
           "currentVersion",
           "id",
@@ -285,6 +363,14 @@
       },
       "DocumentDto": {
         "properties": {
+          "compatibilityStatus": {
+            "enum": [
+              "full",
+              "partial",
+              "unsupported_online"
+            ],
+            "type": "string"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -323,6 +409,7 @@
           }
         },
         "required": [
+          "compatibilityStatus",
           "createdAt",
           "currentVersion",
           "id",
@@ -449,6 +536,134 @@
         },
         "required": [
           "folder"
+        ],
+        "type": "object"
+      },
+      "ImportBatchResponseDto": {
+        "properties": {
+          "cancelledJobs": {
+            "type": "number"
+          },
+          "expectedBytes": {
+            "type": "number"
+          },
+          "failedJobs": {
+            "type": "number"
+          },
+          "id": {
+            "type": "string"
+          },
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/ImportJobResponseDto"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "succeededJobs": {
+            "type": "number"
+          },
+          "totalJobs": {
+            "type": "number"
+          },
+          "uploadedJobs": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "cancelledJobs",
+          "expectedBytes",
+          "failedJobs",
+          "id",
+          "jobs",
+          "status",
+          "succeededJobs",
+          "totalJobs",
+          "uploadedJobs"
+        ],
+        "type": "object"
+      },
+      "ImportFilePreflightDto": {
+        "properties": {
+          "clientFileName": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "expectedBytes": {
+            "maximum": 20971520,
+            "minimum": 0,
+            "type": "number"
+          },
+          "targetFolderId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "targetName": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientFileName",
+          "targetName"
+        ],
+        "type": "object"
+      },
+      "ImportJobResponseDto": {
+        "properties": {
+          "clientFileName": {
+            "type": "string"
+          },
+          "documentId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "errorCode": {
+            "nullable": true,
+            "type": "string"
+          },
+          "errorMessage": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "targetFolderId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "targetName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientFileName",
+          "id",
+          "phase",
+          "targetName"
+        ],
+        "type": "object"
+      },
+      "ImportUploadDto": {
+        "properties": {
+          "file": {
+            "format": "binary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
         ],
         "type": "object"
       },
@@ -658,6 +873,10 @@
         "required": [
           "markedCount"
         ],
+        "type": "object"
+      },
+      "Object": {
+        "properties": {},
         "type": "object"
       },
       "PermissionRequestDto": {
@@ -1186,6 +1405,61 @@
         "security": [
           {
             "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/import-failures": {
+      "get": {
+        "operationId": "adminListImportFailures",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Object"
+                }
+              ],
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminImportFailureListDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
             "sessionCookie": []
           }
         ],
@@ -1955,6 +2229,54 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/export": {
+      "get": {
+        "operationId": "exportDocument",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "documentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/xmind": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "A private XMind export stream."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "exports"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspaceId}/edit-requests": {
       "post": {
         "operationId": "createEditPermissionRequest",
@@ -2185,6 +2507,281 @@
         "summary": "",
         "tags": [
           "folders"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/import-batches": {
+      "post": {
+        "operationId": "createImportBatch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateImportBatchDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportBatchResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/import-batches/{batchId}": {
+      "get": {
+        "operationId": "getImportBatch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "batchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportBatchResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/import-batches/{batchId}/jobs/{jobId}/cancel": {
+      "post": {
+        "operationId": "cancelImportJob",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "batchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportJobResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/import-batches/{batchId}/jobs/{jobId}/retry": {
+      "post": {
+        "operationId": "retryImportJob",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "batchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportJobResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/import-batches/{batchId}/jobs/{jobId}/upload": {
+      "post": {
+        "operationId": "uploadImportJob",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "batchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportUploadDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportJobResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "imports"
         ]
       }
     },

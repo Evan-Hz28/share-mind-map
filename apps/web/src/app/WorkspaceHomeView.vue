@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bell, Document, Edit, Folder, Plus, Sort } from "@element-plus/icons-vue";
+import { Bell, Document, Edit, Folder, Plus, Sort, Upload } from "@element-plus/icons-vue";
 import { ElButton, ElDialog, ElIcon, ElInput, ElTag } from "element-plus";
 import { computed, onMounted, reactive, ref } from "vue";
 
@@ -15,6 +15,8 @@ const editingFolderId = ref<string | null>(null);
 const editingDocumentId = ref<string | null>(null);
 const form = reactive({ name: "", folderId: "" });
 const notificationOpen = ref(false);
+const importDialogOpen = ref(false);
+const importRows = ref<Array<{ file: File; name: string; folderId: string }>>([]);
 
 const workspaceId = computed(() => auth.session?.defaultWorkspace.id ?? "");
 const canEdit = computed(() => auth.role === "editor" || auth.role === "admin");
@@ -39,6 +41,50 @@ function openCreateFolder(): void {
   form.name = "";
   form.folderId = "";
   dialogOpen.value = true;
+}
+
+function openImport(): void {
+  importRows.value = [];
+  workspace.importProgress = null;
+  workspace.importBatchId = null;
+  workspace.importJobs = [];
+  workspace.importSourceFiles = {};
+  workspace.closeImportRealtime();
+  importDialogOpen.value = true;
+}
+
+function selectImportFiles(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  importRows.value = [...(input.files ?? [])].map((file) => ({
+    file,
+    name: file.name.replace(/\.xmind$/iu, ""),
+    folderId: "",
+  }));
+}
+
+async function submitImport(): Promise<void> {
+  const ok = await workspace.importFiles(
+    importRows.value.map((row) => ({
+      file: row.file,
+      targetName: row.name,
+      targetFolderId: row.folderId || null,
+    })),
+  );
+  if (ok) importDialogOpen.value = false;
+}
+
+async function cancelImport(jobId: string): Promise<void> {
+  if (!globalThis.confirm("确定取消这个尚未开始处理的导入任务吗？")) return;
+  await workspace.cancelImport(jobId);
+}
+
+async function retryImport(jobId: string): Promise<void> {
+  await workspace.retryImport(jobId);
+}
+
+function replaceImportFile(jobId: string, event: Event): void {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (file !== undefined) workspace.replaceImportSource(jobId, file);
 }
 
 function openRenameFolder(folderId: string, name: string): void {
@@ -108,6 +154,9 @@ onMounted(() => void load());
         </ElButton>
         <ElButton v-if="canEdit" type="primary" @click="openDocument(null)">
           <ElIcon><Document /></ElIcon>新建文档
+        </ElButton>
+        <ElButton v-if="canEdit" type="primary" @click="openImport">
+          <ElIcon><Upload /></ElIcon>导入 XMind
         </ElButton>
       </div>
     </header>
@@ -202,7 +251,12 @@ onMounted(() => void load());
               ><small
                 >版本 {{ document.currentVersion }} · {{ document.nodeCount }} 个节点</small
               ></span
+            ><ElTag
+              size="small"
+              :type="document.compatibilityStatus === 'full' ? 'success' : 'warning'"
+              >兼容性：{{ document.compatibilityStatus }}</ElTag
             ><ElTag size="small" type="info">只读快照</ElTag
+            ><button type="button" @click="workspace.exportDocument(document.id)">导出 XMind</button
             ><button
               v-if="canEdit"
               type="button"
@@ -221,6 +275,87 @@ onMounted(() => void load());
         </p>
       </section>
     </div>
+
+    <ElDialog
+      v-model="importDialogOpen"
+      title="导入 XMind 文件"
+      width="min(92vw, 760px)"
+      :close-on-click-modal="false"
+    >
+      <div class="form-stack">
+        <div class="field-group">
+          <label for="xmind-files">选择文件（可多选，单个不超过 20 MB）</label>
+          <input
+            id="xmind-files"
+            type="file"
+            accept=".xmind"
+            multiple
+            @change="selectImportFiles"
+          />
+        </div>
+        <div v-if="importRows.length > 0" class="import-list">
+          <div
+            v-for="(row, index) in importRows"
+            :key="row.file.name + row.file.size + index"
+            class="import-list__row"
+          >
+            <span>{{ row.file.name }}</span>
+            <ElInput v-model="row.name" maxlength="100" aria-label="目标文档名" />
+            <select v-model="row.folderId" aria-label="目标文件夹">
+              <option value="">未归档</option>
+              <option v-for="folder in workspace.folders" :key="folder.id" :value="folder.id">
+                {{ folder.name }}
+              </option>
+            </select>
+          </div>
+        </div>
+        <p v-else class="panel-empty">请选择至少一个 .xmind 文件。</p>
+        <p v-if="workspace.importProgress !== null" role="status">
+          状态：{{ workspace.importProgress.status }}；成功
+          {{ workspace.importProgress.succeededJobs }}，失败
+          {{ workspace.importProgress.failedJobs }}，取消
+          {{ workspace.importProgress.cancelledJobs }} / {{ workspace.importProgress.totalJobs }}
+        </p>
+        <ul v-if="workspace.importJobs.length > 0" class="import-job-list" aria-label="导入任务">
+          <li v-for="job in workspace.importJobs" :key="job.id" class="import-job-list__item">
+            <span class="workspace-list__name">
+              <strong>{{ job.targetName }}</strong>
+              <small>{{ job.clientFileName }} · {{ job.phase }}</small>
+              <small v-if="job.errorMessage" class="import-job-error">{{ job.errorMessage }}</small>
+            </span>
+            <ElButton
+              v-if="job.phase === 'waiting'"
+              size="small"
+              :disabled="workspace.importing"
+              @click="cancelImport(job.id)"
+              >取消</ElButton
+            >
+            <ElButton
+              v-if="job.phase === 'failed'"
+              size="small"
+              type="primary"
+              :disabled="workspace.importing"
+              @click="retryImport(job.id)"
+              >重试</ElButton
+            >
+            <label v-if="job.phase === 'failed'" class="import-replace-file">
+              替换文件
+              <input type="file" accept=".xmind" @change="replaceImportFile(job.id, $event)" />
+            </label>
+          </li>
+        </ul>
+      </div>
+      <template #footer>
+        <ElButton @click="importDialogOpen = false">取消</ElButton>
+        <ElButton
+          type="primary"
+          :loading="workspace.importing"
+          :disabled="importRows.length === 0 || workspace.importing"
+          @click="submitImport"
+          >开始导入</ElButton
+        >
+      </template>
+    </ElDialog>
 
     <ElDialog
       v-model="dialogOpen"

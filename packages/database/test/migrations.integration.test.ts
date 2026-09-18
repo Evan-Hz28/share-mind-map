@@ -37,7 +37,11 @@ describe("database migrations", () => {
     await migrateDatabase(runtime.db);
 
     expect(await migrationNames()).toEqual(first);
-    expect(first).toEqual(["0000_phase1_identity", "0001_phase2_workspace"]);
+    expect(first).toEqual([
+      "0000_phase1_identity",
+      "0001_phase2_workspace",
+      "0002_phase3_import_export",
+    ]);
   });
 
   it("uses a Drizzle-compatible migration journal", async () => {
@@ -64,10 +68,14 @@ describe("database migrations", () => {
   it("serializes concurrent startup migration attempts", async () => {
     await Promise.all([migrateDatabase(runtime.db), migrateDatabase(runtime.db)]);
 
-    expect(await migrationNames()).toEqual(["0000_phase1_identity", "0001_phase2_workspace"]);
+    expect(await migrationNames()).toEqual([
+      "0000_phase1_identity",
+      "0001_phase2_workspace",
+      "0002_phase3_import_export",
+    ]);
   });
 
-  it("creates exactly the six phase 1 tables", async () => {
+  it("creates all phase 1 through phase 3 tables", async () => {
     await migrateDatabase(runtime.db);
     const result = await runtime.db.$client.query<{ table_name: string }>(
       `SELECT table_name
@@ -79,10 +87,14 @@ describe("database migrations", () => {
     expect(result.rows.map((row) => row.table_name)).toEqual([
       "audit_logs",
       "auth_identities",
+      "document_assets",
       "document_snapshots",
       "documents",
       "edit_permission_requests",
+      "export_jobs",
       "folders",
+      "import_batches",
+      "import_jobs",
       "notification_outbox",
       "notifications",
       "organizations",

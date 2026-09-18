@@ -476,6 +476,37 @@ a {
   cursor: pointer;
   font-size: 12px;
 }
+.import-job-list {
+  margin: 12px 0 0;
+  padding: 0;
+  border-top: 1px solid #edf0f1;
+  list-style: none;
+}
+.import-job-list__item {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid #edf0f1;
+}
+.import-job-error {
+  color: var(--danger) !important;
+}
+.import-replace-file {
+  flex: 0 0 auto;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-size: 12px;
+}
+.import-replace-file input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 .panel-empty {
   padding: 38px 16px;
   color: var(--muted);

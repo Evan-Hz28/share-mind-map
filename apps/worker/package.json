@@ -15,8 +15,10 @@
   "dependencies": {
     "@share-mind-map/database": "workspace:*",
     "@share-mind-map/document-model": "workspace:*",
+    "@share-mind-map/storage": "workspace:*",
     "@share-mind-map/xmind": "workspace:*",
     "bullmq": "^6.3.6",
+    "drizzle-orm": "^0.45.2",
     "ioredis": "^6.0.0",
     "minio": "^8.0.7",
     "pg": "^8.23.0",

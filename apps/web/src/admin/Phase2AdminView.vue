@@ -87,5 +87,26 @@ onMounted(() => void workspace.loadAdminData());
         </li>
       </ul>
     </section>
+    <section class="workspace-panel audit-panel" aria-labelledby="import-failures-title">
+      <header class="workspace-panel__header">
+        <h2 id="import-failures-title">导入失败记录</h2>
+        <span>{{ workspace.importFailures.length }}</span>
+      </header>
+      <div v-if="workspace.importFailures.length === 0" class="panel-empty">暂无失败记录</div>
+      <ul v-else class="workspace-list">
+        <li
+          v-for="failure in workspace.importFailures"
+          :key="failure.id"
+          class="workspace-list__item"
+        >
+          <span class="workspace-list__name">
+            <strong>{{ failure.targetName }}</strong>
+            <small>{{ failure.clientFileName }} · 批次 {{ failure.batchId }}</small>
+            <small v-if="failure.errorMessage">{{ failure.errorMessage }}</small>
+          </span>
+          <ElTag size="small" type="danger">{{ failure.errorCode ?? "导入失败" }}</ElTag>
+        </li>
+      </ul>
+    </section>
   </section>
 </template>

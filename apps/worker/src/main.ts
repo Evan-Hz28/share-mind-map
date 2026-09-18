@@ -1,30 +1,24 @@
 import { fileURLToPath } from "node:url";
 
 import { createDatabase } from "@share-mind-map/database";
-import { Client as MinioClient } from "minio";
+import { MinioObjectStorage } from "@share-mind-map/storage";
 import { Pool } from "pg";
 
 import { parseWorkerConfig, type WorkerConfig } from "./config.js";
 import { startHealthServer, type HealthServer } from "./health-server.js";
-import { createRedisConnection, createValidationQueue, createValidationWorker } from "./queue.js";
+import {
+  createImportQueue,
+  createImportWorker,
+  createRedisConnection,
+  createValidationQueue,
+  createValidationWorker,
+} from "./queue.js";
 import { NotificationOutboxProcessor } from "./notification-outbox.processor.js";
 
 export interface WorkerRuntime {
   pid: number;
   health: HealthServer;
   close(): Promise<void>;
-}
-
-function createMinioClient(config: WorkerConfig): MinioClient {
-  const endpoint = new URL(config.minioEndpoint);
-  return new MinioClient({
-    endPoint: endpoint.hostname,
-    port:
-      endpoint.port === "" ? (endpoint.protocol === "https:" ? 443 : 80) : Number(endpoint.port),
-    useSSL: endpoint.protocol === "https:",
-    accessKey: config.minioAccessKey,
-    secretKey: config.minioSecretKey,
-  });
 }
 
 export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> {
@@ -37,10 +31,26 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
   const notificationTimer = setInterval(() => {
     void notifications.processBatch().catch(() => undefined);
   }, 1_000);
-  const minio = createMinioClient(config);
+  const storage = new MinioObjectStorage({
+    endpoint: new URL(config.minioEndpoint),
+    accessKey: config.minioAccessKey,
+    secretKey: config.minioSecretKey,
+    bucket: config.minioBucket,
+    useSsl: new URL(config.minioEndpoint).protocol === "https:",
+  });
   const queue = createValidationQueue(config, queueConnection);
   const worker = await createValidationWorker(config, workerConnection);
-  await Promise.all([queue.waitUntilReady(), worker.waitUntilReady()]);
+  const importConnection = createRedisConnection(config.redisUrl);
+  const importQueue = createImportQueue(config, importConnection);
+  const importWorkerConnection = createRedisConnection(config.redisUrl);
+  const importDatabase = createDatabase(config.databaseUrl);
+  const importWorker = createImportWorker(config, importWorkerConnection, importDatabase, storage);
+  await Promise.all([
+    queue.waitUntilReady(),
+    worker.waitUntilReady(),
+    importQueue.waitUntilReady(),
+    importWorker.waitUntilReady(),
+  ]);
 
   const health = await startHealthServer({
     host: config.host,
@@ -54,11 +64,11 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
         await healthRedis.ping();
       },
       minio: async () => {
-        const exists = await minio.bucketExists(config.minioBucket);
+        const exists = await storage.client.bucketExists(config.minioBucket);
         if (!exists) throw new Error("required bucket is unavailable");
       },
       queue: async () => {
-        await queue.waitUntilReady();
+        await Promise.all([queue.waitUntilReady(), importQueue.waitUntilReady()]);
       },
     },
   });
@@ -72,9 +82,19 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
       closed = true;
       clearInterval(notificationTimer);
       await health.close();
-      await Promise.all([worker.close(), queue.close()]);
-      await Promise.all([workerConnection.quit(), queueConnection.quit(), healthRedis.quit()]);
-      await Promise.all([pool.end(), notificationDatabase.$client.end()]);
+      await Promise.all([worker.close(), queue.close(), importWorker.close(), importQueue.close()]);
+      await Promise.all([
+        workerConnection.quit(),
+        queueConnection.quit(),
+        importWorkerConnection.quit(),
+        importConnection.quit(),
+        healthRedis.quit(),
+      ]);
+      await Promise.all([
+        pool.end(),
+        notificationDatabase.$client.end(),
+        importDatabase.$client.end(),
+      ]);
     },
   };
 }

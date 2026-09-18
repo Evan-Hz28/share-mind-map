@@ -6,6 +6,7 @@ packages:
   - packages/document-model
   - packages/xmind
   - packages/api-client
+  - packages/storage
 
 allowBuilds:
   argon2: true

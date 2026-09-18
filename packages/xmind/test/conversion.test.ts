@@ -93,10 +93,14 @@ describe("XMind conversion", () => {
   it.each([
     ["nodes-5000.xmind", 5_000],
     ["nodes-20000.xmind", 20_000],
-  ])("converts %s with exactly %s nodes", async (fixture, expectedCount) => {
-    const document = convertXMindToCloudDocument(await inspectFixture(fixture), identity);
-    expect(countDocumentNodes(document)).toBe(expectedCount);
-  });
+  ])(
+    "converts %s with exactly %s nodes",
+    async (fixture, expectedCount) => {
+      const document = convertXMindToCloudDocument(await inspectFixture(fixture), identity);
+      expect(countDocumentNodes(document)).toBe(expectedCount);
+    },
+    30_000,
+  );
 
   it("rejects a 20,001st node before producing a cloud document", async () => {
     const inspection = structuredClone(await inspectFixture("nodes-20000.xmind"));

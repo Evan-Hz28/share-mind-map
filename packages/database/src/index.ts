@@ -41,3 +41,14 @@ export {
   type PermissionRequestStatus,
   type RevokeEditingResult,
 } from "./repositories/permission-request.repository.js";
+export {
+  ImportRepository,
+  type ImportBatchRecord,
+  type ImportJobRecord,
+} from "./repositories/import.repository.js";
+export {
+  ImportRepositoryError,
+  type CompatibilityStatus,
+  type ImportBatchStatus,
+  type ImportJobPhase,
+} from "./repositories/phase3.types.js";

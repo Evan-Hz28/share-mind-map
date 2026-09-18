@@ -34,6 +34,7 @@ const config: AppConfig = {
   cookie: { secure: false, sameSite: "lax" },
   argon2: { memoryKiB: 8_192, iterations: 1, parallelism: 1 },
   trustProxyCount: 0,
+  queuePrefix: "smm",
   logLevel: "silent",
 };
 

@@ -16,6 +16,7 @@ export interface DocumentRecord {
   nameNormalized: string;
   currentVersion: number;
   schemaVersion: number;
+  compatibilityStatus: "full" | "partial" | "unsupported_online";
   nodeCount: number;
   imageBytes: number;
   createdBy: string;
@@ -41,6 +42,7 @@ interface DocumentRow extends Record<string, unknown> {
   name_normalized: string;
   current_version: number;
   schema_version: number;
+  compatibility_status: "full" | "partial" | "unsupported_online";
   node_count: number;
   image_bytes: number;
   created_by: string;
@@ -66,6 +68,7 @@ function toDocumentRecord(row: DocumentRow): DocumentRecord {
     nameNormalized: row.name_normalized,
     currentVersion: row.current_version,
     schemaVersion: row.schema_version,
+    compatibilityStatus: row.compatibility_status,
     nodeCount: row.node_count,
     imageBytes: row.image_bytes,
     createdBy: row.created_by,
@@ -103,6 +106,83 @@ async function assertTargetFolder(
 }
 
 export class DocumentRepository {
+  public async createImported(
+    transaction: DatabaseTransaction,
+    input: {
+      documentId: string;
+      workspaceId: string;
+      folderId: string | null;
+      name: string;
+      nameNormalized: string;
+      actorUserId: string;
+      snapshot: unknown;
+      snapshotObjectKey: string | null;
+      snapshotSha256: string;
+      nodeCount: number;
+      imageBytes: number;
+      originalObjectKey: string;
+      originalSha256: string;
+      compatibilityStatus: "full" | "partial" | "unsupported_online";
+      compatibilityReport: unknown;
+    },
+  ): Promise<DocumentRecord> {
+    await lockWorkspace(transaction, input.workspaceId);
+    if (input.folderId !== null)
+      await assertTargetFolder(transaction, input.workspaceId, input.folderId);
+    const total = await transaction.execute<{ count: number }>(sql`
+      SELECT count(*)::int AS count FROM documents
+      WHERE workspace_id = ${input.workspaceId} AND trashed_at IS NULL
+    `);
+    if ((total.rows[0]?.count ?? 0) >= 20_000) {
+      throw new Phase2RepositoryError(
+        "WORKSPACE_DOCUMENT_LIMIT_REACHED",
+        "Workspace document limit reached.",
+      );
+    }
+    if (input.folderId !== null) {
+      const count = await transaction.execute<{ count: number }>(sql`
+        SELECT count(*)::int AS count FROM documents
+        WHERE folder_id = ${input.folderId} AND trashed_at IS NULL
+      `);
+      if ((count.rows[0]?.count ?? 0) >= 1000) {
+        throw new Phase2RepositoryError(
+          "FOLDER_DOCUMENT_LIMIT_REACHED",
+          "Folder document limit reached.",
+        );
+      }
+    }
+    const snapshotId = newId();
+    await transaction.execute(sql`
+      INSERT INTO documents
+        (id, workspace_id, folder_id, name, name_normalized, current_version, schema_version,
+         current_snapshot_id, original_object_key, original_sha256, compatibility_status,
+         compatibility_report, node_count, image_bytes, created_by, updated_by)
+      VALUES
+        (${input.documentId}, ${input.workspaceId}, ${input.folderId}, ${input.name}, ${input.nameNormalized},
+         1, 1, NULL, ${input.originalObjectKey}, ${input.originalSha256}, ${input.compatibilityStatus},
+         ${JSON.stringify(input.compatibilityReport)}::jsonb, ${input.nodeCount}, ${input.imageBytes},
+         ${input.actorUserId}, ${input.actorUserId})
+    `);
+    await transaction.execute(sql`
+      INSERT INTO document_snapshots
+        (id, document_id, version, schema_version, snapshot_json, snapshot_object_key,
+         snapshot_sha256, node_count, save_kind, history_visible, created_by)
+      VALUES
+        (${snapshotId}, ${input.documentId}, 1, 1, ${input.snapshotObjectKey === null ? JSON.stringify(input.snapshot) : null}::jsonb,
+         ${input.snapshotObjectKey}, ${input.snapshotSha256}, ${input.nodeCount}, 'initial', false, ${input.actorUserId})
+    `);
+    const result = await transaction.execute<DocumentRow>(sql`
+      UPDATE documents
+      SET current_snapshot_id = ${snapshotId}, updated_at = now()
+      WHERE id = ${input.documentId}
+      RETURNING id, workspace_id, folder_id, name, name_normalized, current_version,
+                schema_version, compatibility_status, node_count, image_bytes, created_by, updated_by, created_at, updated_at
+    `);
+    const row = result.rows[0];
+    if (row === undefined) throw new Error("Imported document insert returned no row.");
+    return toDocumentRecord(row);
+  }
+
   public async createBlank(
     transaction: DatabaseTransaction,
     input: {
@@ -168,7 +248,7 @@ export class DocumentRepository {
       SET current_snapshot_id = ${snapshotId}, updated_at = now()
       WHERE id = ${documentId}
       RETURNING id, workspace_id, folder_id, name, name_normalized, current_version,
-                schema_version, node_count, image_bytes, created_by, updated_by, created_at, updated_at
+                schema_version, compatibility_status, node_count, image_bytes, created_by, updated_by, created_at, updated_at
     `);
     const row = result.rows[0];
     if (row === undefined) throw new Error("Document insert returned no row.");
@@ -198,7 +278,7 @@ export class DocumentRepository {
     const sort = input.sort === "name" ? "name_normalized ASC, id ASC" : "updated_at DESC, id DESC";
     const result = await database.$client.query<DocumentRow>(
       `SELECT id, workspace_id, folder_id, name, name_normalized, current_version,
-              schema_version, node_count, image_bytes, created_by, updated_by, created_at, updated_at
+              schema_version, compatibility_status, node_count, image_bytes, created_by, updated_by, created_at, updated_at
        FROM documents
        WHERE workspace_id = $1 AND trashed_at IS NULL ${cursorClause}
        ORDER BY ${sort}
@@ -226,7 +306,7 @@ export class DocumentRepository {
   ): Promise<DocumentDetail | null> {
     const result = await database.$client.query<DetailRow>(
       `SELECT d.id, d.workspace_id, d.folder_id, d.name, d.name_normalized, d.current_version,
-              d.schema_version, d.node_count, d.image_bytes, d.created_by, d.updated_by,
+              d.schema_version, d.compatibility_status, d.node_count, d.image_bytes, d.created_by, d.updated_by,
               d.created_at, d.updated_at, s.snapshot_json
        FROM documents d
        LEFT JOIN document_snapshots s ON s.id = d.current_snapshot_id
@@ -254,7 +334,7 @@ export class DocumentRepository {
           updated_by = ${input.actorUserId}, updated_at = now()
       WHERE id = ${input.documentId} AND workspace_id = ${input.workspaceId} AND trashed_at IS NULL
       RETURNING id, workspace_id, folder_id, name, name_normalized, current_version,
-                schema_version, node_count, image_bytes, created_by, updated_by, created_at, updated_at
+                schema_version, compatibility_status, node_count, image_bytes, created_by, updated_by, created_at, updated_at
     `);
     const row = result.rows[0];
     if (row === undefined)
@@ -290,7 +370,7 @@ export class DocumentRepository {
       SET folder_id = ${input.folderId}, updated_by = ${input.actorUserId}, updated_at = now()
       WHERE id = ${input.documentId} AND workspace_id = ${input.workspaceId} AND trashed_at IS NULL
       RETURNING id, workspace_id, folder_id, name, name_normalized, current_version,
-                schema_version, node_count, image_bytes, created_by, updated_by, created_at, updated_at
+                schema_version, compatibility_status, node_count, image_bytes, created_by, updated_by, created_at, updated_at
     `);
     const row = result.rows[0];
     if (row === undefined)

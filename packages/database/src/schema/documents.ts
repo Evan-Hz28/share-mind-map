@@ -80,6 +80,9 @@ export const documents = pgTable(
     uniqueIndex("documents_workspace_name_active_uq")
       .on(table.workspaceId, table.nameNormalized)
       .where(sql`${table.trashedAt} IS NULL`),
+    uniqueIndex("documents_workspace_original_sha256_active_uq")
+      .on(table.workspaceId, table.originalSha256)
+      .where(sql`${table.originalSha256} IS NOT NULL AND ${table.trashedAt} IS NULL`),
     index("documents_workspace_updated_idx")
       .on(table.workspaceId, table.updatedAt.desc(), table.id.desc())
       .where(sql`${table.trashedAt} IS NULL`),

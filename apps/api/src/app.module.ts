@@ -7,6 +7,9 @@ import { AuthModule } from "./auth/auth.module.js";
 import { DocumentsModule } from "./documents/documents.module.js";
 import { FoldersModule } from "./folders/folders.module.js";
 import { MembershipModule } from "./membership/membership.module.js";
+import { ImportsModule } from "./imports/imports.module.js";
+import { ExportsModule } from "./exports/exports.module.js";
+import { RealtimeModule } from "./realtime/realtime.module.js";
 import { NotificationsModule } from "./notifications/notifications.module.js";
 import { StorageModule } from "./storage/storage.module.js";
 import { HealthController } from "./health/health.controller.js";
@@ -76,6 +79,9 @@ export class AppModule {
         MembershipModule,
         NotificationsModule,
         StorageModule,
+        ImportsModule,
+        ExportsModule,
+        RealtimeModule,
       ],
       controllers: [HealthController],
       providers: [

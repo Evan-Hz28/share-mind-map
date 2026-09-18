@@ -21,6 +21,7 @@
     "mind-elixir": "6.0.0-next.4",
     "pinia": "4.0.3",
     "simple-mind-map": "0.14.0-fix.3",
+    "socket.io-client": "4.8.3",
     "vue": "3.5.21",
     "vue-router": "4.6.4"
   },

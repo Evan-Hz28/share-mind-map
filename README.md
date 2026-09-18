@@ -1,8 +1,8 @@
 # Shared Mind Map
 
-Shared Mind Map 的阶段 0-2 实现：可复现的技术验证、独立文档模型与 XMind Worker，以及具备本地账号认证、成员管理、工作台和权限流程的可运行平台基础。
+Shared Mind Map 的阶段 0-3 实现：可复现的技术验证、独立文档模型、XMind Worker，以及具备本地账号认证、成员管理、工作台、权限和 XMind 导入导出流程的可运行平台基础。
 
-阶段 2 已提供一级文件夹、文档元数据与合法空白快照、编辑权限申请/审批/撤销、平台通知、审计查询和数据库已知用量读取。思维导图正式画布编辑、XMind 上传业务流程、分享、评论、历史、搜索、回收站、实时协作和生产发布能力尚未实现。
+阶段 2 已提供一级文件夹、文档元数据与合法空白快照、编辑权限申请/审批/撤销、平台通知、审计查询和数据库已知用量读取。阶段 3 增加真实 `.xmind` 多文件导入、流式上传、Worker 解析持久化、进度/失败重试、图片资产、兼容性报告和鉴权导出。思维导图正式画布编辑、分享、评论、历史、搜索、回收站、实时文档协作和生产发布能力尚未实现。
 
 ## 环境要求
 
@@ -79,6 +79,20 @@ docker compose --env-file .env exec api node dist/cli/recover-admin.js
 恢复命令要求交互确认，会恢复账号、设置新的一次性临时密码、强制改密、撤销该用户全部会话并写入审计记录。密码不能通过 CLI 参数或长期环境变量传入。
 
 Admin 登录后可在“成员管理”创建 Reader、一次性重置临时密码、禁用/恢复账号和撤销全部会话，并在“权限与审计”处理编辑权限申请、查看审计和用量。系统拒绝禁用最后一个有效 Admin；撤销编辑权限会立即影响后续 REST 请求。正式画布编辑和未保存内容保护仍属于后续阶段。
+
+## 阶段 3：XMind 导入与导出
+
+Editor/Admin 在工作台点击“导入 XMind”即可一次选择多个 `.xmind` 文件，并为每个文件修改目标名称和一级文件夹。单文件上限为 20 MB；上传后由独立 Worker 解析，页面可通过 Socket.IO 看到批次和逐项结果，断线时自动用 REST 回补。失败任务可取消或重试，成功导入的文档仍是当前阶段的只读持久化快照。
+
+Reader、Editor、Admin 都可以在文档列表点击“导出 XMind”。导出读取最近一次已保存快照，不包含阶段 4 的未保存画布状态。MinIO Bucket 保持私有，临时 `tmp/` 和导出 `exports/` 对象配置 24 小时生命周期；队列前缀由 `XMIND_QUEUE_PREFIX` 统一配置，默认值为 `smm`。
+
+阶段 3 的 API 主要端点包括：
+
+- `POST /api/v1/workspaces/:workspaceId/import-batches`：创建多文件批次。
+- `POST /api/v1/workspaces/:workspaceId/import-batches/:batchId/jobs/:jobId/upload`：流式上传单个任务。
+- `GET /api/v1/workspaces/:workspaceId/import-batches/:batchId`：读取权威进度。
+- `POST .../cancel`、`POST .../retry`：取消等待任务或重试失败任务。
+- `GET /api/v1/workspaces/:workspaceId/documents/:documentId/export`：鉴权导出 `.xmind`。
 
 ## 本机开发
 
@@ -212,6 +226,6 @@ docker compose --env-file .env down
 - PostgreSQL/MinIO/Redis 备份、恢复、RPO/RTO 演练
 - TLS、密钥轮换、监控告警、安全扫描与发布回滚演练
 
-## 未实现范围
+## 后续阶段范围
 
-阶段 3-6 的生产功能未实现：导入上传流程、正式画布编辑与自动保存、图片资产、分享链接、评论、回收站、测试执行管理、WebSocket 实时协作、冲突合并、生产部署与运维自动化。仓库不会用空接口、TODO 或静态业务数据冒充这些能力。
+阶段 4-6 尚未实现：正式画布编辑与自动保存、编辑锁、图片编辑、分享链接、评论、历史、回收站、测试执行管理、WebSocket 实时文档协作、冲突合并、生产部署与运维自动化。仓库不会用空接口、TODO 或静态业务数据冒充这些能力。阶段 3 的本地验收证据见 `docs/verification/phase-3-2026-09-18.md`；真实业务 XMind 保真度仍需授权 Pilot 验证。

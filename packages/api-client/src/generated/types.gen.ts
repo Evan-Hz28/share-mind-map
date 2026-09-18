@@ -5,6 +5,21 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}/api/v1` | `${string}://${string}` | `${string}://${string}` | (string & {});
 };
 
+export type AdminImportFailureDto = {
+    batchId: string;
+    clientFileName: string;
+    completedAt?: string | null;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    id: string;
+    targetName: string;
+};
+
+export type AdminImportFailureListDto = {
+    failures: Array<AdminImportFailureDto>;
+    nextCursor?: string | null;
+};
+
 export type ApiErrorEnvelope = {
     error: {
         code: string;
@@ -53,6 +68,10 @@ export type CreateDocumentDto = {
     name: string;
 };
 
+export type CreateImportBatchDto = {
+    files: Array<ImportFilePreflightDto>;
+};
+
 export type CreateMemberDto = {
     displayName: string;
     loginName: string;
@@ -63,6 +82,7 @@ export type CsrfResponseDto = {
 };
 
 export type DocumentDetailDto = {
+    compatibilityStatus: 'full' | 'partial' | 'unsupported_online';
     createdAt: string;
     currentVersion: number;
     folderId?: string | null;
@@ -83,6 +103,7 @@ export type DocumentDetailResponseDto = {
 };
 
 export type DocumentDto = {
+    compatibilityStatus: 'full' | 'partial' | 'unsupported_online';
     createdAt: string;
     currentVersion: number;
     folderId?: string | null;
@@ -128,6 +149,40 @@ export type FolderNameDto = {
 
 export type FolderResponseDto = {
     folder: FolderDto;
+};
+
+export type ImportBatchResponseDto = {
+    cancelledJobs: number;
+    expectedBytes: number;
+    failedJobs: number;
+    id: string;
+    jobs: Array<ImportJobResponseDto>;
+    status: string;
+    succeededJobs: number;
+    totalJobs: number;
+    uploadedJobs: number;
+};
+
+export type ImportFilePreflightDto = {
+    clientFileName: string;
+    expectedBytes?: number;
+    targetFolderId?: string | null;
+    targetName: string;
+};
+
+export type ImportJobResponseDto = {
+    clientFileName: string;
+    documentId?: string | null;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    id: string;
+    phase: string;
+    targetFolderId?: string | null;
+    targetName: string;
+};
+
+export type ImportUploadDto = {
+    file: Blob | File;
 };
 
 export type LoginDto = {
@@ -178,6 +233,10 @@ export type NotificationListResponseDto = {
 
 export type NotificationReadAllResponseDto = {
     markedCount: number;
+};
+
+export type Object = {
+    [key: string]: unknown;
 };
 
 export type PermissionRequestDto = {
@@ -268,6 +327,10 @@ export type LoginResponseDtoWritable = {
     organization: SafeOrganizationDto;
     role: 'admin' | 'editor' | 'reader';
     user: SafeUserDto;
+};
+
+export type ObjectWritable = {
+    [key: string]: unknown;
 };
 
 /**
@@ -365,6 +428,28 @@ export type RejectEditPermissionRequestResponses = {
 };
 
 export type RejectEditPermissionRequestResponse = RejectEditPermissionRequestResponses[keyof RejectEditPermissionRequestResponses];
+
+export type AdminListImportFailuresData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query?: {
+        limit?: ObjectWritable;
+        after?: string;
+    };
+    url: '/api/v1/admin/import-failures';
+};
+
+export type AdminListImportFailuresResponses = {
+    200: AdminImportFailureListDto;
+};
+
+export type AdminListImportFailuresResponse = AdminListImportFailuresResponses[keyof AdminListImportFailuresResponses];
 
 export type AdminListMembersData = {
     body?: never;
@@ -752,6 +837,31 @@ export type UpdateDocumentMetadataResponses = {
 
 export type UpdateDocumentMetadataResponse = UpdateDocumentMetadataResponses[keyof UpdateDocumentMetadataResponses];
 
+export type ExportDocumentData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        documentId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/export';
+};
+
+export type ExportDocumentResponses = {
+    /**
+     * A private XMind export stream.
+     */
+    200: Blob | File;
+};
+
+export type ExportDocumentResponse = ExportDocumentResponses[keyof ExportDocumentResponses];
+
 export type CreateEditPermissionRequestData = {
     body?: never;
     headers?: {
@@ -858,6 +968,118 @@ export type CheckFolderDeleteResponses = {
 };
 
 export type CheckFolderDeleteResponse = CheckFolderDeleteResponses[keyof CheckFolderDeleteResponses];
+
+export type CreateImportBatchData = {
+    body: CreateImportBatchDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/import-batches';
+};
+
+export type CreateImportBatchResponses = {
+    201: ImportBatchResponseDto;
+};
+
+export type CreateImportBatchResponse = CreateImportBatchResponses[keyof CreateImportBatchResponses];
+
+export type GetImportBatchData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        batchId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/import-batches/{batchId}';
+};
+
+export type GetImportBatchResponses = {
+    200: ImportBatchResponseDto;
+};
+
+export type GetImportBatchResponse = GetImportBatchResponses[keyof GetImportBatchResponses];
+
+export type CancelImportJobData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        batchId: string;
+        jobId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/import-batches/{batchId}/jobs/{jobId}/cancel';
+};
+
+export type CancelImportJobResponses = {
+    200: ImportJobResponseDto;
+};
+
+export type CancelImportJobResponse = CancelImportJobResponses[keyof CancelImportJobResponses];
+
+export type RetryImportJobData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        batchId: string;
+        jobId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/import-batches/{batchId}/jobs/{jobId}/retry';
+};
+
+export type RetryImportJobResponses = {
+    200: ImportJobResponseDto;
+};
+
+export type RetryImportJobResponse = RetryImportJobResponses[keyof RetryImportJobResponses];
+
+export type UploadImportJobData = {
+    body: ImportUploadDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        batchId: string;
+        jobId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/import-batches/{batchId}/jobs/{jobId}/upload';
+};
+
+export type UploadImportJobResponses = {
+    200: ImportJobResponseDto;
+};
+
+export type UploadImportJobResponse = UploadImportJobResponses[keyof UploadImportJobResponses];
 
 export type HealthLiveData = {
     body?: never;

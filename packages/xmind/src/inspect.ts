@@ -10,22 +10,39 @@ export async function inspectXMindFile(
   options: Partial<XMindLimits> = {},
 ): Promise<XMindInspection> {
   const archive = await inspectArchive(path, options);
-  if (archive.contentJson !== undefined && archive.contentXml !== undefined) {
-    throw new XMindError(
-      "ARCHIVE_UNSUPPORTED",
-      "An XMind archive cannot contain both current and legacy content roots.",
-    );
-  }
   if (archive.contentJson === undefined && archive.contentXml === undefined) {
     throw new XMindError("CONTENT_MISSING", "The archive has no supported XMind content root.");
   }
 
-  const parsed =
-    archive.contentJson === undefined
-      ? parseContentXml(archive.contentXml as Buffer)
-      : parseContentJson(archive.contentJson);
+  let format: XMindInspection["format"];
+  let parsed;
+  if (archive.contentJson !== undefined) {
+    try {
+      parsed = parseContentJson(archive.contentJson);
+      format = "content-json";
+      if (archive.contentXml !== undefined) {
+        parsed.compatibility.unshift({
+          featurePath: "content.xml",
+          disposition: "normalized",
+          message: "Both current JSON and legacy XML roots were found; current JSON was selected.",
+        });
+      }
+    } catch (error) {
+      if (archive.contentXml === undefined || !(error instanceof XMindError)) throw error;
+      parsed = parseContentXml(archive.contentXml);
+      parsed.compatibility.unshift({
+        featurePath: "content.json",
+        disposition: "normalized",
+        message: "Current JSON was invalid; legacy XML was selected.",
+      });
+      format = "content-xml";
+    }
+  } else {
+    parsed = parseContentXml(archive.contentXml as Buffer);
+    format = "content-xml";
+  }
   return {
-    format: archive.contentJson === undefined ? "content-xml" : "content-json",
+    format,
     entries: archive.entries,
     sheets: parsed.sheets,
     assets: archive.assets,

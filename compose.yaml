@@ -48,6 +48,7 @@ services:
       ARGON2_ITERATIONS: ${ARGON2_ITERATIONS:-3}
       ARGON2_PARALLELISM: ${ARGON2_PARALLELISM:-1}
       TRUST_PROXY_COUNT: ${TRUST_PROXY_COUNT:-1}
+      XMIND_QUEUE_PREFIX: ${XMIND_QUEUE_PREFIX:-smm}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "127.0.0.1:${API_PORT:-3000}:3000"
@@ -191,6 +192,16 @@ services:
         mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
         mc mb --ignore-existing "local/$${MINIO_BUCKET}"
         mc anonymous set none "local/$${MINIO_BUCKET}"
+        ensure_rule() {
+          prefix="$${1}"
+          rules="$$(mc ilm rule ls --json "local/$${MINIO_BUCKET}" 2>/dev/null || true)"
+          case "$${rules}" in
+            *Prefix*"$${prefix}"*) return 0 ;;
+          esac
+          mc ilm rule add --expire-days 1 --prefix "$${prefix}" "local/$${MINIO_BUCKET}"
+        }
+        ensure_rule "tmp/"
+        ensure_rule "exports/"
     restart: "no"
 
   mailpit:
