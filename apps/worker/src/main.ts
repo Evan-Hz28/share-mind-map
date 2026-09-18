@@ -1,11 +1,13 @@
 import { fileURLToPath } from "node:url";
 
+import { createDatabase } from "@share-mind-map/database";
 import { Client as MinioClient } from "minio";
 import { Pool } from "pg";
 
 import { parseWorkerConfig, type WorkerConfig } from "./config.js";
 import { startHealthServer, type HealthServer } from "./health-server.js";
 import { createRedisConnection, createValidationQueue, createValidationWorker } from "./queue.js";
+import { NotificationOutboxProcessor } from "./notification-outbox.processor.js";
 
 export interface WorkerRuntime {
   pid: number;
@@ -30,6 +32,11 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
   const queueConnection = createRedisConnection(config.redisUrl);
   const healthRedis = createRedisConnection(config.redisUrl);
   const pool = new Pool({ connectionString: config.databaseUrl, connectionTimeoutMillis: 1_000 });
+  const notificationDatabase = createDatabase(config.databaseUrl);
+  const notifications = new NotificationOutboxProcessor(notificationDatabase);
+  const notificationTimer = setInterval(() => {
+    void notifications.processBatch().catch(() => undefined);
+  }, 1_000);
   const minio = createMinioClient(config);
   const queue = createValidationQueue(config, queueConnection);
   const worker = await createValidationWorker(config, workerConnection);
@@ -63,10 +70,11 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
     close: async () => {
       if (closed) return;
       closed = true;
+      clearInterval(notificationTimer);
       await health.close();
       await Promise.all([worker.close(), queue.close()]);
       await Promise.all([workerConnection.quit(), queueConnection.quit(), healthRedis.quit()]);
-      await pool.end();
+      await Promise.all([pool.end(), notificationDatabase.$client.end()]);
     },
   };
 }

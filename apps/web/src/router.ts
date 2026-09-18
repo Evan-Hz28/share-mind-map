@@ -8,6 +8,7 @@ import {
 } from "vue-router";
 
 import MembersView from "./admin/MembersView.vue";
+import Phase2AdminView from "./admin/Phase2AdminView.vue";
 import AppShell from "./app/AppShell.vue";
 import WorkspaceHomeView from "./app/WorkspaceHomeView.vue";
 import ChangePasswordView from "./auth/ChangePasswordView.vue";
@@ -49,6 +50,12 @@ const routes: RouteRecordRaw[] = [
         path: "admin/members",
         name: "members",
         component: MembersView,
+        meta: { requiresAdmin: true },
+      },
+      {
+        path: "admin/phase2",
+        name: "phase2-admin",
+        component: Phase2AdminView,
         meta: { requiresAdmin: true },
       },
     ],

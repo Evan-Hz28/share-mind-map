@@ -1,17 +1,28 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 
 import type { Database } from "./client.js";
 
-const migrationName = "0000_phase1_identity";
-const migrationCreatedAt = 0;
 const advisoryLockKey = 4_839_172_061n;
 
+interface MigrationFile {
+  name: string;
+  path: URL;
+  createdAt: number;
+}
+
+async function migrationFiles(): Promise<MigrationFile[]> {
+  const directory = new URL("../migrations/", import.meta.url);
+  const names = (await readdir(directory)).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
+  return names.map((filename, index) => ({
+    name: filename.slice(0, -4),
+    path: new URL(filename, directory),
+    createdAt: index,
+  }));
+}
+
 export async function migrateDatabase(database: Database): Promise<void> {
-  const sql = await readFile(
-    new URL(`../migrations/${migrationName}.sql`, import.meta.url),
-    "utf8",
-  );
+  const migrations = await migrationFiles();
   const client = await database.$client.connect();
   try {
     await client.query("BEGIN");
@@ -25,15 +36,21 @@ export async function migrateDatabase(database: Database): Promise<void> {
          created_at bigint NOT NULL
         )`,
     );
-    const existing = await client.query<{ name: string }>(
-      "SELECT name FROM drizzle.__drizzle_migrations WHERE name = $1",
-      [migrationName],
-    );
-    if (existing.rowCount === 0) {
-      await client.query(sql);
+    for (const migration of migrations) {
+      const existing = await client.query<{ name: string }>(
+        "SELECT name FROM drizzle.__drizzle_migrations WHERE name = $1",
+        [migration.name],
+      );
+      if (existing.rowCount !== 0) continue;
+      const migrationSql = await readFile(migration.path, "utf8");
+      await client.query(migrationSql);
       await client.query(
         "INSERT INTO drizzle.__drizzle_migrations (name, hash, created_at) VALUES ($1, $2, $3)",
-        [migrationName, createHash("sha256").update(sql).digest("hex"), migrationCreatedAt],
+        [
+          migration.name,
+          createHash("sha256").update(migrationSql).digest("hex"),
+          migration.createdAt,
+        ],
       );
     }
     await client.query("COMMIT");

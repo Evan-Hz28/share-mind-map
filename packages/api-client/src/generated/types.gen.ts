@@ -16,6 +16,24 @@ export type ApiErrorEnvelope = {
     };
 };
 
+export type AuditListResponseDto = {
+    logs: Array<AuditLogDto>;
+    nextCursor?: string | null;
+};
+
+export type AuditLogDto = {
+    action: string;
+    actorUserId?: string | null;
+    createdAt: string;
+    id: string;
+    metadata: {
+        [key: string]: unknown;
+    };
+    result: 'denied' | 'failure' | 'success';
+    targetId?: string | null;
+    targetType?: string | null;
+};
+
 export type ChangeAccountStatusDto = {
     status: 'active' | 'disabled';
 };
@@ -30,6 +48,11 @@ export type CreatedMemberResponseDto = {
     readonly temporaryPassword: string;
 };
 
+export type CreateDocumentDto = {
+    folderId?: string | null;
+    name: string;
+};
+
 export type CreateMemberDto = {
     displayName: string;
     loginName: string;
@@ -37,6 +60,74 @@ export type CreateMemberDto = {
 
 export type CsrfResponseDto = {
     readonly csrfToken: string;
+};
+
+export type DocumentDetailDto = {
+    createdAt: string;
+    currentVersion: number;
+    folderId?: string | null;
+    id: string;
+    imageBytes: number;
+    name: string;
+    nodeCount: number;
+    schemaVersion: number;
+    snapshot: {
+        [key: string]: unknown;
+    };
+    updatedAt: string;
+    workspaceId: string;
+};
+
+export type DocumentDetailResponseDto = {
+    document: DocumentDetailDto;
+};
+
+export type DocumentDto = {
+    createdAt: string;
+    currentVersion: number;
+    folderId?: string | null;
+    id: string;
+    imageBytes: number;
+    name: string;
+    nodeCount: number;
+    schemaVersion: number;
+    updatedAt: string;
+    workspaceId: string;
+};
+
+export type DocumentListResponseDto = {
+    documents: Array<DocumentDto>;
+    nextCursor?: string | null;
+};
+
+export type DocumentResponseDto = {
+    document: DocumentDto;
+};
+
+export type FolderDeleteCheckResponseDto = {
+    canDelete: boolean;
+    documentCount: number;
+    folder: FolderDto;
+};
+
+export type FolderDto = {
+    createdAt: string;
+    id: string;
+    name: string;
+    updatedAt: string;
+    workspaceId: string;
+};
+
+export type FolderListResponseDto = {
+    folders: Array<FolderDto>;
+};
+
+export type FolderNameDto = {
+    name: string;
+};
+
+export type FolderResponseDto = {
+    folder: FolderDto;
 };
 
 export type LoginDto = {
@@ -68,6 +159,55 @@ export type MemberResponseDto = {
     userId: string;
 };
 
+export type NotificationDto = {
+    body: string;
+    createdAt: string;
+    id: string;
+    notificationType: string;
+    readAt?: string | null;
+    targetId?: string | null;
+    targetType?: string | null;
+    title: string;
+};
+
+export type NotificationListResponseDto = {
+    nextCursor?: string | null;
+    notifications: Array<NotificationDto>;
+    unreadCount: number;
+};
+
+export type NotificationReadAllResponseDto = {
+    markedCount: number;
+};
+
+export type PermissionRequestDto = {
+    decidedAt?: string | null;
+    decidedBy?: string | null;
+    id: string;
+    requestedAt: string;
+    requesterDisplayName: string;
+    requesterId: string;
+    status: 'approved' | 'pending' | 'rejected';
+    workspaceId: string;
+};
+
+export type PermissionRequestListDto = {
+    nextCursor?: string | null;
+    requests: Array<PermissionRequestDto>;
+};
+
+export type PermissionRequestResponseDto = {
+    changed: boolean;
+    request: PermissionRequestDto;
+};
+
+export type RevokeEditingResponseDto = {
+    changed: boolean;
+    membershipId: string;
+    role: 'admin' | 'editor' | 'reader';
+    userId: string;
+};
+
 export type SafeOrganizationDto = {
     id: string;
     name: string;
@@ -92,8 +232,24 @@ export type SessionResponseDto = {
     user: SafeUserDto;
 };
 
+export type StorageUsageDto = {
+    documentCount: number;
+    folderCount: number;
+    knownObjectBytes: number;
+    quotaBytes: number;
+    reconciliationStatus: 'pending';
+    threshold: 'critical' | 'exceeded' | 'normal' | 'warning';
+    usagePercent: number;
+    workspaceId: string;
+};
+
 export type TemporaryPasswordResponseDto = {
     readonly temporaryPassword: string;
+};
+
+export type UpdateDocumentDto = {
+    folderId?: string | null;
+    name?: string;
 };
 
 export type CreatedMemberResponseDtoWritable = {
@@ -118,6 +274,97 @@ export type LoginResponseDtoWritable = {
  * Optional caller-provided request correlation identifier.
  */
 export type RequestIdHeader = string;
+
+export type AdminListAuditLogsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query?: {
+        from?: string;
+        to?: string;
+        action?: string;
+        result?: 'denied' | 'failure' | 'success';
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/audit-logs';
+};
+
+export type AdminListAuditLogsResponses = {
+    200: AuditListResponseDto;
+};
+
+export type AdminListAuditLogsResponse = AdminListAuditLogsResponses[keyof AdminListAuditLogsResponses];
+
+export type AdminListEditPermissionRequestsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query?: {
+        status?: 'approved' | 'pending' | 'rejected';
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/edit-requests';
+};
+
+export type AdminListEditPermissionRequestsResponses = {
+    200: PermissionRequestListDto;
+};
+
+export type AdminListEditPermissionRequestsResponse = AdminListEditPermissionRequestsResponses[keyof AdminListEditPermissionRequestsResponses];
+
+export type ApproveEditPermissionRequestData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/edit-requests/{requestId}/approve';
+};
+
+export type ApproveEditPermissionRequestResponses = {
+    201: PermissionRequestResponseDto;
+};
+
+export type ApproveEditPermissionRequestResponse = ApproveEditPermissionRequestResponses[keyof ApproveEditPermissionRequestResponses];
+
+export type RejectEditPermissionRequestData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/edit-requests/{requestId}/reject';
+};
+
+export type RejectEditPermissionRequestResponses = {
+    201: PermissionRequestResponseDto;
+};
+
+export type RejectEditPermissionRequestResponse = RejectEditPermissionRequestResponses[keyof RejectEditPermissionRequestResponses];
 
 export type AdminListMembersData = {
     body?: never;
@@ -220,6 +467,46 @@ export type AdminRevokeMemberSessionsResponses = {
 
 export type AdminRevokeMemberSessionsResponse = AdminRevokeMemberSessionsResponses[keyof AdminRevokeMemberSessionsResponses];
 
+export type RevokeMemberEditingData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        membershipId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/members/{membershipId}/revoke-editing';
+};
+
+export type RevokeMemberEditingResponses = {
+    201: RevokeEditingResponseDto;
+};
+
+export type RevokeMemberEditingResponse = RevokeMemberEditingResponses[keyof RevokeMemberEditingResponses];
+
+export type AdminReadStorageUsageData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/storage';
+};
+
+export type AdminReadStorageUsageResponses = {
+    200: StorageUsageDto;
+};
+
+export type AdminReadStorageUsageResponse = AdminReadStorageUsageResponses[keyof AdminReadStorageUsageResponses];
+
 export type AuthCsrfData = {
     body?: never;
     headers?: {
@@ -314,6 +601,263 @@ export type GetMeResponses = {
 };
 
 export type GetMeResponse = GetMeResponses[keyof GetMeResponses];
+
+export type ListNotificationsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query?: {
+        limit?: number;
+        cursor?: string;
+    };
+    url: '/api/v1/notifications';
+};
+
+export type ListNotificationsResponses = {
+    200: NotificationListResponseDto;
+};
+
+export type ListNotificationsResponse = ListNotificationsResponses[keyof ListNotificationsResponses];
+
+export type ReadNotificationData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        notificationId: string;
+    };
+    query?: never;
+    url: '/api/v1/notifications/{notificationId}/read';
+};
+
+export type ReadNotificationResponses = {
+    201: unknown;
+};
+
+export type ReadAllNotificationsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/notifications/read-all';
+};
+
+export type ReadAllNotificationsResponses = {
+    201: NotificationReadAllResponseDto;
+};
+
+export type ReadAllNotificationsResponse = ReadAllNotificationsResponses[keyof ReadAllNotificationsResponses];
+
+export type ListDocumentsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+    };
+    query?: {
+        sort?: 'name' | 'updatedAt';
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/api/v1/workspaces/{workspaceId}/documents';
+};
+
+export type ListDocumentsResponses = {
+    200: DocumentListResponseDto;
+};
+
+export type ListDocumentsResponse = ListDocumentsResponses[keyof ListDocumentsResponses];
+
+export type CreateBlankDocumentData = {
+    body: CreateDocumentDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents';
+};
+
+export type CreateBlankDocumentResponses = {
+    201: DocumentResponseDto;
+};
+
+export type CreateBlankDocumentResponse = CreateBlankDocumentResponses[keyof CreateBlankDocumentResponses];
+
+export type GetDocumentMetadataData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        documentId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}';
+};
+
+export type GetDocumentMetadataResponses = {
+    200: DocumentDetailResponseDto;
+};
+
+export type GetDocumentMetadataResponse = GetDocumentMetadataResponses[keyof GetDocumentMetadataResponses];
+
+export type UpdateDocumentMetadataData = {
+    body: UpdateDocumentDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        documentId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}';
+};
+
+export type UpdateDocumentMetadataResponses = {
+    200: DocumentResponseDto;
+};
+
+export type UpdateDocumentMetadataResponse = UpdateDocumentMetadataResponses[keyof UpdateDocumentMetadataResponses];
+
+export type CreateEditPermissionRequestData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/edit-requests';
+};
+
+export type CreateEditPermissionRequestResponses = {
+    201: PermissionRequestResponseDto;
+};
+
+export type CreateEditPermissionRequestResponse = CreateEditPermissionRequestResponses[keyof CreateEditPermissionRequestResponses];
+
+export type ListFoldersData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/folders';
+};
+
+export type ListFoldersResponses = {
+    200: FolderListResponseDto;
+};
+
+export type ListFoldersResponse = ListFoldersResponses[keyof ListFoldersResponses];
+
+export type CreateFolderData = {
+    body: FolderNameDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/folders';
+};
+
+export type CreateFolderResponses = {
+    201: FolderResponseDto;
+};
+
+export type CreateFolderResponse = CreateFolderResponses[keyof CreateFolderResponses];
+
+export type RenameFolderData = {
+    body: FolderNameDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        folderId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/folders/{folderId}';
+};
+
+export type RenameFolderResponses = {
+    200: FolderResponseDto;
+};
+
+export type RenameFolderResponse = RenameFolderResponses[keyof RenameFolderResponses];
+
+export type CheckFolderDeleteData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        folderId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/folders/{folderId}/delete-check';
+};
+
+export type CheckFolderDeleteResponses = {
+    200: FolderDeleteCheckResponseDto;
+};
+
+export type CheckFolderDeleteResponse = CheckFolderDeleteResponses[keyof CheckFolderDeleteResponses];
 
 export type HealthLiveData = {
     body?: never;

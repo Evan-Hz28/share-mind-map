@@ -2,6 +2,7 @@ import type { APIRequestContext, APIResponse } from "@playwright/test";
 
 export interface ApiSession {
   csrfToken: string;
+  workspaceId: string;
 }
 
 export interface E2eMember {
@@ -15,7 +16,7 @@ interface E2eCreatedMember {
   temporaryPassword: string;
 }
 
-async function jsonBody<T>(response: APIResponse): Promise<T> {
+export async function jsonBody<T>(response: APIResponse): Promise<T> {
   const body: unknown = await response.json();
   return body as T;
 }
@@ -29,8 +30,11 @@ export async function apiLogin(
     data: { loginName, password },
   });
   if (!response.ok()) return { response };
-  const login = await jsonBody<{ csrfToken: string }>(response);
-  return { response, session: { csrfToken: login.csrfToken } };
+  const login = await jsonBody<{ csrfToken: string; defaultWorkspace: { id: string } }>(response);
+  return {
+    response,
+    session: { csrfToken: login.csrfToken, workspaceId: login.defaultWorkspace.id },
+  };
 }
 
 export async function apiChangePassword(

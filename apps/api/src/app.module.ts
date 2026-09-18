@@ -2,7 +2,13 @@ import { Inject, Module } from "@nestjs/common";
 import type { DynamicModule, OnApplicationShutdown } from "@nestjs/common";
 
 import { AdminModule } from "./admin/admin.module.js";
+import { AuditModule } from "./audit/audit.module.js";
 import { AuthModule } from "./auth/auth.module.js";
+import { DocumentsModule } from "./documents/documents.module.js";
+import { FoldersModule } from "./folders/folders.module.js";
+import { MembershipModule } from "./membership/membership.module.js";
+import { NotificationsModule } from "./notifications/notifications.module.js";
+import { StorageModule } from "./storage/storage.module.js";
 import { HealthController } from "./health/health.controller.js";
 import {
   createInfrastructureHealthRuntime,
@@ -64,6 +70,12 @@ export class AppModule {
         ConfigModule.forRoot(options.config),
         AuthModule.register(options.config),
         AdminModule,
+        AuditModule,
+        FoldersModule,
+        DocumentsModule,
+        MembershipModule,
+        NotificationsModule,
+        StorageModule,
       ],
       controllers: [HealthController],
       providers: [

@@ -33,6 +33,7 @@ async function logout(): Promise<void> {
       <nav class="desktop-navigation" aria-label="主导航">
         <RouterLink to="/workspace"> 工作区 </RouterLink>
         <RouterLink v-if="auth.role === 'admin'" to="/admin/members"> 成员管理 </RouterLink>
+        <RouterLink v-if="auth.role === 'admin'" to="/admin/phase2"> 权限与审计 </RouterLink>
       </nav>
 
       <div class="top-bar__actions">
@@ -56,6 +57,12 @@ async function logout(): Promise<void> {
             >
               成员管理
             </RouterLink>
+            <RouterLink
+              v-if="auth.role === 'admin'"
+              to="/admin/phase2"
+              @click="navigationOpen = false"
+              >权限与审计</RouterLink
+            >
           </nav>
         </div>
         <div class="account-menu">

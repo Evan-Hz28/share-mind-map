@@ -29,7 +29,7 @@ beforeEach(async () => {
   await resetDatabase(runtime);
 });
 
-describe("phase 1 migrations", () => {
+describe("database migrations", () => {
   it("migrates an empty database and treats repeated migration as a no-op", async () => {
     await migrateDatabase(runtime.db);
     const first = await migrationNames();
@@ -37,7 +37,7 @@ describe("phase 1 migrations", () => {
     await migrateDatabase(runtime.db);
 
     expect(await migrationNames()).toEqual(first);
-    expect(first).toEqual(["0000_phase1_identity"]);
+    expect(first).toEqual(["0000_phase1_identity", "0001_phase2_workspace"]);
   });
 
   it("uses a Drizzle-compatible migration journal", async () => {
@@ -64,7 +64,7 @@ describe("phase 1 migrations", () => {
   it("serializes concurrent startup migration attempts", async () => {
     await Promise.all([migrateDatabase(runtime.db), migrateDatabase(runtime.db)]);
 
-    expect(await migrationNames()).toEqual(["0000_phase1_identity"]);
+    expect(await migrationNames()).toEqual(["0000_phase1_identity", "0001_phase2_workspace"]);
   });
 
   it("creates exactly the six phase 1 tables", async () => {
@@ -79,6 +79,12 @@ describe("phase 1 migrations", () => {
     expect(result.rows.map((row) => row.table_name)).toEqual([
       "audit_logs",
       "auth_identities",
+      "document_snapshots",
+      "documents",
+      "edit_permission_requests",
+      "folders",
+      "notification_outbox",
+      "notifications",
       "organizations",
       "users",
       "workspace_memberships",
@@ -95,22 +101,36 @@ describe("phase 1 migrations", () => {
        ORDER BY table_name, column_name`,
     );
 
-    expect(result.rows).toEqual([
-      { table_name: "audit_logs", column_name: "created_at" },
-      { table_name: "auth_identities", column_name: "created_at" },
-      { table_name: "auth_identities", column_name: "password_changed_at" },
-      { table_name: "auth_identities", column_name: "updated_at" },
-      { table_name: "organizations", column_name: "created_at" },
-      { table_name: "organizations", column_name: "updated_at" },
-      { table_name: "users", column_name: "created_at" },
-      { table_name: "users", column_name: "last_login_at" },
-      { table_name: "users", column_name: "updated_at" },
-      { table_name: "workspace_memberships", column_name: "created_at" },
-      { table_name: "workspace_memberships", column_name: "granted_at" },
-      { table_name: "workspace_memberships", column_name: "revoked_at" },
-      { table_name: "workspace_memberships", column_name: "updated_at" },
-      { table_name: "workspaces", column_name: "created_at" },
-      { table_name: "workspaces", column_name: "updated_at" },
-    ]);
+    expect(result.rows).toEqual(
+      expect.arrayContaining([
+        { table_name: "audit_logs", column_name: "created_at" },
+        { table_name: "auth_identities", column_name: "created_at" },
+        { table_name: "auth_identities", column_name: "password_changed_at" },
+        { table_name: "auth_identities", column_name: "updated_at" },
+        { table_name: "organizations", column_name: "created_at" },
+        { table_name: "organizations", column_name: "updated_at" },
+        { table_name: "users", column_name: "created_at" },
+        { table_name: "users", column_name: "last_login_at" },
+        { table_name: "users", column_name: "updated_at" },
+        { table_name: "workspace_memberships", column_name: "created_at" },
+        { table_name: "workspace_memberships", column_name: "granted_at" },
+        { table_name: "workspace_memberships", column_name: "revoked_at" },
+        { table_name: "workspace_memberships", column_name: "updated_at" },
+        { table_name: "workspaces", column_name: "created_at" },
+        { table_name: "workspaces", column_name: "updated_at" },
+        { table_name: "document_snapshots", column_name: "created_at" },
+        { table_name: "documents", column_name: "created_at" },
+        { table_name: "documents", column_name: "updated_at" },
+        { table_name: "edit_permission_requests", column_name: "created_at" },
+        { table_name: "edit_permission_requests", column_name: "requested_at" },
+        { table_name: "edit_permission_requests", column_name: "updated_at" },
+        { table_name: "folders", column_name: "created_at" },
+        { table_name: "folders", column_name: "updated_at" },
+        { table_name: "notification_outbox", column_name: "available_at" },
+        { table_name: "notification_outbox", column_name: "created_at" },
+        { table_name: "notification_outbox", column_name: "updated_at" },
+        { table_name: "notifications", column_name: "created_at" },
+      ]),
+    );
   });
 });

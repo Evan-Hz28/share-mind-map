@@ -5,6 +5,7 @@ import {
   adminListMembers,
   adminResetMemberPassword,
   adminRevokeMemberSessions,
+  revokeMemberEditing,
   type MemberResponseDto,
 } from "@share-mind-map/api-client";
 import { MoreFilled, Plus } from "@element-plus/icons-vue";
@@ -15,7 +16,7 @@ import { apiClient, toApiFailure, type RequestFailure } from "../api.js";
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
 import TemporaryPasswordDialog from "./TemporaryPasswordDialog.vue";
 
-type Confirmation = { action: "status" | "revoke"; member: MemberResponseDto };
+type Confirmation = { action: "status" | "revoke" | "editing"; member: MemberResponseDto };
 
 const members = ref<MemberResponseDto[]>([]);
 const loading = ref(true);
@@ -112,7 +113,15 @@ async function confirmAction(): Promise<void> {
             path: { id: requested.member.id },
             body: { status: requested.member.accountStatus === "active" ? "disabled" : "active" },
           })
-        : await adminRevokeMemberSessions({ client: apiClient, path: { id: requested.member.id } });
+        : requested.action === "revoke"
+          ? await adminRevokeMemberSessions({
+              client: apiClient,
+              path: { id: requested.member.id },
+            })
+          : await revokeMemberEditing({
+              client: apiClient,
+              path: { membershipId: requested.member.id },
+            });
     if (result.error !== undefined) {
       error.value = toApiFailure(result.error);
       return;
@@ -212,6 +221,13 @@ onMounted(loadMembers);
             <button type="button" @click="requestConfirmation('revoke', member)">
               撤销 {{ member.displayName }} 的全部会话
             </button>
+            <button
+              v-if="member.role === 'editor'"
+              type="button"
+              @click="requestConfirmation('editing', member)"
+            >
+              撤销 {{ member.displayName }} 的编辑权限
+            </button>
           </div>
         </div>
       </div>
@@ -247,15 +263,18 @@ onMounted(loadMembers);
       :title="
         confirmation?.action === 'revoke'
           ? '撤销全部会话'
-          : confirmation?.member.accountStatus === 'active'
-            ? '禁用成员'
-            : '恢复成员'
+          : confirmation?.action === 'editing'
+            ? '撤销编辑权限'
+            : confirmation?.member.accountStatus === 'active'
+              ? '禁用成员'
+              : '恢复成员'
       "
       width="min(92vw, 480px)"
       :close-on-click-modal="false"
       @close="confirmation = null"
     >
       <p v-if="confirmation?.action === 'revoke'">该成员需要在所有设备上重新登录。</p>
+      <p v-else-if="confirmation?.action === 'editing'">撤销后，该成员立即恢复为只读成员。</p>
       <p v-else-if="confirmation?.member.accountStatus === 'active'">
         禁用后，该成员的全部会话将立即失效。
       </p>
@@ -266,9 +285,11 @@ onMounted(loadMembers);
           {{
             confirmation?.action === "revoke"
               ? "确认撤销"
-              : confirmation?.member.accountStatus === "active"
-                ? "确认禁用"
-                : "确认恢复"
+              : confirmation?.action === "editing"
+                ? "确认撤销编辑权限"
+                : confirmation?.member.accountStatus === "active"
+                  ? "确认禁用"
+                  : "确认恢复"
           }}
         </ElButton>
       </template>

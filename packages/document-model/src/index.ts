@@ -1,4 +1,5 @@
 import { DocumentModelError } from "./errors.js";
+export { createInitialCloudDocument } from "./initial-document.js";
 import { validateDocumentInvariants } from "./invariants.js";
 import { cloudDocumentV1Schema } from "./schema.js";
 import type { CloudDocumentV1, DocumentInvariantIssue } from "./types.js";

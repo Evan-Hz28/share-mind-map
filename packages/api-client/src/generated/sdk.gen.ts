@@ -3,7 +3,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { AdminChangeAccountStatusData, AdminChangeAccountStatusResponses, AdminCreateMemberData, AdminCreateMemberResponses, AdminListMembersData, AdminListMembersResponses, AdminResetMemberPasswordData, AdminResetMemberPasswordResponses, AdminRevokeMemberSessionsData, AdminRevokeMemberSessionsResponses, AuthChangePasswordData, AuthChangePasswordResponses, AuthCsrfData, AuthCsrfResponses, AuthLoginData, AuthLoginResponses, AuthLogoutData, AuthLogoutResponses, GetMeData, GetMeResponses, HealthLiveData, HealthLiveResponses, HealthReadyData, HealthReadyErrors, HealthReadyResponses } from './types.gen.js';
+import type { AdminChangeAccountStatusData, AdminChangeAccountStatusResponses, AdminCreateMemberData, AdminCreateMemberResponses, AdminListAuditLogsData, AdminListAuditLogsResponses, AdminListEditPermissionRequestsData, AdminListEditPermissionRequestsResponses, AdminListMembersData, AdminListMembersResponses, AdminReadStorageUsageData, AdminReadStorageUsageResponses, AdminResetMemberPasswordData, AdminResetMemberPasswordResponses, AdminRevokeMemberSessionsData, AdminRevokeMemberSessionsResponses, ApproveEditPermissionRequestData, ApproveEditPermissionRequestResponses, AuthChangePasswordData, AuthChangePasswordResponses, AuthCsrfData, AuthCsrfResponses, AuthLoginData, AuthLoginResponses, AuthLogoutData, AuthLogoutResponses, CheckFolderDeleteData, CheckFolderDeleteResponses, CreateBlankDocumentData, CreateBlankDocumentResponses, CreateEditPermissionRequestData, CreateEditPermissionRequestResponses, CreateFolderData, CreateFolderResponses, GetDocumentMetadataData, GetDocumentMetadataResponses, GetMeData, GetMeResponses, HealthLiveData, HealthLiveResponses, HealthReadyData, HealthReadyErrors, HealthReadyResponses, ListDocumentsData, ListDocumentsResponses, ListFoldersData, ListFoldersResponses, ListNotificationsData, ListNotificationsResponses, ReadAllNotificationsData, ReadAllNotificationsResponses, ReadNotificationData, ReadNotificationResponses, RejectEditPermissionRequestData, RejectEditPermissionRequestResponses, RenameFolderData, RenameFolderResponses, RevokeMemberEditingData, RevokeMemberEditingResponses, UpdateDocumentMetadataData, UpdateDocumentMetadataResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -18,6 +18,14 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
      */
     meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
 };
+
+export const adminListAuditLogs = <ThrowOnError extends boolean = false>(options?: Options<AdminListAuditLogsData, ThrowOnError>): RequestResult<AdminListAuditLogsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminListAuditLogsResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/audit-logs', ...options });
+
+export const adminListEditPermissionRequests = <ThrowOnError extends boolean = false>(options?: Options<AdminListEditPermissionRequestsData, ThrowOnError>): RequestResult<AdminListEditPermissionRequestsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminListEditPermissionRequestsResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/edit-requests', ...options });
+
+export const approveEditPermissionRequest = <ThrowOnError extends boolean = false>(options: Options<ApproveEditPermissionRequestData, ThrowOnError>): RequestResult<ApproveEditPermissionRequestResponses, unknown, ThrowOnError> => (options.client ?? client).post<ApproveEditPermissionRequestResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/edit-requests/{requestId}/approve', ...options });
+
+export const rejectEditPermissionRequest = <ThrowOnError extends boolean = false>(options: Options<RejectEditPermissionRequestData, ThrowOnError>): RequestResult<RejectEditPermissionRequestResponses, unknown, ThrowOnError> => (options.client ?? client).post<RejectEditPermissionRequestResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/edit-requests/{requestId}/reject', ...options });
 
 export const adminListMembers = <ThrowOnError extends boolean = false>(options?: Options<AdminListMembersData, ThrowOnError>): RequestResult<AdminListMembersResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminListMembersResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/members', ...options });
 
@@ -43,6 +51,10 @@ export const adminResetMemberPassword = <ThrowOnError extends boolean = false>(o
 
 export const adminRevokeMemberSessions = <ThrowOnError extends boolean = false>(options: Options<AdminRevokeMemberSessionsData, ThrowOnError>): RequestResult<AdminRevokeMemberSessionsResponses, unknown, ThrowOnError> => (options.client ?? client).post<AdminRevokeMemberSessionsResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/members/{id}/sessions/revoke', ...options });
 
+export const revokeMemberEditing = <ThrowOnError extends boolean = false>(options: Options<RevokeMemberEditingData, ThrowOnError>): RequestResult<RevokeMemberEditingResponses, unknown, ThrowOnError> => (options.client ?? client).post<RevokeMemberEditingResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/members/{membershipId}/revoke-editing', ...options });
+
+export const adminReadStorageUsage = <ThrowOnError extends boolean = false>(options?: Options<AdminReadStorageUsageData, ThrowOnError>): RequestResult<AdminReadStorageUsageResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminReadStorageUsageResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/storage', ...options });
+
 export const authCsrf = <ThrowOnError extends boolean = false>(options?: Options<AuthCsrfData, ThrowOnError>): RequestResult<AuthCsrfResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AuthCsrfResponses, unknown, ThrowOnError>({ url: '/api/v1/auth/csrf', ...options });
 
 export const authLogin = <ThrowOnError extends boolean = false>(options: Options<AuthLoginData, ThrowOnError>): RequestResult<AuthLoginResponses, unknown, ThrowOnError> => (options.client ?? client).post<AuthLoginResponses, unknown, ThrowOnError>({
@@ -66,6 +78,58 @@ export const authChangePassword = <ThrowOnError extends boolean = false>(options
 });
 
 export const getMe = <ThrowOnError extends boolean = false>(options?: Options<GetMeData, ThrowOnError>): RequestResult<GetMeResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetMeResponses, unknown, ThrowOnError>({ url: '/api/v1/me', ...options });
+
+export const listNotifications = <ThrowOnError extends boolean = false>(options?: Options<ListNotificationsData, ThrowOnError>): RequestResult<ListNotificationsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListNotificationsResponses, unknown, ThrowOnError>({ url: '/api/v1/notifications', ...options });
+
+export const readNotification = <ThrowOnError extends boolean = false>(options: Options<ReadNotificationData, ThrowOnError>): RequestResult<ReadNotificationResponses, unknown, ThrowOnError> => (options.client ?? client).post<ReadNotificationResponses, unknown, ThrowOnError>({ url: '/api/v1/notifications/{notificationId}/read', ...options });
+
+export const readAllNotifications = <ThrowOnError extends boolean = false>(options?: Options<ReadAllNotificationsData, ThrowOnError>): RequestResult<ReadAllNotificationsResponses, unknown, ThrowOnError> => (options?.client ?? client).post<ReadAllNotificationsResponses, unknown, ThrowOnError>({ url: '/api/v1/notifications/read-all', ...options });
+
+export const listDocuments = <ThrowOnError extends boolean = false>(options: Options<ListDocumentsData, ThrowOnError>): RequestResult<ListDocumentsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListDocumentsResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{workspaceId}/documents', ...options });
+
+export const createBlankDocument = <ThrowOnError extends boolean = false>(options: Options<CreateBlankDocumentData, ThrowOnError>): RequestResult<CreateBlankDocumentResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateBlankDocumentResponses, unknown, ThrowOnError>({
+    url: '/api/v1/workspaces/{workspaceId}/documents',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const getDocumentMetadata = <ThrowOnError extends boolean = false>(options: Options<GetDocumentMetadataData, ThrowOnError>): RequestResult<GetDocumentMetadataResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetDocumentMetadataResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}', ...options });
+
+export const updateDocumentMetadata = <ThrowOnError extends boolean = false>(options: Options<UpdateDocumentMetadataData, ThrowOnError>): RequestResult<UpdateDocumentMetadataResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateDocumentMetadataResponses, unknown, ThrowOnError>({
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const createEditPermissionRequest = <ThrowOnError extends boolean = false>(options: Options<CreateEditPermissionRequestData, ThrowOnError>): RequestResult<CreateEditPermissionRequestResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateEditPermissionRequestResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{workspaceId}/edit-requests', ...options });
+
+export const listFolders = <ThrowOnError extends boolean = false>(options: Options<ListFoldersData, ThrowOnError>): RequestResult<ListFoldersResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListFoldersResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{workspaceId}/folders', ...options });
+
+export const createFolder = <ThrowOnError extends boolean = false>(options: Options<CreateFolderData, ThrowOnError>): RequestResult<CreateFolderResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateFolderResponses, unknown, ThrowOnError>({
+    url: '/api/v1/workspaces/{workspaceId}/folders',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const renameFolder = <ThrowOnError extends boolean = false>(options: Options<RenameFolderData, ThrowOnError>): RequestResult<RenameFolderResponses, unknown, ThrowOnError> => (options.client ?? client).patch<RenameFolderResponses, unknown, ThrowOnError>({
+    url: '/api/v1/workspaces/{workspaceId}/folders/{folderId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const checkFolderDelete = <ThrowOnError extends boolean = false>(options: Options<CheckFolderDeleteData, ThrowOnError>): RequestResult<CheckFolderDeleteResponses, unknown, ThrowOnError> => (options.client ?? client).post<CheckFolderDeleteResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{workspaceId}/folders/{folderId}/delete-check', ...options });
 
 export const healthLive = <ThrowOnError extends boolean = false>(options?: Options<HealthLiveData, ThrowOnError>): RequestResult<HealthLiveResponses, unknown, ThrowOnError> => (options?.client ?? client).get<HealthLiveResponses, unknown, ThrowOnError>({ url: '/health/live', ...options });
 

@@ -48,6 +48,72 @@
         ],
         "type": "object"
       },
+      "AuditListResponseDto": {
+        "properties": {
+          "logs": {
+            "items": {
+              "$ref": "#/components/schemas/AuditLogDto"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "logs"
+        ],
+        "type": "object"
+      },
+      "AuditLogDto": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actorUserId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "result": {
+            "enum": [
+              "denied",
+              "failure",
+              "success"
+            ],
+            "type": "string"
+          },
+          "targetId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "targetType": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "createdAt",
+          "id",
+          "metadata",
+          "result"
+        ],
+        "type": "object"
+      },
       "ChangeAccountStatusDto": {
         "properties": {
           "status": {
@@ -100,6 +166,24 @@
         ],
         "type": "object"
       },
+      "CreateDocumentDto": {
+        "properties": {
+          "folderId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "CreateMemberDto": {
         "properties": {
           "displayName": {
@@ -129,6 +213,242 @@
         },
         "required": [
           "csrfToken"
+        ],
+        "type": "object"
+      },
+      "DocumentDetailDto": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "currentVersion": {
+            "type": "number"
+          },
+          "folderId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "imageBytes": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodeCount": {
+            "type": "number"
+          },
+          "schemaVersion": {
+            "type": "number"
+          },
+          "snapshot": {
+            "type": "object"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "workspaceId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "createdAt",
+          "currentVersion",
+          "id",
+          "imageBytes",
+          "name",
+          "nodeCount",
+          "schemaVersion",
+          "snapshot",
+          "updatedAt",
+          "workspaceId"
+        ],
+        "type": "object"
+      },
+      "DocumentDetailResponseDto": {
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/DocumentDetailDto"
+          }
+        },
+        "required": [
+          "document"
+        ],
+        "type": "object"
+      },
+      "DocumentDto": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "currentVersion": {
+            "type": "number"
+          },
+          "folderId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "imageBytes": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodeCount": {
+            "type": "number"
+          },
+          "schemaVersion": {
+            "type": "number"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "workspaceId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "createdAt",
+          "currentVersion",
+          "id",
+          "imageBytes",
+          "name",
+          "nodeCount",
+          "schemaVersion",
+          "updatedAt",
+          "workspaceId"
+        ],
+        "type": "object"
+      },
+      "DocumentListResponseDto": {
+        "properties": {
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentDto"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "documents"
+        ],
+        "type": "object"
+      },
+      "DocumentResponseDto": {
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/DocumentDto"
+          }
+        },
+        "required": [
+          "document"
+        ],
+        "type": "object"
+      },
+      "FolderDeleteCheckResponseDto": {
+        "properties": {
+          "canDelete": {
+            "type": "boolean"
+          },
+          "documentCount": {
+            "type": "number"
+          },
+          "folder": {
+            "$ref": "#/components/schemas/FolderDto"
+          }
+        },
+        "required": [
+          "canDelete",
+          "documentCount",
+          "folder"
+        ],
+        "type": "object"
+      },
+      "FolderDto": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "workspaceId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "createdAt",
+          "id",
+          "name",
+          "updatedAt",
+          "workspaceId"
+        ],
+        "type": "object"
+      },
+      "FolderListResponseDto": {
+        "properties": {
+          "folders": {
+            "items": {
+              "$ref": "#/components/schemas/FolderDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "folders"
+        ],
+        "type": "object"
+      },
+      "FolderNameDto": {
+        "properties": {
+          "name": {
+            "maxLength": 50,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "FolderResponseDto": {
+        "properties": {
+          "folder": {
+            "$ref": "#/components/schemas/FolderDto"
+          }
+        },
+        "required": [
+          "folder"
         ],
         "type": "object"
       },
@@ -264,6 +584,195 @@
         ],
         "type": "object"
       },
+      "NotificationDto": {
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "notificationType": {
+            "type": "string"
+          },
+          "readAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "targetId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "targetType": {
+            "nullable": true,
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "body",
+          "createdAt",
+          "id",
+          "notificationType",
+          "title"
+        ],
+        "type": "object"
+      },
+      "NotificationListResponseDto": {
+        "properties": {
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          },
+          "notifications": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationDto"
+            },
+            "type": "array"
+          },
+          "unreadCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "notifications",
+          "unreadCount"
+        ],
+        "type": "object"
+      },
+      "NotificationReadAllResponseDto": {
+        "properties": {
+          "markedCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "markedCount"
+        ],
+        "type": "object"
+      },
+      "PermissionRequestDto": {
+        "properties": {
+          "decidedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "decidedBy": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "requestedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "requesterDisplayName": {
+            "type": "string"
+          },
+          "requesterId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "approved",
+              "pending",
+              "rejected"
+            ],
+            "type": "string"
+          },
+          "workspaceId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "requestedAt",
+          "requesterDisplayName",
+          "requesterId",
+          "status",
+          "workspaceId"
+        ],
+        "type": "object"
+      },
+      "PermissionRequestListDto": {
+        "properties": {
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          },
+          "requests": {
+            "items": {
+              "$ref": "#/components/schemas/PermissionRequestDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "requests"
+        ],
+        "type": "object"
+      },
+      "PermissionRequestResponseDto": {
+        "properties": {
+          "changed": {
+            "type": "boolean"
+          },
+          "request": {
+            "$ref": "#/components/schemas/PermissionRequestDto"
+          }
+        },
+        "required": [
+          "changed",
+          "request"
+        ],
+        "type": "object"
+      },
+      "RevokeEditingResponseDto": {
+        "properties": {
+          "changed": {
+            "type": "boolean"
+          },
+          "membershipId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "editor",
+              "reader"
+            ],
+            "type": "string"
+          },
+          "userId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "changed",
+          "membershipId",
+          "role",
+          "userId"
+        ],
+        "type": "object"
+      },
       "SafeOrganizationDto": {
         "properties": {
           "id": {
@@ -351,6 +860,55 @@
         ],
         "type": "object"
       },
+      "StorageUsageDto": {
+        "properties": {
+          "documentCount": {
+            "type": "number"
+          },
+          "folderCount": {
+            "type": "number"
+          },
+          "knownObjectBytes": {
+            "type": "number"
+          },
+          "quotaBytes": {
+            "type": "number"
+          },
+          "reconciliationStatus": {
+            "enum": [
+              "pending"
+            ],
+            "type": "string"
+          },
+          "threshold": {
+            "enum": [
+              "critical",
+              "exceeded",
+              "normal",
+              "warning"
+            ],
+            "type": "string"
+          },
+          "usagePercent": {
+            "type": "number"
+          },
+          "workspaceId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "documentCount",
+          "folderCount",
+          "knownObjectBytes",
+          "quotaBytes",
+          "reconciliationStatus",
+          "threshold",
+          "usagePercent",
+          "workspaceId"
+        ],
+        "type": "object"
+      },
       "TemporaryPasswordResponseDto": {
         "properties": {
           "temporaryPassword": {
@@ -361,6 +919,21 @@
         "required": [
           "temporaryPassword"
         ],
+        "type": "object"
+      },
+      "UpdateDocumentDto": {
+        "properties": {
+          "folderId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
         "type": "object"
       }
     },
@@ -390,6 +963,238 @@
   },
   "openapi": "3.0.0",
   "paths": {
+    "/api/v1/admin/audit-logs": {
+      "get": {
+        "operationId": "adminListAuditLogs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "result",
+            "required": false,
+            "schema": {
+              "enum": [
+                "denied",
+                "failure",
+                "success"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "number"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditListResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/edit-requests": {
+      "get": {
+        "operationId": "adminListEditPermissionRequests",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "enum": [
+                "approved",
+                "pending",
+                "rejected"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "number"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionRequestListDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/edit-requests/{requestId}/approve": {
+      "post": {
+        "operationId": "approveEditPermissionRequest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "requestId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionRequestResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/edit-requests/{requestId}/reject": {
+      "post": {
+        "operationId": "rejectEditPermissionRequest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "requestId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionRequestResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
     "/api/v1/admin/members": {
       "get": {
         "operationId": "adminListMembers",
@@ -584,6 +1389,77 @@
         ]
       }
     },
+    "/api/v1/admin/members/{membershipId}/revoke-editing": {
+      "post": {
+        "operationId": "revokeMemberEditing",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "membershipId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeEditingResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/storage": {
+      "get": {
+        "operationId": "adminReadStorageUsage",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageUsageDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
     "/api/v1/auth/csrf": {
       "get": {
         "operationId": "authCsrf",
@@ -739,6 +1615,576 @@
         "summary": "",
         "tags": [
           "authentication"
+        ]
+      }
+    },
+    "/api/v1/notifications": {
+      "get": {
+        "operationId": "listNotifications",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationListResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/notifications/{notificationId}/read": {
+      "post": {
+        "operationId": "readNotification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notificationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/notifications/read-all": {
+      "post": {
+        "operationId": "readAllNotifications",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationReadAllResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents": {
+      "get": {
+        "operationId": "listDocuments",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "updatedAt",
+              "enum": [
+                "name",
+                "updatedAt"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "number"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentListResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "documents"
+        ]
+      },
+      "post": {
+        "operationId": "createBlankDocument",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDocumentDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}": {
+      "get": {
+        "operationId": "getDocumentMetadata",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "documentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentDetailResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "documents"
+        ]
+      },
+      "patch": {
+        "operationId": "updateDocumentMetadata",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "documentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDocumentDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/edit-requests": {
+      "post": {
+        "operationId": "createEditPermissionRequest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionRequestResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "permissions"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/folders": {
+      "get": {
+        "operationId": "listFolders",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderListResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "folders"
+        ]
+      },
+      "post": {
+        "operationId": "createFolder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FolderNameDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "folders"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/folders/{folderId}": {
+      "patch": {
+        "operationId": "renameFolder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "folderId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FolderNameDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "folders"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/folders/{folderId}/delete-check": {
+      "post": {
+        "operationId": "checkFolderDelete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "folderId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderDeleteCheckResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "folders"
         ]
       }
     },
