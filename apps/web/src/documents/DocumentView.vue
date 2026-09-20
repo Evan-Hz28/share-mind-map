@@ -1,10 +1,20 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  acquireDocumentLock,
+  heartbeatDocumentLock,
+  releaseDocumentLock,
+  type LockDto,
+} from "@share-mind-map/api-client";
+import { cloneCloudDocument } from "@share-mind-map/document-model";
 
 import { useAuthStore } from "../auth/auth.store.js";
+import { apiClient } from "../api.js";
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
 import { DraftStore } from "../editor/draft-store.js";
 import { useEditorStore } from "../editor/editor.store.js";
+import LockStatus from "../editor/LockStatus.vue";
+import ImageUploadControl from "../editor/assets/ImageUploadControl.vue";
 import { MindElixirAdapter } from "../editor/adapters/mind-elixir.js";
 import type { MindMapAdapter } from "../editor/adapters/types.js";
 import { useUnsavedGuard } from "../editor/use-unsaved-guard.js";
@@ -19,9 +29,11 @@ const drafts = new DraftStore();
 const canvas = ref<HTMLDivElement | null>(null);
 const mobile = ref(false);
 const copiedDraft = ref(false);
+const lockState = ref<"idle" | "acquiring" | "held" | "lost" | "error">("idle");
 let adapter: MindMapAdapter | null = null;
 let unsubscribe: (() => void) | null = null;
 let mediaQuery: MediaQueryList | null = null;
+let lockTimer: ReturnType<typeof setTimeout> | null = null;
 const realtime = new DocumentRealtime({
   onVersionGap: () => void load(),
   onReconnect: () => {
@@ -154,15 +166,122 @@ async function load(): Promise<void> {
   }
 }
 
-function beginEditing(): void {
-  if (!canEdit.value || mobile.value || lockOccupied.value || documents.metadata === null) return;
-  editor.startEditing(documents.metadata.currentVersion);
-  adapter?.setReadOnly(false);
+function stopLockTimer(): void {
+  if (lockTimer !== null) clearTimeout(lockTimer);
+  lockTimer = null;
 }
 
-function endEditing(): void {
+function scheduleHeartbeat(ttlSeconds: number): void {
+  stopLockTimer();
+  lockTimer = setTimeout(() => void heartbeat(), Math.max(1_000, Math.floor(ttlSeconds * 500)));
+}
+
+async function heartbeat(): Promise<void> {
+  const lease = editor.lockLease;
+  if (lease === null || currentWorkspaceId.value === "") return;
+  const result = await heartbeatDocumentLock({
+    client: apiClient,
+    path: { workspaceId: currentWorkspaceId.value, documentId: properties.documentId },
+    body: lease,
+  });
+  if (result.data === undefined) {
+    lockState.value = "lost";
+    editor.clearLockLease();
+    editor.markLockLost();
+    stopLockTimer();
+    adapter?.setReadOnly(true);
+    return;
+  }
+  editor.setLockLease({ ...lease, generation: result.data.generation });
+  if (documents.lock !== null) {
+    documents.lock = {
+      ...documents.lock,
+      generation: result.data.generation,
+      expiresAt: result.data.expiresAt,
+      ttlSeconds: result.data.ttlSeconds,
+    };
+  }
+  scheduleHeartbeat(result.data.ttlSeconds);
+}
+
+async function beginEditing(): Promise<void> {
+  if (!canEdit.value || mobile.value || lockOccupied.value || documents.metadata === null) return;
+  lockState.value = "acquiring";
+  const browserEditSessionId = globalThis.crypto.randomUUID();
+  const result = await acquireDocumentLock({
+    client: apiClient,
+    path: { workspaceId: currentWorkspaceId.value, documentId: properties.documentId },
+    body: { browserEditSessionId },
+  });
+  if (result.data === undefined) {
+    lockState.value = "error";
+    return;
+  }
+  const lock = result.data.lock as LockDto & { token?: string };
+  if (lock.token === undefined) {
+    lockState.value = "error";
+    return;
+  }
+  const { token: _token, ...publicLock } = lock;
+  editor.setLockLease({ browserEditSessionId, generation: lock.generation, token: lock.token });
+  editor.startEditing(documents.metadata.currentVersion);
+  documents.lock = publicLock;
+  lockState.value = "held";
+  adapter?.setReadOnly(false);
+  scheduleHeartbeat(lock.ttlSeconds);
+}
+
+async function endEditing(): Promise<void> {
+  const lease = editor.lockLease;
+  stopLockTimer();
   editor.stopEditing();
   adapter?.setReadOnly(true);
+  lockState.value = "idle";
+  if (lease === null || currentWorkspaceId.value === "") return;
+  editor.clearLockLease();
+  await releaseDocumentLock({
+    client: apiClient,
+    path: { workspaceId: currentWorkspaceId.value, documentId: properties.documentId },
+    body: lease,
+  });
+}
+
+async function uploadImage(file: File): Promise<string> {
+  const lease = editor.lockLease;
+  if (lease === null) throw new Error("编辑锁已失效");
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(
+    `${apiClient.config.baseUrl}/api/v1/workspaces/${currentWorkspaceId.value}/documents/${properties.documentId}/assets`,
+    {
+      method: "POST",
+      body: form,
+      credentials: "include",
+      headers: {
+        "X-Asset-Path": file.name,
+        "X-Browser-Edit-Session": lease.browserEditSessionId,
+        "X-Lock-Token": lease.token,
+        "X-Lock-Generation": String(lease.generation),
+        ...(auth.csrfToken === null ? {} : { "X-CSRF-Token": auth.csrfToken }),
+      },
+    },
+  );
+  if (!response.ok) throw new Error("Image upload failed");
+  const body = (await response.json()) as { asset?: { id?: unknown } };
+  if (typeof body.asset?.id !== "string") throw new Error("Image asset id missing");
+  return body.asset.id;
+}
+
+async function insertImage(assetId: string): Promise<void> {
+  const draft = editor.draft;
+  const sheet = draft?.sheets[0];
+  if (draft === null || sheet === undefined) return;
+  const next = cloneCloudDocument(draft);
+  const nextSheet = next.sheets[0];
+  if (nextSheet === undefined) return;
+  nextSheet.nodes[nextSheet.rootNodeId]!.imageAssetId = assetId;
+  editor.markChanged(next);
+  await adapter?.applySnapshot(next);
 }
 
 async function copyDraftJson(): Promise<void> {
@@ -185,6 +304,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  stopLockTimer();
+  void endEditing();
   realtime.disconnect();
   mediaQuery?.removeEventListener("change", updateMobile);
   unsubscribe?.();
@@ -220,22 +341,20 @@ onBeforeUnmount(() => {
           </p>
         </div>
         <div class="document-actions">
-          <span class="document-connection" role="status">{{
-            readOnly ? "只读模式" : "编辑中"
-          }}</span>
-          <button
-            v-if="canEdit && !editor.canWrite"
-            type="button"
-            :disabled="mobile || lockOccupied"
-            @click="beginEditing"
-          >
-            {{
-              lockOccupied
-                ? `由 ${documents.lock?.editorDisplayName ?? "其他成员"} 编辑中`
-                : "开始编辑"
-            }}
-          </button>
-          <button v-if="editor.canWrite" type="button" @click="endEditing">结束编辑</button>
+          <LockStatus
+            :state="lockState"
+            :lock="documents.lock"
+            :can-edit="canEdit && !lockOccupied"
+            :mobile="mobile"
+            @begin="beginEditing"
+            @end="endEditing"
+          />
+          <ImageUploadControl
+            v-if="editor.canWrite"
+            :disabled="!editor.canWrite"
+            :upload="uploadImage"
+            @asset-selected="insertImage"
+          />
           <button v-if="editor.dirty" type="button" @click="copyDraftJson">复制草稿 JSON</button>
           <button v-if="editor.dirty" type="button" @click="unsaved.exportDraft">
             导出草稿 XMind

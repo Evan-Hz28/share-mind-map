@@ -30,11 +30,45 @@
       "AcquireLockResponseDto": {
         "properties": {
           "lock": {
-            "$ref": "#/components/schemas/LockDto"
+            "$ref": "#/components/schemas/AcquireLockResponseLockDto"
           }
         },
         "required": [
           "lock"
+        ],
+        "type": "object"
+      },
+      "AcquireLockResponseLockDto": {
+        "properties": {
+          "editorDisplayName": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "number"
+          },
+          "heartbeatAt": {
+            "type": "string"
+          },
+          "occupied": {
+            "type": "boolean"
+          },
+          "token": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "ttlSeconds": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "expiresAt",
+          "generation",
+          "occupied",
+          "token",
+          "ttlSeconds"
         ],
         "type": "object"
       },

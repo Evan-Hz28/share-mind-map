@@ -13,6 +13,20 @@ vi.mock("../../src/editor/adapters/mind-elixir.js", () => ({
   },
 }));
 
+vi.mock("../../src/realtime/document-realtime.js", () => ({
+  DocumentRealtime: class {
+    connect(): void {}
+    join(): void {}
+    disconnect(): void {}
+    onSnapshot(): () => void {
+      return () => undefined;
+    }
+    onLock(): () => void {
+      return () => undefined;
+    }
+  },
+}));
+
 import DocumentView from "../../src/documents/DocumentView.vue";
 import { useAuthStore } from "../../src/auth/auth.store.js";
 import { sessionResponse } from "../helpers.js";

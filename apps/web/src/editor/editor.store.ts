@@ -3,6 +3,7 @@ import {
   validateCloudDocumentSnapshot,
   type CloudDocumentV1,
 } from "@share-mind-map/document-model";
+import type { LockLeaseDto } from "@share-mind-map/api-client";
 import { defineStore, type Pinia } from "pinia";
 
 import type { EditorMode } from "./editor.types.js";
@@ -12,6 +13,7 @@ interface EditorState {
   dirty: boolean;
   currentVersion: number | null;
   draft: CloudDocumentV1 | null;
+  lockLease: LockLeaseDto | null;
 }
 
 export const useEditorStoreDefinition = defineStore("editor", {
@@ -20,6 +22,7 @@ export const useEditorStoreDefinition = defineStore("editor", {
     dirty: false,
     currentVersion: null,
     draft: null,
+    lockLease: null,
   }),
   getters: {
     canWrite: (state): boolean => state.mode === "editing-clean" || state.mode === "editing-dirty",
@@ -31,6 +34,7 @@ export const useEditorStoreDefinition = defineStore("editor", {
       this.draft = null;
       this.dirty = false;
       this.mode = "readonly";
+      this.lockLease = null;
     },
 
     startEditing(currentVersion: number): void {
@@ -42,6 +46,7 @@ export const useEditorStoreDefinition = defineStore("editor", {
 
     stopEditing(): void {
       this.mode = "readonly";
+      this.lockLease = null;
     },
 
     markChanged(document: CloudDocumentV1): void {
@@ -66,6 +71,15 @@ export const useEditorStoreDefinition = defineStore("editor", {
       this.draft = null;
       this.dirty = false;
       this.mode = "readonly";
+      this.lockLease = null;
+    },
+
+    setLockLease(lease: LockLeaseDto): void {
+      this.lockLease = { ...lease };
+    },
+
+    clearLockLease(): void {
+      this.lockLease = null;
     },
 
     markLockLost(): void {

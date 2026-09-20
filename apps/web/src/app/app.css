@@ -797,6 +797,46 @@ a {
   cursor: not-allowed;
   opacity: 0.55;
 }
+.lock-status {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.lock-status button,
+.image-upload-control button {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--accent);
+  color: #fff;
+  background: var(--accent);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.lock-status button:disabled,
+.image-upload-control button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.image-upload-control {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.image-upload-control input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.image-upload-control label {
+  color: var(--muted);
+  font-size: 12px;
+}
 .document-connection {
   color: var(--muted);
   font-size: 13px;

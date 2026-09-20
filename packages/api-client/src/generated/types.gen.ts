@@ -10,7 +10,17 @@ export type AcquireLockDto = {
 };
 
 export type AcquireLockResponseDto = {
-    lock: LockDto;
+    lock: AcquireLockResponseLockDto;
+};
+
+export type AcquireLockResponseLockDto = {
+    editorDisplayName?: string;
+    expiresAt: string;
+    generation: number;
+    heartbeatAt?: string;
+    occupied: boolean;
+    token: string;
+    ttlSeconds: number;
 };
 
 export type AdminImportFailureDto = {

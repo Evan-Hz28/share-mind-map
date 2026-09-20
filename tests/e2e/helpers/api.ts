@@ -5,6 +5,22 @@ export interface ApiSession {
   workspaceId: string;
 }
 
+export async function apiCreateDocument(
+  request: APIRequestContext,
+  workspaceId: string,
+  csrfToken: string,
+  name: string,
+): Promise<string> {
+  const response = await request.post(`/api/v1/workspaces/${workspaceId}/documents`, {
+    headers: { "X-CSRF-Token": csrfToken },
+    data: { name },
+  });
+  if (response.status() !== 201) {
+    throw new Error(`Document creation failed with ${String(response.status())}`);
+  }
+  return (await jsonBody<{ document: { id: string } }>(response)).document.id;
+}
+
 export interface E2eMember {
   id: string;
   displayName: string;

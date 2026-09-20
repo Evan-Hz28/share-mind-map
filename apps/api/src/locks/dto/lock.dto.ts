@@ -48,8 +48,13 @@ export class LockDto {
   public expiresAt!: string;
 }
 
+class AcquireLockResponseLockDto extends LockDto {
+  @ApiProperty({ minLength: 1 })
+  public token!: string;
+}
+
 export class AcquireLockResponseDto {
-  @ApiProperty({ type: LockDto })
+  @ApiProperty({ type: AcquireLockResponseLockDto })
   public lock!: LockDto & { token: string };
 }
 
