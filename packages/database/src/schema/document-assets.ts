@@ -59,5 +59,6 @@ export const documentAssets = pgTable(
       table.documentId,
       table.id,
     ),
+    index("document_assets_workspace_sha_idx").on(table.workspaceId, table.sha256, table.id),
   ],
 );

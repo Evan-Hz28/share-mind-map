@@ -8,6 +8,27 @@
       "when": 0,
       "tag": "0000_phase1_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 0,
+      "tag": "0001_phase2_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 0,
+      "tag": "0002_phase3_import_export",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 0,
+      "tag": "0003_phase4_editing",
+      "breakpoints": true
     }
   ]
 }

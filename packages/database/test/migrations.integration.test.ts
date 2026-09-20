@@ -41,6 +41,7 @@ describe("database migrations", () => {
       "0000_phase1_identity",
       "0001_phase2_workspace",
       "0002_phase3_import_export",
+      "0003_phase4_editing",
     ]);
   });
 
@@ -72,10 +73,11 @@ describe("database migrations", () => {
       "0000_phase1_identity",
       "0001_phase2_workspace",
       "0002_phase3_import_export",
+      "0003_phase4_editing",
     ]);
   });
 
-  it("creates all phase 1 through phase 3 tables", async () => {
+  it("creates all phase 1 through phase 4 tables", async () => {
     await migrateDatabase(runtime.db);
     const result = await runtime.db.$client.query<{ table_name: string }>(
       `SELECT table_name
@@ -88,6 +90,7 @@ describe("database migrations", () => {
       "audit_logs",
       "auth_identities",
       "document_assets",
+      "document_save_requests",
       "document_snapshots",
       "documents",
       "edit_permission_requests",
@@ -98,6 +101,7 @@ describe("database migrations", () => {
       "notification_outbox",
       "notifications",
       "organizations",
+      "snapshot_asset_refs",
       "users",
       "workspace_memberships",
       "workspaces",
