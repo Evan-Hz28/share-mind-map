@@ -49,6 +49,16 @@ describe("application routing and shell", () => {
     expect(anonymousRouter.currentRoute.value.path).toBe("/workspace");
   });
 
+  it("registers an authenticated document detail route", async () => {
+    const { router } = setup("reader");
+    await router.push("/workspace/documents/00000000-0000-7000-8000-000000000101");
+
+    expect(router.currentRoute.value.name).toBe("document");
+    expect(router.currentRoute.value.params.documentId).toBe(
+      "00000000-0000-7000-8000-000000000101",
+    );
+  });
+
   it.each(["reader", "editor"] as const)(
     "does not render Admin navigation for %s",
     async (role) => {

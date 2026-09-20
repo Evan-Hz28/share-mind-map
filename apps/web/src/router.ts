@@ -11,6 +11,7 @@ import MembersView from "./admin/MembersView.vue";
 import Phase2AdminView from "./admin/Phase2AdminView.vue";
 import AppShell from "./app/AppShell.vue";
 import WorkspaceHomeView from "./app/WorkspaceHomeView.vue";
+import DocumentView from "./documents/DocumentView.vue";
 import ChangePasswordView from "./auth/ChangePasswordView.vue";
 import LoginView from "./auth/LoginView.vue";
 import SessionExpiredView from "./auth/SessionExpiredView.vue";
@@ -46,6 +47,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
     children: [
       { path: "workspace", name: "workspace", component: WorkspaceHomeView },
+      {
+        path: "workspace/documents/:documentId",
+        name: "document",
+        component: DocumentView,
+        props: (route) => ({ documentId: String(route.params.documentId) }),
+      },
       {
         path: "admin/members",
         name: "members",

@@ -2,6 +2,7 @@
 import { Bell, Document, Edit, Folder, Plus, Sort, Upload } from "@element-plus/icons-vue";
 import { ElButton, ElDialog, ElIcon, ElInput, ElTag } from "element-plus";
 import { computed, onMounted, reactive, ref } from "vue";
+import { RouterLink } from "vue-router";
 
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
 import { useAuthStore } from "../auth/auth.store.js";
@@ -246,11 +247,13 @@ onMounted(() => void load());
             :key="document.id"
             class="workspace-list__item"
           >
-            <Document aria-hidden="true" /><span class="workspace-list__name"
+            <Document aria-hidden="true" /><RouterLink
+              class="workspace-list__name workspace-list__name--link"
+              :to="{ name: 'document', params: { documentId: document.id } }"
               ><strong>{{ document.name }}</strong
               ><small
                 >版本 {{ document.currentVersion }} · {{ document.nodeCount }} 个节点</small
-              ></span
+              ></RouterLink
             ><ElTag
               size="small"
               :type="document.compatibilityStatus === 'full' ? 'success' : 'warning'"
