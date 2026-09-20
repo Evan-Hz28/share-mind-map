@@ -2,9 +2,6 @@ import type { CloudDocumentV1 } from "./types.js";
 import { parseCloudDocument } from "./index.js";
 
 function randomUUID(): string {
-  if (globalThis.crypto?.randomUUID === undefined) {
-    throw new Error("A Web Crypto implementation is required to create a document.");
-  }
   return globalThis.crypto.randomUUID();
 }
 

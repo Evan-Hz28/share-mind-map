@@ -2,6 +2,8 @@ import {
   exportDocumentDraft,
   getDocumentMetadata,
   inspectDocumentLock,
+  saveDocumentSnapshot,
+  type LockLeaseDto,
   type DocumentDetailDto,
   type LockDto,
 } from "@share-mind-map/api-client";
@@ -12,6 +14,8 @@ import {
   validateCloudDocumentSnapshot,
   type CloudDocumentV1,
 } from "@share-mind-map/document-model";
+
+export type DocumentSaveKind = "auto" | "manual" | "restore";
 
 export type DocumentConnectionState = "idle" | "loading" | "connected" | "error";
 
@@ -90,8 +94,47 @@ export const useDocumentStoreDefinition = defineStore("document", {
         path: { workspaceId: this.workspaceId, documentId: this.documentId },
         body: { snapshot: snapshot as unknown as Record<string, unknown> },
       });
-      if (result.data === undefined) throw toApiFailure(result.error);
+      if (result.data === undefined) {
+        throw new Error(toApiFailure(result.error).code);
+      }
       return result.data;
+    },
+
+    async saveSnapshot(
+      snapshot: CloudDocumentV1,
+      lease: LockLeaseDto,
+      saveKind: DocumentSaveKind,
+      idempotencyKey: string,
+      imageBytes: number,
+      baseVersion = snapshot.version,
+    ): Promise<{ version: number; idempotent: boolean }> {
+      if (this.workspaceId === null || this.documentId === null)
+        throw new Error("Document identity is not loaded");
+      const assetIds = new Set<string>();
+      for (const sheet of snapshot.sheets) {
+        for (const node of Object.values(sheet.nodes)) {
+          if (node.imageAssetId !== null) assetIds.add(node.imageAssetId);
+        }
+      }
+      const result = await saveDocumentSnapshot({
+        client: apiClient,
+        path: { workspaceId: this.workspaceId, documentId: this.documentId },
+        headers: { "Idempotency-Key": idempotencyKey },
+        body: {
+          baseVersion,
+          browserEditSessionId: lease.browserEditSessionId,
+          generation: lease.generation,
+          imageBytes,
+          saveKind,
+          snapshot: snapshot as unknown as Record<string, unknown>,
+          token: lease.token,
+          assetIds: [...assetIds],
+        },
+      });
+      if (result.data === undefined) throw new Error(toApiFailure(result.error).code);
+      const version = (result.data.snapshot as { version?: unknown }).version;
+      if (typeof version !== "number") throw new Error("Invalid snapshot save response");
+      return { version, idempotent: result.data.idempotent };
     },
   },
 });

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { AuditRepository, type Database } from "@share-mind-map/database";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { sql } from "drizzle-orm";
 
 import type { AuthContext } from "../auth/auth-context.js";
@@ -10,6 +10,7 @@ import { sessionReference } from "../common/audit/session-reference.js";
 import { APP_CONFIG } from "../platform/config/config.module.js";
 import type { AppConfig } from "../platform/config/app-config.js";
 import { ApiError } from "../platform/errors/api-error.js";
+import { DocumentRoomService } from "../realtime/document-room.service.js";
 import type { AcquireLockDto, ForceReleaseLockDto, LockLeaseDto } from "./dto/lock.dto.js";
 import { LockStore, type LockRedisClient } from "./lock.store.js";
 
@@ -31,6 +32,7 @@ export class LockService {
     @Inject(AUTH_DATABASE) private readonly database: Database,
     @Inject(AUTH_REDIS) redis: LockRedisClient,
     @Inject(APP_CONFIG) config: AppConfig,
+    @Optional() private readonly documentRooms?: DocumentRoomService,
   ) {
     this.locks = new LockStore(redis, {
       keyPrefix: config.queuePrefix,
@@ -53,15 +55,8 @@ export class LockService {
       browserEditSessionId: input.browserEditSessionId,
     });
     if (result.status === "occupied") throw new ApiError("DOCUMENT_LOCKED");
-    return {
-      lock: {
-        occupied: true,
-        generation: result.generation,
-        ttlSeconds: result.ttlSeconds,
-        expiresAt: this.expiresAt(result.ttlSeconds),
-        token: result.token,
-      },
-    };
+    const lock = await this.publicLockAndBroadcast(workspaceId, documentId);
+    return { lock: { ...lock, token: result.token } };
   }
 
   public async heartbeat(
@@ -107,7 +102,7 @@ export class LockService {
       input.generation,
     );
     if (!released) throw new ApiError("LOCK_LOST");
-    return { lock: await this.publicLock(documentId) };
+    return { lock: await this.publicLockAndBroadcast(workspaceId, documentId) };
   }
 
   public async inspect(
@@ -150,7 +145,7 @@ export class LockService {
         metadata: { generation: result.generation },
       });
     });
-    return { lock: await this.publicLock(documentId) };
+    return { lock: await this.publicLockAndBroadcast(workspaceId, documentId) };
   }
 
   private async assertDocument(
@@ -189,6 +184,22 @@ export class LockService {
       ...(inspection.heartbeatAt === undefined ? {} : { heartbeatAt: inspection.heartbeatAt }),
       ...(displayName === undefined ? {} : { editorDisplayName: displayName }),
     };
+  }
+
+  private async publicLockAndBroadcast(
+    workspaceId: string,
+    documentId: string,
+  ): Promise<PublicLock> {
+    const lock = await this.publicLock(documentId);
+    this.documentRooms?.broadcastLock({
+      workspaceId,
+      documentId,
+      occupied: lock.occupied,
+      editorDisplayName: lock.editorDisplayName ?? null,
+      expiresAt: lock.expiresAt,
+      generation: lock.generation,
+    });
+    return lock;
   }
 
   private platformSessionId(auth: AuthContext): string {

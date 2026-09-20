@@ -14,6 +14,7 @@ import {
 } from "@nestjs/common";
 import {
   ApiCookieAuth,
+  ApiHeader,
   ApiOperation,
   ApiProduces,
   ApiResponse,
@@ -116,6 +117,7 @@ export class DocumentsController {
   @Post(":documentId/snapshots")
   @Roles("editor")
   @ApiSecurity({ sessionCookie: [], csrfToken: [] })
+  @ApiHeader({ name: "Idempotency-Key", required: true })
   @ApiOperation({ operationId: "saveDocumentSnapshot" })
   @ApiResponse({ status: 200, type: SnapshotResponseDto })
   @ApiResponse({ status: 201, type: SnapshotResponseDto })

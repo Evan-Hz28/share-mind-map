@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { afterEach, describe, expect, it } from "vitest";
 
 import { MindElixirAdapter } from "../../src/editor/adapters/mind-elixir.js";

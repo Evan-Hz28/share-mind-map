@@ -46,11 +46,12 @@ beforeAll(async () => {
   const workerEnvironment = {
     WORKER_PORT: String(await availablePort()),
     WORKER_HOST: "127.0.0.1",
-    DATABASE_URL: "postgresql://mindmap:123456@localhost:15432/share_mind_map",
-    REDIS_URL: "redis://default:123456@localhost:16379",
+    DATABASE_URL:
+      process.env.TEST_DATABASE_URL ?? "postgresql://mindmap:123456@localhost:15432/share_mind_map",
+    REDIS_URL: process.env.TEST_REDIS_URL ?? "redis://default:123456@localhost:16379",
     MINIO_ENDPOINT: "http://localhost:9000",
     MINIO_ROOT_USER: "mindmap",
-    MINIO_ROOT_PASSWORD: "12345678",
+    MINIO_ROOT_PASSWORD: process.env.MINIO_ROOT_PASSWORD ?? "12345678",
     MINIO_BUCKET: "share-mind-map",
     XMIND_QUEUE_PREFIX: `smm-integration-${String(process.pid)}`,
     XMIND_FIXTURE_ROOT: fixtureRoot,

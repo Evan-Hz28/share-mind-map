@@ -43,7 +43,7 @@ describe("document realtime rooms", () => {
       code: "UNAUTHORIZED",
     });
 
-    const members = Array.from({ length: 100 }, (_, index) => socket(`member-${index}`));
+    const members = Array.from({ length: 100 }, (_, index) => socket(`member-${String(index)}`));
     for (const member of members) {
       await expect(rooms.join(member, workspaceId, documentId)).resolves.toEqual({
         mode: "joined",
@@ -56,7 +56,9 @@ describe("document realtime rooms", () => {
       reason: "ROOM_LIMIT",
     });
 
-    await rooms.leave(members[0]!, workspaceId, documentId);
+    const firstMember = members[0];
+    if (firstMember === undefined) throw new Error("First room member is missing");
+    await rooms.leave(firstMember, workspaceId, documentId);
     await expect(rooms.join(socket("member-101"), workspaceId, documentId)).resolves.toEqual({
       mode: "joined",
       currentVersion: 4,
@@ -70,7 +72,13 @@ describe("document realtime rooms", () => {
       extensions: {},
     } as never;
     rooms.broadcastSnapshot({ workspaceId, documentId, snapshot, version: 5 });
-    expect(members[1]!.emit).toHaveBeenCalledWith("document:snapshot", { version: 5, snapshot });
+    const secondMember = members[1];
+    if (secondMember === undefined) throw new Error("Second room member is missing");
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(vi.mocked(secondMember["emit"])).toHaveBeenCalledWith("document:snapshot", {
+      version: 5,
+      snapshot,
+    });
   });
 
   it("returns a document error for a gateway join without a session", async () => {
@@ -79,7 +87,8 @@ describe("document realtime rooms", () => {
     const gateway = new WorkspaceRealtimeGateway(db as never, { get: vi.fn() }, rooms);
     const client = socket("unauthorized", false);
     await gateway.joinDocument(client, { workspaceId, documentId });
-    expect(client.emit).toHaveBeenCalledWith("document:error", {
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(vi.mocked(client["emit"])).toHaveBeenCalledWith("document:error", {
       code: "UNAUTHORIZED",
       message: "Document room denied.",
     });

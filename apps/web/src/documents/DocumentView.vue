@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
 import {
   acquireDocumentLock,
   heartbeatDocumentLock,
@@ -13,6 +13,7 @@ import { apiClient } from "../api.js";
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
 import { DraftStore } from "../editor/draft-store.js";
 import { useEditorStore } from "../editor/editor.store.js";
+import { SaveQueue } from "../editor/save-queue.js";
 import LockStatus from "../editor/LockStatus.vue";
 import ImageUploadControl from "../editor/assets/ImageUploadControl.vue";
 import { MindElixirAdapter } from "../editor/adapters/mind-elixir.js";
@@ -29,11 +30,14 @@ const drafts = new DraftStore();
 const canvas = ref<HTMLDivElement | null>(null);
 const mobile = ref(false);
 const copiedDraft = ref(false);
+const saveError = ref<string | null>(null);
+const imageBytes = ref(0);
 const lockState = ref<"idle" | "acquiring" | "held" | "lost" | "error">("idle");
 let adapter: MindMapAdapter | null = null;
 let unsubscribe: (() => void) | null = null;
 let mediaQuery: MediaQueryList | null = null;
 let lockTimer: ReturnType<typeof setTimeout> | null = null;
+let mounted = false;
 const realtime = new DocumentRealtime({
   onVersionGap: () => void load(),
   onReconnect: () => {
@@ -47,8 +51,9 @@ const currentWorkspaceId = computed(
 );
 const canEdit = computed(() => auth.role === "editor" || auth.role === "admin");
 const lockOccupied = computed(() => documents.lock?.occupied ?? false);
+const lockOccupiedByOther = computed(() => lockOccupied.value && !editor.canWrite);
 const readOnly = computed(
-  () => !canEdit.value || mobile.value || lockOccupied.value || !editor.canWrite,
+  () => !canEdit.value || mobile.value || lockOccupiedByOther.value || !editor.canWrite,
 );
 const notes = computed(() => {
   const result: Array<{ id: string; text: string }> = [];
@@ -68,6 +73,62 @@ const draftKey = computed(() => {
 const draftAvailable = computed(
   () => draftKey.value !== null && drafts.load(draftKey.value) !== null,
 );
+
+function saveErrorCode(error: unknown): string {
+  return error instanceof Error && error.message !== "" ? error.message : "NETWORK_ERROR";
+}
+
+function handleSaveFailure(error: unknown): void {
+  const code = saveErrorCode(error);
+  saveError.value = code;
+  if (code === "LOCK_LOST" || code === "PERMISSION_DENIED" || code === "AUTH_SESSION_EXPIRED") {
+    stopLockTimer();
+    editor.clearLockLease();
+    editor.markLockLost();
+    lockState.value = "lost";
+    adapter?.setReadOnly(true);
+  } else if (code === "DOCUMENT_VERSION_CONFLICT") {
+    editor.markConflict();
+    adapter?.setReadOnly(true);
+  } else if (code === "NETWORK_ERROR") {
+    editor.markOffline();
+    adapter?.setReadOnly(true);
+  } else {
+    editor.markSaveFailed();
+  }
+}
+
+const saveQueue = new SaveQueue(async (snapshot, kind) => {
+  const lease = editor.lockLease;
+  if (lease === null) throw new Error("LOCK_LOST");
+  editor.setMode("saving");
+  const result = await documents.saveSnapshot(
+    snapshot,
+    lease,
+    kind,
+    `document-save-${globalThis.crypto.randomUUID()}`,
+    imageBytes.value,
+    editor.currentVersion ?? snapshot.version,
+  );
+  const saved = cloneCloudDocument(snapshot);
+  saved.version = result.version;
+  documents.snapshot = saved;
+  if (documents.metadata !== null) {
+    documents.metadata = { ...documents.metadata, currentVersion: result.version };
+  }
+  const draftIsStillCurrent =
+    editor.draft !== null && JSON.stringify(editor.draft) === JSON.stringify(snapshot);
+  if (draftIsStillCurrent || !editor.dirty) {
+    editor.markSaved(result.version);
+    if (draftKey.value !== null) drafts.clear(draftKey.value);
+    if (mounted) await adapter?.applySnapshot(saved);
+  } else {
+    editor.currentVersion = result.version;
+    editor.setMode("editing-dirty");
+  }
+  saveError.value = null;
+  return result;
+});
 
 function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
@@ -110,6 +171,7 @@ async function mountAdapter(): Promise<void> {
         const currentVersion = editor.currentVersion;
         drafts.save(draftKey.value, snapshot, currentVersion === null ? {} : { currentVersion });
       }
+      void saveQueue.enqueue(snapshot, "auto").catch(handleSaveFailure);
     }
   });
 }
@@ -145,8 +207,12 @@ function handleRealtimeLock(lock: {
     expiresAt: lock.expiresAt ?? documents.lock.expiresAt,
     ...(lock.editorDisplayName === null ? {} : { editorDisplayName: lock.editorDisplayName }),
   };
-  if (lock.occupied && editor.canWrite) {
+  const lease = editor.lockLease;
+  if (lease !== null && (!lock.occupied || lock.generation !== lease.generation)) {
+    stopLockTimer();
+    editor.clearLockLease();
     editor.markLockLost();
+    lockState.value = "lost";
     adapter?.setReadOnly(true);
   }
 }
@@ -156,6 +222,7 @@ async function load(): Promise<void> {
   await documents.load(currentWorkspaceId.value, properties.documentId);
   await nextTick();
   if (documents.snapshot !== null) {
+    imageBytes.value = documents.metadata?.imageBytes ?? 0;
     editor.setDocument(documents.snapshot, documents.metadata?.currentVersion);
     await mountAdapter();
     realtime.join(
@@ -222,9 +289,17 @@ async function beginEditing(): Promise<void> {
     lockState.value = "error";
     return;
   }
-  const { token: _token, ...publicLock } = lock;
+  const publicLock: LockDto = {
+    occupied: lock.occupied,
+    generation: lock.generation,
+    expiresAt: lock.expiresAt,
+    ttlSeconds: lock.ttlSeconds,
+    ...(lock.editorDisplayName === undefined ? {} : { editorDisplayName: lock.editorDisplayName }),
+    ...(lock.heartbeatAt === undefined ? {} : { heartbeatAt: lock.heartbeatAt }),
+  };
   editor.setLockLease({ browserEditSessionId, generation: lock.generation, token: lock.token });
   editor.startEditing(documents.metadata.currentVersion);
+  saveError.value = null;
   documents.lock = publicLock;
   lockState.value = "held";
   adapter?.setReadOnly(false);
@@ -233,6 +308,14 @@ async function beginEditing(): Promise<void> {
 
 async function endEditing(): Promise<void> {
   const lease = editor.lockLease;
+  if (lease !== null && editor.dirty && editor.draft !== null) {
+    try {
+      await saveQueue.enqueue(editor.draft, "manual");
+    } catch (error) {
+      handleSaveFailure(error);
+      return;
+    }
+  }
   stopLockTimer();
   editor.stopEditing();
   adapter?.setReadOnly(true);
@@ -267,33 +350,60 @@ async function uploadImage(file: File): Promise<string> {
     },
   );
   if (!response.ok) throw new Error("Image upload failed");
-  const body = (await response.json()) as { asset?: { id?: unknown } };
+  const body = (await response.json()) as { asset?: { id?: unknown; byteSize?: unknown } };
   if (typeof body.asset?.id !== "string") throw new Error("Image asset id missing");
+  if (typeof body.asset.byteSize === "number") imageBytes.value += body.asset.byteSize;
   return body.asset.id;
 }
 
+async function saveManually(): Promise<void> {
+  if (editor.draft === null || !editor.canWrite) return;
+  try {
+    await saveQueue.enqueue(editor.draft, "manual");
+  } catch (error) {
+    handleSaveFailure(error);
+  }
+}
+
+async function restoreDraft(): Promise<void> {
+  if (draftKey.value === null) return;
+  const stored = drafts.load(draftKey.value);
+  if (stored === null) return;
+  if (!editor.canWrite) await beginEditing();
+  if (!editor.canWrite) return;
+  editor.markChanged(stored.snapshot);
+  await adapter?.applySnapshot(stored.snapshot);
+}
+
+function discardStoredDraft(): void {
+  if (draftKey.value !== null) drafts.clear(draftKey.value);
+}
+
 async function insertImage(assetId: string): Promise<void> {
-  const draft = editor.draft;
+  const draft = editor.draft ?? documents.snapshot;
   const sheet = draft?.sheets[0];
   if (draft === null || sheet === undefined) return;
-  const next = cloneCloudDocument(draft);
+  const next = cloneCloudDocument(toRaw(draft));
   const nextSheet = next.sheets[0];
   if (nextSheet === undefined) return;
-  nextSheet.nodes[nextSheet.rootNodeId]!.imageAssetId = assetId;
+  const rootNode = nextSheet.nodes[nextSheet.rootNodeId];
+  if (rootNode === undefined) return;
+  rootNode.imageAssetId = assetId;
   editor.markChanged(next);
-  await adapter?.applySnapshot(next);
+  if (adapter !== null) await adapter.applySnapshot(next);
 }
 
 async function copyDraftJson(): Promise<void> {
   const json = unsaved.copyJson();
   if (json === undefined) return;
-  await navigator.clipboard?.writeText(json);
+  await navigator.clipboard.writeText(json);
   copiedDraft.value = true;
 }
 
 watch(readOnly, (value) => adapter?.setReadOnly(value));
 
 onMounted(() => {
+  mounted = true;
   realtime.onSnapshot(handleRealtimeSnapshot);
   realtime.onLock(handleRealtimeLock);
   realtime.connect();
@@ -304,8 +414,13 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  mounted = false;
   stopLockTimer();
-  void endEditing();
+  void endEditing()
+    .catch(handleSaveFailure)
+    .finally(() => {
+      saveQueue.dispose();
+    });
   realtime.disconnect();
   mediaQuery?.removeEventListener("change", updateMobile);
   unsubscribe?.();
@@ -344,7 +459,7 @@ onBeforeUnmount(() => {
           <LockStatus
             :state="lockState"
             :lock="documents.lock"
-            :can-edit="canEdit && !lockOccupied"
+            :can-edit="canEdit && !lockOccupiedByOther"
             :mobile="mobile"
             @begin="beginEditing"
             @end="endEditing"
@@ -355,6 +470,14 @@ onBeforeUnmount(() => {
             :upload="uploadImage"
             @asset-selected="insertImage"
           />
+          <button
+            v-if="editor.dirty && editor.canWrite"
+            type="button"
+            :disabled="editor.mode === 'saving'"
+            @click="saveManually"
+          >
+            {{ editor.mode === "saving" ? "保存中…" : "保存" }}
+          </button>
           <button v-if="editor.dirty" type="button" @click="copyDraftJson">复制草稿 JSON</button>
           <button v-if="editor.dirty" type="button" @click="unsaved.exportDraft">
             导出草稿 XMind
@@ -366,14 +489,25 @@ onBeforeUnmount(() => {
           editor.dirty ? "存在未保存修改，已保存在本机草稿中。" : "检测到本机草稿。"
         }}</span>
         <span v-if="copiedDraft">已复制</span>
+        <button
+          v-if="!editor.dirty && draftAvailable && canEdit && !mobile"
+          type="button"
+          @click="restoreDraft"
+        >
+          恢复草稿
+        </button>
+        <button v-if="!editor.dirty && draftAvailable" type="button" @click="discardStoredDraft">
+          丢弃草稿
+        </button>
         <button v-if="editor.dirty" type="button" @click="unsaved.discard">放弃草稿</button>
       </div>
       <div class="document-status-bar">
         <span>兼容性：{{ documents.compatibility }}</span>
-        <span v-if="documents.lock?.occupied"
-          >编辑锁：{{ documents.lock.editorDisplayName ?? "已占用" }}</span
-        >
-        <span v-else>编辑锁：可获取</span>
+        <template v-if="documents.lock?.occupied">
+          <span>编辑锁：{{ documents.lock.editorDisplayName ?? "已占用" }}</span>
+        </template>
+        <template v-else><span>编辑锁：可获取</span></template>
+        <span v-if="saveError">保存状态：{{ saveError }}</span>
       </div>
       <div
         ref="canvas"

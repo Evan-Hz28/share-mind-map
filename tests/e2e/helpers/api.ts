@@ -5,6 +5,12 @@ export interface ApiSession {
   workspaceId: string;
 }
 
+export interface ApiLockLease {
+  browserEditSessionId: string;
+  generation: number;
+  token: string;
+}
+
 export async function apiCreateDocument(
   request: APIRequestContext,
   workspaceId: string,
@@ -19,6 +25,72 @@ export async function apiCreateDocument(
     throw new Error(`Document creation failed with ${String(response.status())}`);
   }
   return (await jsonBody<{ document: { id: string } }>(response)).document.id;
+}
+
+export async function apiDocumentDetail(
+  request: APIRequestContext,
+  workspaceId: string,
+  documentId: string,
+): Promise<{ document: { currentVersion: number; snapshot: Record<string, unknown> } }> {
+  const response = await request.get(`/api/v1/workspaces/${workspaceId}/documents/${documentId}`);
+  if (!response.ok()) throw new Error(`Document detail failed with ${String(response.status())}`);
+  return jsonBody(response);
+}
+
+export async function apiAcquireDocumentLock(
+  request: APIRequestContext,
+  workspaceId: string,
+  documentId: string,
+  csrfToken: string,
+  browserEditSessionId: string,
+): Promise<ApiLockLease> {
+  const response = await request.post(
+    `/api/v1/workspaces/${workspaceId}/documents/${documentId}/lock`,
+    { headers: { "X-CSRF-Token": csrfToken }, data: { browserEditSessionId } },
+  );
+  if (response.status() !== 201) {
+    throw new Error(`Lock acquisition failed with ${String(response.status())}`);
+  }
+  const body = await jsonBody<{ lock: ApiLockLease }>(response);
+  return { ...body.lock, browserEditSessionId };
+}
+
+export async function apiForceReleaseDocumentLock(
+  request: APIRequestContext,
+  workspaceId: string,
+  documentId: string,
+  csrfToken: string,
+): Promise<APIResponse> {
+  return request.post(
+    `/api/v1/workspaces/${workspaceId}/documents/${documentId}/lock/force-release`,
+    { headers: { "X-CSRF-Token": csrfToken }, data: { confirm: true } },
+  );
+}
+
+export async function apiSaveDocumentSnapshot(
+  request: APIRequestContext,
+  workspaceId: string,
+  documentId: string,
+  csrfToken: string,
+  lease: ApiLockLease,
+  snapshot: Record<string, unknown>,
+  idempotencyKey: string,
+): Promise<APIResponse> {
+  const baseVersion = snapshot.version;
+  if (typeof baseVersion !== "number") throw new Error("Snapshot version is missing");
+  return request.post(`/api/v1/workspaces/${workspaceId}/documents/${documentId}/snapshots`, {
+    headers: { "X-CSRF-Token": csrfToken, "Idempotency-Key": idempotencyKey },
+    data: {
+      baseVersion,
+      browserEditSessionId: lease.browserEditSessionId,
+      generation: lease.generation,
+      imageBytes: 0,
+      saveKind: "manual",
+      snapshot,
+      token: lease.token,
+      assetIds: [],
+    },
+  });
 }
 
 export interface E2eMember {
@@ -102,6 +174,16 @@ export async function apiChangeStatus(
   return request.patch(`/api/v1/admin/members/${memberId}/account-status`, {
     headers: { "X-CSRF-Token": csrfToken },
     data: { status },
+  });
+}
+
+export async function apiRevokeMemberEditing(
+  request: APIRequestContext,
+  csrfToken: string,
+  membershipId: string,
+): Promise<APIResponse> {
+  return request.post(`/api/v1/admin/members/${membershipId}/revoke-editing`, {
+    headers: { "X-CSRF-Token": csrfToken },
   });
 }
 

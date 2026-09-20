@@ -1,10 +1,13 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { DraftStore } from "../../src/editor/draft-store.js";
 import { sampleDocument } from "./test-fixtures.js";
 
 describe("DraftStore", () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+  });
 
   it("uses isolated deterministic keys and stores cloned snapshots without lock credentials", () => {
     const store = new DraftStore(localStorage);

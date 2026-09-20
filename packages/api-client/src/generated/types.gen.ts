@@ -1120,7 +1120,8 @@ export type HeartbeatDocumentLockResponse = HeartbeatDocumentLockResponses[keyof
 
 export type SaveDocumentSnapshotData = {
     body: SaveSnapshotDto;
-    headers?: {
+    headers: {
+        'Idempotency-Key': string;
         /**
          * Optional caller-provided request correlation identifier.
          */

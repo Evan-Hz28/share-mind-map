@@ -2,7 +2,7 @@ import {
   validateCloudDocumentSnapshot,
   type CloudDocumentV1,
 } from "@share-mind-map/document-model";
-import { io, type Socket } from "socket.io-client";
+import { io } from "socket.io-client";
 
 export interface DocumentRealtimeSnapshot {
   version: number;
@@ -68,8 +68,12 @@ export class DocumentRealtime {
       this.hasConnected = true;
       if (this.joined !== null) socket.emit("document:join", this.joined);
     });
-    socket.on("document:snapshot", (payload) => this.acceptSnapshot(payload));
-    socket.on("document:lock", (payload) => this.acceptLock(payload));
+    socket.on("document:snapshot", (payload) => {
+      this.acceptSnapshot(payload);
+    });
+    socket.on("document:lock", (payload) => {
+      this.acceptLock(payload);
+    });
   }
 
   public join(workspaceId: string, documentId: string, currentVersion = 0): void {

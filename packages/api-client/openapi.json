@@ -2956,6 +2956,14 @@
             }
           },
           {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "$ref": "#/components/parameters/RequestIdHeader"
           }
         ],

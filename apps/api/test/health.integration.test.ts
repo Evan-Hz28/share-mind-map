@@ -14,12 +14,13 @@ const config: AppConfig = {
   port: 0,
   apiPublicUrl: new URL("http://localhost:3000"),
   webOrigin: new URL("http://localhost:5173"),
-  databaseUrl: "postgresql://mindmap:123456@localhost:15432/share_mind_map",
-  redisUrl: "redis://default:123456@localhost:16379",
+  databaseUrl:
+    process.env.TEST_DATABASE_URL ?? "postgresql://mindmap:123456@localhost:15432/share_mind_map",
+  redisUrl: process.env.TEST_REDIS_URL ?? "redis://default:123456@localhost:16379",
   minio: {
     endpoint: new URL("http://localhost:9000"),
     accessKey: "mindmap",
-    secretKey: "12345678",
+    secretKey: process.env.MINIO_ROOT_PASSWORD ?? "12345678",
     bucket: "share-mind-map",
     useSsl: false,
   },

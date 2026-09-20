@@ -7,7 +7,7 @@ import { CsrfService } from "../src/auth/csrf/csrf.service.js";
 import { SessionStore } from "../src/auth/session/session.store.js";
 import type { SessionPrincipal } from "../src/auth/session/session.types.js";
 
-const redis = new Redis("redis://default:123456@localhost:16379", {
+const redis = new Redis(process.env.TEST_REDIS_URL ?? "redis://default:123456@localhost:16379", {
   lazyConnect: true,
   maxRetriesPerRequest: 1,
 });

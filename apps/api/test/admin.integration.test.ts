@@ -246,7 +246,12 @@ describe("phase 1 administrator member operations", () => {
       changeStatus(secondAdminLogin.session, firstMembershipId, "disabled"),
     ]);
 
-    expect([disableSecond.status, disableFirst.status].sort()).toEqual([200, 409]);
+    expect([disableSecond.status, disableFirst.status].sort()).toEqual([200, 401]);
+    const survivingAdmin = disableSecond.status === 200 ? admin : secondAdminLogin.session;
+    const survivingMembershipId =
+      disableSecond.status === 200 ? firstMembershipId : secondMembershipId;
+    const lastAdminAttempt = await changeStatus(survivingAdmin, survivingMembershipId, "disabled");
+    expect(lastAdminAttempt.status).toBe(409);
     const activeAdmins = await runtime.database.$client.query<{ count: string }>(
       `SELECT count(*)::text AS count FROM workspace_memberships wm
        JOIN users u ON u.id = wm.user_id

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-09-16T15:16:47.679Z",
+  "capturedAt": "2026-09-20T09:29:07.545Z",
   "os": {
     "platform": "linux",
     "release": "6.18.33.2-microsoft-standard-WSL2",
@@ -11,8 +11,8 @@
     "logicalCores": 16
   },
   "memory": {
-    "totalBytes": 7912194048,
-    "freeBytesAtCapture": 2241261568
+    "totalBytes": 7912189952,
+    "freeBytesAtCapture": 2888753152
   },
   "runtime": {
     "node": "v24.16.0",

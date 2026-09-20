@@ -6,7 +6,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { LoginRateLimitService } from "../src/auth/rate-limit/login-rate-limit.service.js";
 import { ApiError } from "../src/platform/errors/api-error.js";
 
-const redis = new Redis("redis://default:123456@localhost:16379", {
+const redis = new Redis(process.env.TEST_REDIS_URL ?? "redis://default:123456@localhost:16379", {
   lazyConnect: true,
   maxRetriesPerRequest: 1,
 });

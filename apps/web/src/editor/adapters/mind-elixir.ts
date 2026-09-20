@@ -94,7 +94,7 @@ function nodeFromVendor(
   idMap: Map<string, string>,
   collected: Record<string, CloudNodeV1>,
 ): CloudNodeV1 {
-  const vendorId = String(vendor.id);
+  const vendorId = vendor.id;
   const existingId = idMap.get(vendorId);
   const id = existingId ?? uuid(vendorId);
   idMap.set(vendorId, id);

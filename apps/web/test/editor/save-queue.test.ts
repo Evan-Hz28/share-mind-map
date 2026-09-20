@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-unsafe-assignment */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SaveQueue } from "../../src/editor/save-queue.js";

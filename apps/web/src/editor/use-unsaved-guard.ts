@@ -28,16 +28,28 @@ export function useUnsavedGuard(options: UnsavedGuardOptions): UnsavedGuard {
     handleBeforeUnload: (event) => {
       if (!isDirty(options.dirty)) return;
       event.preventDefault();
-      event.returnValue = "";
     },
     retry: () => !isDirty(options.dirty) || (options.confirmLeave?.() ?? false),
-    discard: () => options.onDiscard?.(),
+    discard: () => {
+      options.onDiscard?.();
+    },
     copyJson: () => options.onCopyJson?.(),
-    exportDraft: async () => options.onExportDraft?.(),
+    exportDraft: async () => {
+      await options.onExportDraft?.();
+    },
   };
 
-  onBeforeRouteLeave(() => guard.canLeave());
-  onMounted(() => window.addEventListener("beforeunload", guard.handleBeforeUnload));
-  onBeforeUnmount(() => window.removeEventListener("beforeunload", guard.handleBeforeUnload));
+  const beforeUnload = (event: BeforeUnloadEvent): void => {
+    guard.handleBeforeUnload(event);
+  };
+  onBeforeRouteLeave(() => {
+    return guard.canLeave();
+  });
+  onMounted(() => {
+    window.addEventListener("beforeunload", beforeUnload);
+  });
+  onBeforeUnmount(() => {
+    window.removeEventListener("beforeunload", beforeUnload);
+  });
   return guard;
 }

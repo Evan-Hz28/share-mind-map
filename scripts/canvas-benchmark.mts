@@ -53,6 +53,26 @@ export type BenchmarkSummary = {
   };
 };
 
+export function performanceGateErrors(
+  candidate: string,
+  samples: readonly {
+    nodeCount: number;
+    medians: { firstUsableMs: number | null; interactionMs: number | null };
+  }[],
+): string[] {
+  if (candidate !== "mind-elixir") return [];
+  const errors: string[] = [];
+  const fiveThousand = samples.find((sample) => sample.nodeCount === 5_000);
+  const twentyThousand = samples.find((sample) => sample.nodeCount === 20_000);
+  if ((fiveThousand?.medians.interactionMs ?? Infinity) > 3_000) {
+    errors.push("mind-elixir 5,000-node interaction exceeds the 3,000 ms gate.");
+  }
+  if ((twentyThousand?.medians.firstUsableMs ?? Infinity) > 5_000) {
+    errors.push("mind-elixir 20,000-node first usable exceeds the 5,000 ms gate.");
+  }
+  return errors;
+}
+
 export function median(values: readonly number[]): number | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((left, right) => left - right);
@@ -349,6 +369,9 @@ export async function runCanvasBenchmark(): Promise<void> {
       protocol: { warmupRuns: 1, recordedRuns: recordedRunCount, nodeCounts },
       candidates: candidateResults,
     };
+    const performanceErrors = candidateResults.flatMap((candidate) =>
+      performanceGateErrors(candidate.candidate, candidate.samples),
+    );
     const cpuList = cpus();
     const environment = {
       schemaVersion: 1,
@@ -373,6 +396,9 @@ export async function runCanvasBenchmark(): Promise<void> {
       writeFile(resultsPath, `${JSON.stringify(results, null, 2)}\n`, "utf8"),
       writeFile(environmentPath, `${JSON.stringify(environment, null, 2)}\n`, "utf8"),
     ]);
+    if (performanceErrors.length > 0) {
+      throw new Error(`Canvas performance gate failed:\n${performanceErrors.join("\n")}`);
+    }
     process.stdout.write(`${resultsPath}\n${environmentPath}\n`);
   } finally {
     await browser.close();
