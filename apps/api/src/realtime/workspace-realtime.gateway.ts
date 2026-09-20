@@ -13,8 +13,10 @@ import type { Database } from "@share-mind-map/database";
 import { AUTH_DATABASE } from "../auth/auth.tokens.js";
 import { SESSION_LOOKUP, type SessionLookup } from "../common/guards/session.guard.js";
 import type { SessionRecord } from "../auth/session/session.types.js";
+import { DocumentRoomService } from "./document-room.service.js";
 
 const subscriptionSchema = z.object({ batchId: z.uuid() });
+const documentSubscriptionSchema = z.object({ workspaceId: z.uuid(), documentId: z.uuid() });
 
 interface SocketData {
   session?: SessionRecord;
@@ -41,6 +43,7 @@ export class WorkspaceRealtimeGateway implements OnGatewayConnection, OnGatewayD
   public constructor(
     @Inject(AUTH_DATABASE) private readonly database: Database,
     @Inject(SESSION_LOOKUP) private readonly sessions: SessionLookup,
+    private readonly documentRooms: DocumentRoomService,
   ) {}
 
   public async handleConnection(client: Socket): Promise<void> {
@@ -59,6 +62,43 @@ export class WorkspaceRealtimeGateway implements OnGatewayConnection, OnGatewayD
     const timer = this.timers.get(client.id);
     if (timer !== undefined) clearInterval(timer);
     this.timers.delete(client.id);
+    void this.documentRooms.leaveSocket(client);
+  }
+
+  @SubscribeMessage("document:join")
+  public async joinDocument(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() input: unknown,
+  ): Promise<void> {
+    const parsed = documentSubscriptionSchema.safeParse(input);
+    if (!parsed.success) {
+      client.emit("document:error", { code: "INVALID_INPUT", message: "Invalid document room." });
+      return;
+    }
+    const result = await this.documentRooms.join(
+      client,
+      parsed.data.workspaceId,
+      parsed.data.documentId,
+    );
+    if (result.mode === "denied") {
+      client.emit("document:error", { code: result.code, message: "Document room denied." });
+      return;
+    }
+    client.emit("document:joined", {
+      mode: result.mode,
+      currentVersion: result.currentVersion,
+      reason: result.mode === "rest" ? result.reason : undefined,
+    });
+  }
+
+  @SubscribeMessage("document:leave")
+  public async leaveDocument(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() input: unknown,
+  ): Promise<void> {
+    const parsed = documentSubscriptionSchema.safeParse(input);
+    if (parsed.success)
+      await this.documentRooms.leave(client, parsed.data.workspaceId, parsed.data.documentId);
   }
 
   @SubscribeMessage("import:subscribe")

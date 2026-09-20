@@ -20,7 +20,7 @@ import {
   parseCloudDocument,
 } from "@share-mind-map/document-model";
 import { exportCloudDocumentToXMind } from "@share-mind-map/xmind";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { sql } from "drizzle-orm";
 
 import type { AuthContext } from "../auth/auth-context.js";
@@ -30,6 +30,7 @@ import { ApiError } from "../platform/errors/api-error.js";
 import type { DraftExportDto, SaveSnapshotDto } from "./dto/document-save.dto.js";
 import type { SnapshotResponseDto } from "./dto/document.dto.js";
 import { LockService } from "../locks/lock.service.js";
+import { DocumentRoomService } from "../realtime/document-room.service.js";
 import type {
   CreateDocumentDto,
   DocumentListQueryDto,
@@ -123,6 +124,7 @@ export class DocumentsService {
   public constructor(
     @Inject(AUTH_DATABASE) private readonly database: Database,
     private readonly locks: LockService,
+    @Optional() private readonly documentRooms?: DocumentRoomService,
   ) {}
 
   private assertWorkspace(auth: AuthContext, workspaceId: string): void {
@@ -211,6 +213,16 @@ export class DocumentsService {
         });
         return saved;
       });
+      try {
+        this.documentRooms?.broadcastSnapshot({
+          workspaceId,
+          documentId,
+          snapshot,
+          version: result.snapshot.version,
+        });
+      } catch {
+        // The database commit remains authoritative; clients recover through REST.
+      }
       return {
         idempotent: result.idempotent,
         document: toDto(result.document),

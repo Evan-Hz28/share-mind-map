@@ -8,6 +8,7 @@ import { useEditorStore } from "../editor/editor.store.js";
 import { MindElixirAdapter } from "../editor/adapters/mind-elixir.js";
 import type { MindMapAdapter } from "../editor/adapters/types.js";
 import { useUnsavedGuard } from "../editor/use-unsaved-guard.js";
+import { DocumentRealtime } from "../realtime/document-realtime.js";
 import { useDocumentStore } from "./document.store.js";
 
 const properties = defineProps<{ documentId: string; workspaceId?: string }>();
@@ -21,6 +22,13 @@ const copiedDraft = ref(false);
 let adapter: MindMapAdapter | null = null;
 let unsubscribe: (() => void) | null = null;
 let mediaQuery: MediaQueryList | null = null;
+const realtime = new DocumentRealtime({
+  onVersionGap: () => void load(),
+  onReconnect: () => {
+    editor.stopEditing();
+    editor.setMode("readonly");
+  },
+});
 
 const currentWorkspaceId = computed(
   () => properties.workspaceId || auth.session?.defaultWorkspace.id || "",
@@ -94,6 +102,43 @@ async function mountAdapter(): Promise<void> {
   });
 }
 
+function handleRealtimeSnapshot(event: {
+  version: number;
+  snapshot: NonNullable<typeof documents.snapshot>;
+}): void {
+  if (editor.dirty || editor.canWrite) {
+    editor.markConflict();
+    adapter?.setReadOnly(true);
+    return;
+  }
+  documents.snapshot = event.snapshot;
+  if (documents.metadata !== null) {
+    documents.metadata = { ...documents.metadata, currentVersion: event.version };
+  }
+  editor.setDocument(event.snapshot, event.version);
+  void adapter?.applySnapshot(event.snapshot);
+}
+
+function handleRealtimeLock(lock: {
+  occupied: boolean;
+  editorDisplayName: string | null;
+  expiresAt: string | null;
+  generation: number;
+}): void {
+  if (documents.lock === null) return;
+  documents.lock = {
+    ...documents.lock,
+    occupied: lock.occupied,
+    generation: lock.generation,
+    expiresAt: lock.expiresAt ?? documents.lock.expiresAt,
+    ...(lock.editorDisplayName === null ? {} : { editorDisplayName: lock.editorDisplayName }),
+  };
+  if (lock.occupied && editor.canWrite) {
+    editor.markLockLost();
+    adapter?.setReadOnly(true);
+  }
+}
+
 async function load(): Promise<void> {
   if (currentWorkspaceId.value === "") return;
   await documents.load(currentWorkspaceId.value, properties.documentId);
@@ -101,6 +146,11 @@ async function load(): Promise<void> {
   if (documents.snapshot !== null) {
     editor.setDocument(documents.snapshot, documents.metadata?.currentVersion);
     await mountAdapter();
+    realtime.join(
+      currentWorkspaceId.value,
+      properties.documentId,
+      documents.metadata?.currentVersion ?? 0,
+    );
   }
 }
 
@@ -125,6 +175,9 @@ async function copyDraftJson(): Promise<void> {
 watch(readOnly, (value) => adapter?.setReadOnly(value));
 
 onMounted(() => {
+  realtime.onSnapshot(handleRealtimeSnapshot);
+  realtime.onLock(handleRealtimeLock);
+  realtime.connect();
   mediaQuery = window.matchMedia("(max-width: 767px)");
   mediaQuery.addEventListener("change", updateMobile);
   updateMobile();
@@ -132,6 +185,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  realtime.disconnect();
   mediaQuery?.removeEventListener("change", updateMobile);
   unsubscribe?.();
   adapter?.destroy();

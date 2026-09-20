@@ -1,11 +1,12 @@
 import { Module } from "@nestjs/common";
 
 import { LocksModule } from "../locks/lock.module.js";
+import { RealtimeModule } from "../realtime/realtime.module.js";
 import { DocumentsController } from "./documents.controller.js";
 import { DocumentsService } from "./documents.service.js";
 
 @Module({
-  imports: [LocksModule],
+  imports: [LocksModule, RealtimeModule],
   controllers: [DocumentsController],
   providers: [DocumentsService],
 })
