@@ -3,17 +3,21 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 
 import { useAuthStore } from "../auth/auth.store.js";
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
+import { DraftStore } from "../editor/draft-store.js";
 import { useEditorStore } from "../editor/editor.store.js";
 import { MindElixirAdapter } from "../editor/adapters/mind-elixir.js";
 import type { MindMapAdapter } from "../editor/adapters/types.js";
+import { useUnsavedGuard } from "../editor/use-unsaved-guard.js";
 import { useDocumentStore } from "./document.store.js";
 
 const properties = defineProps<{ documentId: string; workspaceId?: string }>();
 const auth = useAuthStore();
 const documents = useDocumentStore();
 const editor = useEditorStore();
+const drafts = new DraftStore();
 const canvas = ref<HTMLDivElement | null>(null);
 const mobile = ref(false);
+const copiedDraft = ref(false);
 let adapter: MindMapAdapter | null = null;
 let unsubscribe: (() => void) | null = null;
 let mediaQuery: MediaQueryList | null = null;
@@ -36,6 +40,37 @@ const notes = computed(() => {
   }
   return result;
 });
+const draftKey = computed(() => {
+  const userId = auth.session?.user.id;
+  if (userId === undefined || currentWorkspaceId.value === "") return null;
+  return DraftStore.key(userId, currentWorkspaceId.value, properties.documentId);
+});
+const draftAvailable = computed(
+  () => draftKey.value !== null && drafts.load(draftKey.value) !== null,
+);
+
+function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+const unsaved = useUnsavedGuard({
+  dirty: () => editor.dirty,
+  onDiscard: () => {
+    if (draftKey.value !== null) drafts.clear(draftKey.value);
+    editor.discardDraft();
+  },
+  onCopyJson: () => (draftKey.value === null ? undefined : drafts.copyJson(draftKey.value)),
+  onExportDraft: async () => {
+    if (editor.draft === null) return;
+    const blob = await documents.exportDraft(editor.draft);
+    downloadBlob(blob, `${documents.metadata?.name ?? "mind-map"}-draft.xmind`);
+  },
+});
 
 function updateMobile(): void {
   mobile.value = mediaQuery?.matches ?? window.innerWidth < 768;
@@ -49,7 +84,13 @@ async function mountAdapter(): Promise<void> {
   await adapter.mount(documents.snapshot);
   adapter.setReadOnly(readOnly.value);
   unsubscribe = adapter.onChange((snapshot) => {
-    if (!readOnly.value) editor.markChanged(snapshot);
+    if (!readOnly.value) {
+      editor.markChanged(snapshot);
+      if (draftKey.value !== null) {
+        const currentVersion = editor.currentVersion;
+        drafts.save(draftKey.value, snapshot, currentVersion === null ? {} : { currentVersion });
+      }
+    }
   });
 }
 
@@ -57,7 +98,10 @@ async function load(): Promise<void> {
   if (currentWorkspaceId.value === "") return;
   await documents.load(currentWorkspaceId.value, properties.documentId);
   await nextTick();
-  if (documents.snapshot !== null) await mountAdapter();
+  if (documents.snapshot !== null) {
+    editor.setDocument(documents.snapshot, documents.metadata?.currentVersion);
+    await mountAdapter();
+  }
 }
 
 function beginEditing(): void {
@@ -69,6 +113,13 @@ function beginEditing(): void {
 function endEditing(): void {
   editor.stopEditing();
   adapter?.setReadOnly(true);
+}
+
+async function copyDraftJson(): Promise<void> {
+  const json = unsaved.copyJson();
+  if (json === undefined) return;
+  await navigator.clipboard?.writeText(json);
+  copiedDraft.value = true;
 }
 
 watch(readOnly, (value) => adapter?.setReadOnly(value));
@@ -131,8 +182,19 @@ onBeforeUnmount(() => {
             }}
           </button>
           <button v-if="editor.canWrite" type="button" @click="endEditing">结束编辑</button>
+          <button v-if="editor.dirty" type="button" @click="copyDraftJson">复制草稿 JSON</button>
+          <button v-if="editor.dirty" type="button" @click="unsaved.exportDraft">
+            导出草稿 XMind
+          </button>
         </div>
       </header>
+      <div v-if="editor.dirty || draftAvailable" class="document-draft-bar" role="status">
+        <span>{{
+          editor.dirty ? "存在未保存修改，已保存在本机草稿中。" : "检测到本机草稿。"
+        }}</span>
+        <span v-if="copiedDraft">已复制</span>
+        <button v-if="editor.dirty" type="button" @click="unsaved.discard">放弃草稿</button>
+      </div>
       <div class="document-status-bar">
         <span>兼容性：{{ documents.compatibility }}</span>
         <span v-if="documents.lock?.occupied"

@@ -1,4 +1,5 @@
 import {
+  exportDocumentDraft,
   getDocumentMetadata,
   inspectDocumentLock,
   type DocumentDetailDto,
@@ -79,6 +80,18 @@ export const useDocumentStoreDefinition = defineStore("document", {
     async refresh(): Promise<void> {
       if (this.workspaceId !== null && this.documentId !== null)
         await this.load(this.workspaceId, this.documentId);
+    },
+
+    async exportDraft(snapshot: CloudDocumentV1): Promise<Blob> {
+      if (this.workspaceId === null || this.documentId === null)
+        throw new Error("Document identity is not loaded");
+      const result = await exportDocumentDraft({
+        client: apiClient,
+        path: { workspaceId: this.workspaceId, documentId: this.documentId },
+        body: { snapshot: snapshot as unknown as Record<string, unknown> },
+      });
+      if (result.data === undefined) throw toApiFailure(result.error);
+      return result.data;
     },
   },
 });

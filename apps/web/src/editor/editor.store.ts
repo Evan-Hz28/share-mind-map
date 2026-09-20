@@ -26,12 +26,11 @@ export const useEditorStoreDefinition = defineStore("editor", {
   },
   actions: {
     setDocument(document: CloudDocumentV1, currentVersion = document.version): void {
-      const validated = validateCloudDocumentSnapshot(document);
+      validateCloudDocumentSnapshot(document);
       this.currentVersion = currentVersion;
       this.draft = null;
       this.dirty = false;
       this.mode = "readonly";
-      void validated;
     },
 
     startEditing(currentVersion: number): void {
@@ -67,6 +66,22 @@ export const useEditorStoreDefinition = defineStore("editor", {
       this.draft = null;
       this.dirty = false;
       this.mode = "readonly";
+    },
+
+    markLockLost(): void {
+      this.mode = "lock-lost";
+    },
+
+    markConflict(): void {
+      this.mode = "conflict";
+    },
+
+    markOffline(): void {
+      this.mode = "offline";
+    },
+
+    markSaveFailed(): void {
+      this.mode = "save-failed";
     },
   },
 });

@@ -813,6 +813,29 @@ a {
   border-radius: 6px;
   font-size: 13px;
 }
+.document-draft-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid #ead6a0;
+  color: #72550d;
+  background: #fff9e9;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.document-draft-bar span:first-child {
+  flex: 1;
+}
+.document-draft-bar button {
+  border: 0;
+  color: #72550d;
+  background: transparent;
+  cursor: pointer;
+  text-decoration: underline;
+}
 .document-canvas {
   min-height: 600px;
   overflow: hidden;
