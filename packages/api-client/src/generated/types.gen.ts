@@ -901,6 +901,53 @@ export type UpdateDocumentMetadataResponses = {
 
 export type UpdateDocumentMetadataResponse = UpdateDocumentMetadataResponses[keyof UpdateDocumentMetadataResponses];
 
+export type UploadDocumentAssetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        documentId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/assets';
+};
+
+export type UploadDocumentAssetResponses = {
+    /**
+     * Uploaded image asset metadata.
+     */
+    201: unknown;
+};
+
+export type ReadDocumentAssetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        documentId: string;
+        assetId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/assets/{assetId}';
+};
+
+export type ReadDocumentAssetResponses = {
+    /**
+     * A current-snapshot-referenced private image.
+     */
+    200: unknown;
+};
+
 export type ExportDocumentDraftData = {
     body: DraftExportDto;
     headers?: {

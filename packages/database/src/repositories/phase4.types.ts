@@ -4,7 +4,10 @@ import type { DocumentRecord } from "./document.repository.js";
 export type Phase4SaveKind = "auto" | "manual" | "restore";
 
 export type Phase4RepositoryErrorCode =
-  "DOCUMENT_VERSION_CONFLICT" | "IDEMPOTENCY_KEY_REUSED" | "DOCUMENT_ASSET_INVALID";
+  | "DOCUMENT_VERSION_CONFLICT"
+  | "IDEMPOTENCY_KEY_REUSED"
+  | "DOCUMENT_ASSET_INVALID"
+  | "DOCUMENT_IMAGE_QUOTA_EXCEEDED";
 
 export class Phase4RepositoryError extends Error {
   public constructor(

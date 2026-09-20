@@ -12,6 +12,7 @@ import { ExportsModule } from "./exports/exports.module.js";
 import { RealtimeModule } from "./realtime/realtime.module.js";
 import { NotificationsModule } from "./notifications/notifications.module.js";
 import { LocksModule } from "./locks/lock.module.js";
+import { AssetsModule } from "./assets/assets.module.js";
 import { StorageModule } from "./storage/storage.module.js";
 import { HealthController } from "./health/health.controller.js";
 import {
@@ -80,6 +81,7 @@ export class AppModule {
         MembershipModule,
         NotificationsModule,
         LocksModule,
+        AssetsModule,
         StorageModule,
         ImportsModule,
         ExportsModule,

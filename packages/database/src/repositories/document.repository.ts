@@ -202,12 +202,17 @@ export class DocumentRepository {
     }
 
     const assetIds = [...new Set(input.assetIds)];
+    let imageBytes: number;
     if (assetIds.length > 0) {
-      const assetRows = await transaction.execute<{ id: string }>(sql`
-        SELECT id FROM document_assets
+      const assetIdList = sql.join(
+        assetIds.map((assetId) => sql`${assetId}`),
+        sql`,`,
+      );
+      const assetRows = await transaction.execute<{ id: string; byte_size: number | string }>(sql`
+        SELECT id, byte_size FROM document_assets
         WHERE workspace_id = ${input.workspaceId}
           AND document_id = ${input.documentId}
-          AND id = ANY(${assetIds}::uuid[])
+          AND id IN (${assetIdList})
       `);
       if (assetRows.rows.length !== assetIds.length) {
         throw new Phase4RepositoryError(
@@ -215,6 +220,19 @@ export class DocumentRepository {
           "Snapshot references an unknown document asset.",
         );
       }
+      const referencedImageBytes = assetRows.rows.reduce(
+        (total, asset) => total + Number(asset.byte_size),
+        0,
+      );
+      if (referencedImageBytes > 50 * 1024 * 1024) {
+        throw new Phase4RepositoryError(
+          "DOCUMENT_IMAGE_QUOTA_EXCEEDED",
+          "Current snapshot image quota exceeded.",
+        );
+      }
+      imageBytes = referencedImageBytes;
+    } else {
+      imageBytes = 0;
     }
 
     const snapshotId = newId();
@@ -240,7 +258,7 @@ export class DocumentRepository {
       UPDATE documents
       SET current_version = ${nextVersion}, schema_version = ${input.snapshot.schemaVersion},
           current_snapshot_id = ${snapshotId}, node_count = ${snapshotNodeCount(input.snapshot)},
-          image_bytes = ${input.imageBytes}, updated_by = ${input.actorUserId}, updated_at = now()
+          image_bytes = ${imageBytes}, updated_by = ${input.actorUserId}, updated_at = now()
       WHERE id = ${input.documentId} AND workspace_id = ${input.workspaceId} AND trashed_at IS NULL
       RETURNING id, workspace_id, folder_id, name, name_normalized, current_version,
                 schema_version, compatibility_status, node_count, image_bytes, created_by, updated_by,

@@ -30,7 +30,7 @@ export const authTestConfig: AppConfig = {
   minio: {
     endpoint: new URL("http://localhost:9000"),
     accessKey: "mindmap",
-    secretKey: "12345678",
+    secretKey: process.env.MINIO_ROOT_PASSWORD ?? "12345678",
     bucket: "share-mind-map",
     useSsl: false,
   },
