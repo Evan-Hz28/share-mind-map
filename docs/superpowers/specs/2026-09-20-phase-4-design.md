@@ -163,6 +163,7 @@ GET    /api/v1/workspaces/:workspaceId/documents/:documentId/lock
 
 ```text
 POST /api/v1/workspaces/:workspaceId/documents/:documentId/assets
+GET  /api/v1/workspaces/:workspaceId/documents/:documentId/assets/:assetId
 ```
 
 上传同时校验当前锁；请求采用流式大小限制，服务端计算 SHA-256 并解析真实媒体类型和尺寸。对象先写入不可变内部键：
@@ -178,6 +179,8 @@ snapshot_asset_refs(snapshot_id, asset_id, primary key(snapshot_id, asset_id))
 ```
 
 `pending` 不新增可变状态字段，而是由“尚未出现在任何 `snapshot_asset_refs` 中”派生；一旦建立引用即为 `referenced`。删除节点只影响未来快照引用，不物理删除对象。清理任务只删除超过保留窗口、没有快照引用且没有进行中上传的对象。引用表使用 `snapshot_id` 和 `asset_id` 外键，并在同一保存事务中写入。
+
+图片读取端点只允许当前工作空间成员访问，并确认资产属于指定文档且出现在当前快照引用中；服务端从私有 MinIO 流式返回正确 `Content-Type`，不返回内部对象键或永久公开 URL。
 
 资产复用按工作空间和 SHA-256 查找相同字节，但每个文档的引用关系仍必须单独建立。总图片大小由当前快照引用的资产计算，并在事务中校验 50 MiB；达到组织存储 100% 时拒绝图片上传，但不拒绝纯文本保存。
 
