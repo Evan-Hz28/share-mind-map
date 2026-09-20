@@ -3,7 +3,7 @@
 
 import { client } from './client.gen.js';
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client/index.js';
-import type { AdminChangeAccountStatusData, AdminChangeAccountStatusResponses, AdminCreateMemberData, AdminCreateMemberResponses, AdminListAuditLogsData, AdminListAuditLogsResponses, AdminListEditPermissionRequestsData, AdminListEditPermissionRequestsResponses, AdminListImportFailuresData, AdminListImportFailuresResponses, AdminListMembersData, AdminListMembersResponses, AdminReadStorageUsageData, AdminReadStorageUsageResponses, AdminResetMemberPasswordData, AdminResetMemberPasswordResponses, AdminRevokeMemberSessionsData, AdminRevokeMemberSessionsResponses, ApproveEditPermissionRequestData, ApproveEditPermissionRequestResponses, AuthChangePasswordData, AuthChangePasswordResponses, AuthCsrfData, AuthCsrfResponses, AuthLoginData, AuthLoginResponses, AuthLogoutData, AuthLogoutResponses, CancelImportJobData, CancelImportJobResponses, CheckFolderDeleteData, CheckFolderDeleteResponses, CreateBlankDocumentData, CreateBlankDocumentResponses, CreateEditPermissionRequestData, CreateEditPermissionRequestResponses, CreateFolderData, CreateFolderResponses, CreateImportBatchData, CreateImportBatchResponses, ExportDocumentData, ExportDocumentResponses, GetDocumentMetadataData, GetDocumentMetadataResponses, GetImportBatchData, GetImportBatchResponses, GetMeData, GetMeResponses, HealthLiveData, HealthLiveResponses, HealthReadyData, HealthReadyErrors, HealthReadyResponses, ListDocumentsData, ListDocumentsResponses, ListFoldersData, ListFoldersResponses, ListNotificationsData, ListNotificationsResponses, ReadAllNotificationsData, ReadAllNotificationsResponses, ReadNotificationData, ReadNotificationResponses, RejectEditPermissionRequestData, RejectEditPermissionRequestResponses, RenameFolderData, RenameFolderResponses, RetryImportJobData, RetryImportJobResponses, RevokeMemberEditingData, RevokeMemberEditingResponses, UpdateDocumentMetadataData, UpdateDocumentMetadataResponses, UploadImportJobData, UploadImportJobResponses } from './types.gen.js';
+import type { AcquireDocumentLockData, AcquireDocumentLockResponses, AdminChangeAccountStatusData, AdminChangeAccountStatusResponses, AdminCreateMemberData, AdminCreateMemberResponses, AdminListAuditLogsData, AdminListAuditLogsResponses, AdminListEditPermissionRequestsData, AdminListEditPermissionRequestsResponses, AdminListImportFailuresData, AdminListImportFailuresResponses, AdminListMembersData, AdminListMembersResponses, AdminReadStorageUsageData, AdminReadStorageUsageResponses, AdminResetMemberPasswordData, AdminResetMemberPasswordResponses, AdminRevokeMemberSessionsData, AdminRevokeMemberSessionsResponses, ApproveEditPermissionRequestData, ApproveEditPermissionRequestResponses, AuthChangePasswordData, AuthChangePasswordResponses, AuthCsrfData, AuthCsrfResponses, AuthLoginData, AuthLoginResponses, AuthLogoutData, AuthLogoutResponses, CancelImportJobData, CancelImportJobResponses, CheckFolderDeleteData, CheckFolderDeleteResponses, CreateBlankDocumentData, CreateBlankDocumentResponses, CreateEditPermissionRequestData, CreateEditPermissionRequestResponses, CreateFolderData, CreateFolderResponses, CreateImportBatchData, CreateImportBatchResponses, ExportDocumentData, ExportDocumentResponses, ForceReleaseDocumentLockData, ForceReleaseDocumentLockResponses, GetDocumentMetadataData, GetDocumentMetadataResponses, GetImportBatchData, GetImportBatchResponses, GetMeData, GetMeResponses, HealthLiveData, HealthLiveResponses, HealthReadyData, HealthReadyErrors, HealthReadyResponses, HeartbeatDocumentLockData, HeartbeatDocumentLockResponses, InspectDocumentLockData, InspectDocumentLockResponses, ListDocumentsData, ListDocumentsResponses, ListFoldersData, ListFoldersResponses, ListNotificationsData, ListNotificationsResponses, ReadAllNotificationsData, ReadAllNotificationsResponses, ReadNotificationData, ReadNotificationResponses, RejectEditPermissionRequestData, RejectEditPermissionRequestResponses, ReleaseDocumentLockData, ReleaseDocumentLockResponses, RenameFolderData, RenameFolderResponses, RetryImportJobData, RetryImportJobResponses, RevokeMemberEditingData, RevokeMemberEditingResponses, UpdateDocumentMetadataData, UpdateDocumentMetadataResponses, UploadImportJobData, UploadImportJobResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -110,6 +110,44 @@ export const updateDocumentMetadata = <ThrowOnError extends boolean = false>(opt
 });
 
 export const exportDocument = <ThrowOnError extends boolean = false>(options: Options<ExportDocumentData, ThrowOnError>): RequestResult<ExportDocumentResponses, unknown, ThrowOnError> => (options.client ?? client).get<ExportDocumentResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/export', ...options });
+
+export const releaseDocumentLock = <ThrowOnError extends boolean = false>(options: Options<ReleaseDocumentLockData, ThrowOnError>): RequestResult<ReleaseDocumentLockResponses, unknown, ThrowOnError> => (options.client ?? client).delete<ReleaseDocumentLockResponses, unknown, ThrowOnError>({
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/lock',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const inspectDocumentLock = <ThrowOnError extends boolean = false>(options: Options<InspectDocumentLockData, ThrowOnError>): RequestResult<InspectDocumentLockResponses, unknown, ThrowOnError> => (options.client ?? client).get<InspectDocumentLockResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/lock', ...options });
+
+export const acquireDocumentLock = <ThrowOnError extends boolean = false>(options: Options<AcquireDocumentLockData, ThrowOnError>): RequestResult<AcquireDocumentLockResponses, unknown, ThrowOnError> => (options.client ?? client).post<AcquireDocumentLockResponses, unknown, ThrowOnError>({
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/lock',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const forceReleaseDocumentLock = <ThrowOnError extends boolean = false>(options: Options<ForceReleaseDocumentLockData, ThrowOnError>): RequestResult<ForceReleaseDocumentLockResponses, unknown, ThrowOnError> => (options.client ?? client).post<ForceReleaseDocumentLockResponses, unknown, ThrowOnError>({
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/lock/force-release',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const heartbeatDocumentLock = <ThrowOnError extends boolean = false>(options: Options<HeartbeatDocumentLockData, ThrowOnError>): RequestResult<HeartbeatDocumentLockResponses, unknown, ThrowOnError> => (options.client ?? client).post<HeartbeatDocumentLockResponses, unknown, ThrowOnError>({
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/lock/heartbeat',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
 
 export const createEditPermissionRequest = <ThrowOnError extends boolean = false>(options: Options<CreateEditPermissionRequestData, ThrowOnError>): RequestResult<CreateEditPermissionRequestResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateEditPermissionRequestResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{workspaceId}/edit-requests', ...options });
 

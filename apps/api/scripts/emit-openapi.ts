@@ -89,6 +89,7 @@ const artifactConfig = {
   },
   sessionSecret: "openapi-only-placeholder",
   sessionTtlSeconds: 86_400,
+  documentLockTtlSeconds: 900,
   cookie: { secure: false, sameSite: "lax" },
   argon2: { memoryKiB: 8_192, iterations: 1, parallelism: 1 },
   queuePrefix: "smm",

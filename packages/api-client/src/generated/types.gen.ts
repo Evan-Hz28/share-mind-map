@@ -5,6 +5,14 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}/api/v1` | `${string}://${string}` | `${string}://${string}` | (string & {});
 };
 
+export type AcquireLockDto = {
+    browserEditSessionId: string;
+};
+
+export type AcquireLockResponseDto = {
+    lock: LockDto;
+};
+
 export type AdminImportFailureDto = {
     batchId: string;
     clientFileName: string;
@@ -151,6 +159,16 @@ export type FolderResponseDto = {
     folder: FolderDto;
 };
 
+export type ForceReleaseLockDto = {
+    confirm: boolean;
+};
+
+export type HeartbeatLockResponseDto = {
+    expiresAt: string;
+    generation: number;
+    ttlSeconds: number;
+};
+
 export type ImportBatchResponseDto = {
     cancelledJobs: number;
     expectedBytes: number;
@@ -183,6 +201,25 @@ export type ImportJobResponseDto = {
 
 export type ImportUploadDto = {
     file: Blob | File;
+};
+
+export type LockDto = {
+    editorDisplayName?: string;
+    expiresAt: string;
+    generation: number;
+    heartbeatAt?: string;
+    occupied: boolean;
+    ttlSeconds: number;
+};
+
+export type LockLeaseDto = {
+    browserEditSessionId: string;
+    generation: number;
+    token: string;
+};
+
+export type LockResponseDto = {
+    lock: LockDto;
 };
 
 export type LoginDto = {
@@ -861,6 +898,116 @@ export type ExportDocumentResponses = {
 };
 
 export type ExportDocumentResponse = ExportDocumentResponses[keyof ExportDocumentResponses];
+
+export type ReleaseDocumentLockData = {
+    body: LockLeaseDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        documentId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/lock';
+};
+
+export type ReleaseDocumentLockResponses = {
+    200: LockResponseDto;
+};
+
+export type ReleaseDocumentLockResponse = ReleaseDocumentLockResponses[keyof ReleaseDocumentLockResponses];
+
+export type InspectDocumentLockData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        documentId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/lock';
+};
+
+export type InspectDocumentLockResponses = {
+    200: LockResponseDto;
+};
+
+export type InspectDocumentLockResponse = InspectDocumentLockResponses[keyof InspectDocumentLockResponses];
+
+export type AcquireDocumentLockData = {
+    body: AcquireLockDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        documentId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/lock';
+};
+
+export type AcquireDocumentLockResponses = {
+    201: AcquireLockResponseDto;
+};
+
+export type AcquireDocumentLockResponse = AcquireDocumentLockResponses[keyof AcquireDocumentLockResponses];
+
+export type ForceReleaseDocumentLockData = {
+    body: ForceReleaseLockDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        documentId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/lock/force-release';
+};
+
+export type ForceReleaseDocumentLockResponses = {
+    201: LockResponseDto;
+};
+
+export type ForceReleaseDocumentLockResponse = ForceReleaseDocumentLockResponses[keyof ForceReleaseDocumentLockResponses];
+
+export type HeartbeatDocumentLockData = {
+    body: LockLeaseDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        documentId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/lock/heartbeat';
+};
+
+export type HeartbeatDocumentLockResponses = {
+    200: HeartbeatLockResponseDto;
+};
+
+export type HeartbeatDocumentLockResponse = HeartbeatDocumentLockResponses[keyof HeartbeatDocumentLockResponses];
 
 export type CreateEditPermissionRequestData = {
     body?: never;

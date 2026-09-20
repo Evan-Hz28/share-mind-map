@@ -14,6 +14,8 @@ export const errorCatalog = {
   NAME_CONFLICT: { status: 409, message: "名称已存在。" },
   FOLDER_NAME_CONFLICT: { status: 409, message: "文件夹名称已存在。" },
   DOCUMENT_NAME_CONFLICT: { status: 409, message: "文档名称已存在。" },
+  DOCUMENT_LOCKED: { status: 409, message: "文档当前正在编辑。" },
+  LOCK_LOST: { status: 423, message: "编辑锁已失效，请保留本地修改后重新获取。" },
   FOLDER_LIMIT_REACHED: { status: 409, message: "工作空间文件夹数量已达上限。" },
   FOLDER_DOCUMENT_LIMIT_REACHED: { status: 409, message: "文件夹文档数量已达上限。" },
   WORKSPACE_DOCUMENT_LIMIT_REACHED: { status: 409, message: "工作空间文档数量已达上限。" },

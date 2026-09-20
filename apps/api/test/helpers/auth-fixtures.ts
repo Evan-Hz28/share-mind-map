@@ -1,4 +1,5 @@
 import type { Server } from "node:http";
+import { fileURLToPath } from "node:url";
 
 import { createDatabase, migrateDatabase, type Database } from "@share-mind-map/database";
 import type { INestApplication } from "@nestjs/common";
@@ -10,14 +11,22 @@ import { createApp } from "../../src/main.js";
 import type { AppConfig } from "../../src/platform/config/app-config.js";
 import { RecordingCommandIO } from "./recording-command-io.js";
 
+try {
+  process.loadEnvFile(fileURLToPath(new URL("../../../../.env", import.meta.url)));
+} catch {
+  // CI supplies test connection URLs directly instead of a repository .env file.
+}
+
 export const authTestConfig: AppConfig = {
   environment: "test",
   host: "127.0.0.1",
   port: 0,
   apiPublicUrl: new URL("http://localhost:3000"),
   webOrigin: new URL("http://localhost:5173"),
-  databaseUrl: "postgresql://mindmap:123456@localhost:15432/share_mind_map",
-  redisUrl: "redis://default:123456@localhost:16379",
+  databaseUrl:
+    process.env.TEST_DATABASE_URL ?? "postgresql://mindmap:123456@localhost:15432/share_mind_map",
+  redisUrl:
+    process.env.TEST_REDIS_URL ?? process.env.REDIS_URL ?? "redis://default:123456@localhost:16379",
   minio: {
     endpoint: new URL("http://localhost:9000"),
     accessKey: "mindmap",
@@ -33,6 +42,7 @@ export const authTestConfig: AppConfig = {
   },
   sessionSecret: "task-nine-integration-session-secret-value",
   sessionTtlSeconds: 86_400,
+  documentLockTtlSeconds: 900,
   cookie: { secure: false, sameSite: "lax" },
   argon2: { memoryKiB: 8_192, iterations: 1, parallelism: 1 },
   trustProxyCount: 0,
@@ -97,6 +107,7 @@ export async function resetAuthTestRuntime(runtime: AuthTestRuntime): Promise<vo
   );
   await deleteKeys(runtime.redis, "smm:auth:*");
   await deleteKeys(runtime.redis, "smm:login-limit:*");
+  await deleteKeys(runtime.redis, "smm:lock:*");
 }
 
 export async function stopAuthTestRuntime(runtime?: AuthTestRuntime): Promise<void> {

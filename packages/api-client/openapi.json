@@ -14,6 +14,30 @@
       }
     },
     "schemas": {
+      "AcquireLockDto": {
+        "properties": {
+          "browserEditSessionId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "browserEditSessionId"
+        ],
+        "type": "object"
+      },
+      "AcquireLockResponseDto": {
+        "properties": {
+          "lock": {
+            "$ref": "#/components/schemas/LockDto"
+          }
+        },
+        "required": [
+          "lock"
+        ],
+        "type": "object"
+      },
       "AdminImportFailureDto": {
         "properties": {
           "batchId": {
@@ -539,6 +563,36 @@
         ],
         "type": "object"
       },
+      "ForceReleaseLockDto": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "confirm"
+        ],
+        "type": "object"
+      },
+      "HeartbeatLockResponseDto": {
+        "properties": {
+          "expiresAt": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "number"
+          },
+          "ttlSeconds": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "expiresAt",
+          "generation",
+          "ttlSeconds"
+        ],
+        "type": "object"
+      },
       "ImportBatchResponseDto": {
         "properties": {
           "cancelledJobs": {
@@ -664,6 +718,69 @@
         },
         "required": [
           "file"
+        ],
+        "type": "object"
+      },
+      "LockDto": {
+        "properties": {
+          "editorDisplayName": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "number"
+          },
+          "heartbeatAt": {
+            "type": "string"
+          },
+          "occupied": {
+            "type": "boolean"
+          },
+          "ttlSeconds": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "expiresAt",
+          "generation",
+          "occupied",
+          "ttlSeconds"
+        ],
+        "type": "object"
+      },
+      "LockLeaseDto": {
+        "properties": {
+          "browserEditSessionId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "generation": {
+            "minimum": 1,
+            "type": "number"
+          },
+          "token": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "browserEditSessionId",
+          "generation",
+          "token"
+        ],
+        "type": "object"
+      },
+      "LockResponseDto": {
+        "properties": {
+          "lock": {
+            "$ref": "#/components/schemas/LockDto"
+          }
+        },
+        "required": [
+          "lock"
         ],
         "type": "object"
       },
@@ -2274,6 +2391,281 @@
         "summary": "",
         "tags": [
           "exports"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/lock": {
+      "delete": {
+        "operationId": "releaseDocumentLock",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "documentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LockLeaseDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LockResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "locks"
+        ]
+      },
+      "get": {
+        "operationId": "inspectDocumentLock",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "documentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LockResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "locks"
+        ]
+      },
+      "post": {
+        "operationId": "acquireDocumentLock",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "documentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcquireLockDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcquireLockResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "locks"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/lock/force-release": {
+      "post": {
+        "operationId": "forceReleaseDocumentLock",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "documentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForceReleaseLockDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LockResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "locks"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/lock/heartbeat": {
+      "post": {
+        "operationId": "heartbeatDocumentLock",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "documentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LockLeaseDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartbeatLockResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "locks"
         ]
       }
     },

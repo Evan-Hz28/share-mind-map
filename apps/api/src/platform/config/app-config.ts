@@ -39,6 +39,7 @@ const environmentSchema = z
     SMTP_PASSWORD: z.string().min(1).optional(),
     SESSION_SECRET: z.string().min(1),
     SESSION_TTL_SECONDS: z.coerce.number().int().min(60).max(604_800).default(86_400),
+    DOCUMENT_LOCK_TTL_SECONDS: z.coerce.number().int().min(60).max(3_600).default(900),
     COOKIE_SECURE: booleanString.default(false),
     COOKIE_SAME_SITE: z.enum(["lax", "strict"]).default("lax"),
     ARGON2_MEMORY_KIB: z.coerce.number().int().min(8_192).default(65_536),
@@ -174,6 +175,7 @@ export interface AppConfig {
   smtp: SmtpConfig;
   sessionSecret: string;
   sessionTtlSeconds: number;
+  documentLockTtlSeconds: number;
   cookie: { secure: boolean; sameSite: CookieSameSite };
   argon2: { memoryKiB: number; iterations: number; parallelism: number };
   trustProxyCount: number;
@@ -219,6 +221,7 @@ export function parseAppConfig(environment: Record<string, string | undefined>):
     },
     sessionSecret: result.data.SESSION_SECRET,
     sessionTtlSeconds: result.data.SESSION_TTL_SECONDS,
+    documentLockTtlSeconds: result.data.DOCUMENT_LOCK_TTL_SECONDS,
     cookie: {
       secure: result.data.COOKIE_SECURE,
       sameSite: result.data.COOKIE_SAME_SITE,
