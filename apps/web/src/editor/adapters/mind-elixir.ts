@@ -1,0 +1,315 @@
+import {
+  cloneCloudDocument,
+  parseCloudDocument,
+  validateCloudDocumentSnapshot,
+  type CloudDocumentV1,
+  type CloudNodeV1,
+  type CloudSheetV1,
+} from "@share-mind-map/document-model";
+import MindElixir, { type MindElixirData, type NodeObj } from "mind-elixir";
+
+import {
+  cloneViewState,
+  INITIAL_VIEW_STATE,
+  type MindMapAdapter,
+  type MindMapViewState,
+} from "./types.js";
+
+type VendorNode = {
+  id: string;
+  children?: VendorNode[];
+  expanded?: boolean;
+  icons?: unknown[];
+  note?: unknown;
+  style?: Record<string, unknown>;
+  tags?: unknown[];
+  topic?: unknown;
+};
+
+type MindElixirBus = {
+  addListener(name: string, listener: (payload: unknown) => void): void;
+  removeListener(name: string, listener: (payload: unknown) => void): void;
+};
+
+function uuid(value: string): string {
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)) {
+    return value;
+  }
+  return globalThis.crypto.randomUUID();
+}
+
+function toMindElixirNode(
+  sheet: CloudSheetV1,
+  node: CloudNodeV1,
+  expanded: ReadonlySet<string>,
+): NodeObj {
+  return {
+    id: node.id,
+    topic: node.title,
+    expanded: node.parentId === null || expanded.has(node.id),
+    children: node.childIds.map((childId) => {
+      const child = sheet.nodes[childId];
+      if (child === undefined) throw new Error(`Missing child node ${childId}.`);
+      return toMindElixirNode(sheet, child, expanded);
+    }),
+    ...(node.labels.length > 0 ? { tags: [...node.labels] } : {}),
+    ...(node.icons.length > 0 ? { icons: [...node.icons] } : {}),
+    ...(node.notes === null ? {} : { note: node.notes.text }),
+    ...(Object.keys(node.style).length === 0
+      ? {}
+      : {
+          style: {
+            ...(node.style.fontSize === undefined ? {} : { fontSize: String(node.style.fontSize) }),
+            ...(node.style.fontFamily === undefined ? {} : { fontFamily: node.style.fontFamily }),
+            ...(node.style.textColor === undefined ? {} : { color: node.style.textColor }),
+            ...(node.style.backgroundColor === undefined
+              ? {}
+              : { background: node.style.backgroundColor }),
+            ...(node.style.fontWeight === undefined
+              ? {}
+              : { fontWeight: String(node.style.fontWeight) }),
+          },
+        }),
+  };
+}
+
+function styleFromVendor(style: Record<string, unknown> | undefined): CloudNodeV1["style"] {
+  if (style === undefined) return {};
+  const fontSize = typeof style.fontSize === "string" ? Number(style.fontSize) : style.fontSize;
+  const fontWeight =
+    typeof style.fontWeight === "string" ? Number(style.fontWeight) : style.fontWeight;
+  return {
+    ...(typeof style.color === "string" ? { textColor: style.color } : {}),
+    ...(typeof style.background === "string" ? { backgroundColor: style.background } : {}),
+    ...(typeof style.fontFamily === "string" ? { fontFamily: style.fontFamily } : {}),
+    ...(typeof fontSize === "number" && Number.isFinite(fontSize) ? { fontSize } : {}),
+    ...(typeof fontWeight === "number" && Number.isFinite(fontWeight) ? { fontWeight } : {}),
+  };
+}
+
+function nodeFromVendor(
+  vendor: VendorNode,
+  parentId: string | null,
+  previous: Record<string, CloudNodeV1>,
+  idMap: Map<string, string>,
+  collected: Record<string, CloudNodeV1>,
+): CloudNodeV1 {
+  const vendorId = String(vendor.id);
+  const existingId = idMap.get(vendorId);
+  const id = existingId ?? uuid(vendorId);
+  idMap.set(vendorId, id);
+  const old = previous[id];
+  const children = (vendor.children ?? []).map((child) =>
+    nodeFromVendor(child, id, previous, idMap, collected),
+  );
+  const title = typeof vendor.topic === "string" ? vendor.topic : (old?.title ?? "");
+  const tags = Array.isArray(vendor.tags)
+    ? vendor.tags.filter((tag): tag is string => typeof tag === "string")
+    : (old?.labels ?? []);
+  const icons = Array.isArray(vendor.icons)
+    ? vendor.icons.filter((icon): icon is string => typeof icon === "string")
+    : (old?.icons ?? []);
+  const note =
+    typeof vendor.note === "string"
+      ? { format: "plain" as const, text: vendor.note }
+      : (old?.notes ?? null);
+  const result: CloudNodeV1 = {
+    id,
+    parentId,
+    childIds: children.map((child) => child.id),
+    title,
+    priority: old?.priority ?? null,
+    notes: note,
+    labels: tags,
+    icons,
+    style:
+      Object.keys(vendor.style ?? {}).length > 0
+        ? styleFromVendor(vendor.style)
+        : (old?.style ?? {}),
+    imageAssetId: old?.imageAssetId ?? null,
+    extensions: old?.extensions ?? {},
+  };
+  collected[result.id] = result;
+  return result;
+}
+
+function standardFromVendor(
+  base: CloudDocumentV1,
+  data: MindElixirData,
+  idMap: Map<string, string>,
+): CloudDocumentV1 {
+  const baseSheet = base.sheets[0];
+  if (baseSheet === undefined) throw new Error("The snapshot does not contain a sheet.");
+  const root = data.nodeData as VendorNode;
+  const nodes: Record<string, CloudNodeV1> = {};
+  const rootNode = nodeFromVendor(root, null, baseSheet.nodes, idMap, nodes);
+  const relationships = baseSheet.relationships.filter(
+    (relationship) =>
+      nodes[relationship.sourceNodeId] !== undefined &&
+      nodes[relationship.targetNodeId] !== undefined,
+  );
+  return parseCloudDocument({
+    ...base,
+    sheets: [{ ...baseSheet, rootNodeId: rootNode.id, nodes, relationships }],
+  });
+}
+
+export class MindElixirAdapter implements MindMapAdapter {
+  private instance: MindElixir | null = null;
+  private snapshot: CloudDocumentV1 | null = null;
+  private viewState = cloneViewState(INITIAL_VIEW_STATE);
+  private readonly listeners = new Set<(document: CloudDocumentV1) => void>();
+  private readonly vendorIds = new Map<string, string>();
+  private readonly operationListener = (): void => {
+    this.publishVendorSnapshot();
+  };
+
+  public constructor(private readonly host: HTMLElement) {}
+
+  public async mount(document: CloudDocumentV1): Promise<void> {
+    this.destroy();
+    this.snapshot = validateCloudDocumentSnapshot(document);
+    const instance = new MindElixir({
+      el: this.host,
+      editable: !this.viewState.readOnly,
+      contextMenu: false,
+      toolBar: false,
+      keypress: false,
+      allowUndo: true,
+      overflowHidden: true,
+    });
+    this.instance = instance;
+    const error = await instance.init(this.vendorData());
+    if (error !== undefined) throw error;
+    this.bus().addListener("operation", this.operationListener);
+    await this.applyViewState();
+  }
+
+  public async applySnapshot(document: CloudDocumentV1): Promise<void> {
+    this.snapshot = validateCloudDocumentSnapshot(document);
+    this.vendorIds.clear();
+    this.requireInstance().refresh(this.vendorData());
+    await this.applyViewState();
+  }
+
+  public exportSnapshot(): CloudDocumentV1 {
+    if (this.snapshot === null) throw new Error("The adapter is not mounted.");
+    return this.snapshotFromVendor();
+  }
+
+  public onChange(listener: (document: CloudDocumentV1) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  public async focusNode(nodeId: string): Promise<boolean> {
+    const instance = this.requireInstance();
+    if (this.requireSheet().nodes[nodeId] === undefined) return false;
+    const node = instance.findEle(nodeId, this.host);
+    instance.selectNode(node);
+    instance.scrollIntoView(node, true);
+    this.viewState.selectedNodeId = nodeId;
+    await this.afterRender();
+    return true;
+  }
+
+  public getViewState(): MindMapViewState {
+    return cloneViewState(this.viewState);
+  }
+
+  public async restoreViewState(state: MindMapViewState): Promise<void> {
+    this.viewState = cloneViewState(state);
+    this.requireInstance().refresh(this.vendorData());
+    await this.applyViewState();
+  }
+
+  public setReadOnly(readOnly: boolean): void {
+    this.viewState.readOnly = readOnly;
+    const instance = this.requireInstance();
+    if (readOnly) instance.disableEdit();
+    else instance.enableEdit();
+  }
+
+  public destroy(): void {
+    if (this.instance !== null) {
+      this.bus().removeListener("operation", this.operationListener);
+      this.instance.destroy();
+    }
+    this.instance = null;
+    this.snapshot = null;
+    this.vendorIds.clear();
+    this.host.replaceChildren();
+  }
+
+  private publishVendorSnapshot(): void {
+    const next = this.snapshotFromVendor();
+    this.snapshot = next;
+    const cloned = cloneCloudDocument(next);
+    for (const listener of this.listeners) listener(cloned);
+  }
+
+  private snapshotFromVendor(): CloudDocumentV1 {
+    const snapshot = this.snapshot;
+    if (snapshot === null) throw new Error("The adapter is not mounted.");
+    const data = this.requireInstance().getData();
+    return standardFromVendor(snapshot, data, this.vendorIds);
+  }
+
+  private vendorData(): MindElixirData {
+    const sheet = this.requireSheet();
+    return {
+      nodeData: toMindElixirNode(
+        sheet,
+        this.requireNode(sheet, sheet.rootNodeId),
+        new Set(this.viewState.expandedNodeIds),
+      ),
+      direction: MindElixir.RIGHT,
+    };
+  }
+
+  private async applyViewState(): Promise<void> {
+    const instance = this.requireInstance();
+    if (this.viewState.readOnly) instance.disableEdit();
+    else instance.enableEdit();
+    instance.scale(this.viewState.viewport.zoom);
+    instance.move(this.viewState.viewport.x, this.viewState.viewport.y);
+    if (
+      this.viewState.selectedNodeId !== null &&
+      this.requireSheet().nodes[this.viewState.selectedNodeId]
+    ) {
+      const node = instance.findEle(this.viewState.selectedNodeId, this.host);
+      instance.selectNode(node);
+    }
+    await this.afterRender();
+  }
+
+  private bus(): MindElixirBus {
+    const instance = this.requireInstance() as unknown as { bus: MindElixirBus };
+    return instance.bus;
+  }
+
+  private requireInstance(): MindElixir {
+    if (this.instance === null) throw new Error("The adapter is not mounted.");
+    return this.instance;
+  }
+
+  private requireSheet(): CloudSheetV1 {
+    const sheet = this.snapshot?.sheets[0];
+    if (sheet === undefined) throw new Error("The snapshot does not contain a sheet.");
+    return sheet;
+  }
+
+  private requireNode(sheet: CloudSheetV1, nodeId: string): CloudNodeV1 {
+    const node = sheet.nodes[nodeId];
+    if (node === undefined) throw new Error(`Missing node ${nodeId}.`);
+    return node;
+  }
+
+  private async afterRender(): Promise<void> {
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => {
+        resolve();
+      }),
+    );
+  }
+}
