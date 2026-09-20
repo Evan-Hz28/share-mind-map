@@ -475,6 +475,17 @@
         ],
         "type": "object"
       },
+      "DraftExportDto": {
+        "properties": {
+          "snapshot": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "snapshot"
+        ],
+        "type": "object"
+      },
       "FolderDeleteCheckResponseDto": {
         "properties": {
           "canDelete": {
@@ -1157,6 +1168,60 @@
         ],
         "type": "object"
       },
+      "SaveSnapshotDto": {
+        "properties": {
+          "assetIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "baseVersion": {
+            "minimum": 1,
+            "type": "number"
+          },
+          "browserEditSessionId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "generation": {
+            "minimum": 1,
+            "type": "number"
+          },
+          "imageBytes": {
+            "maximum": 52428800,
+            "minimum": 0,
+            "type": "number"
+          },
+          "saveKind": {
+            "enum": [
+              "auto",
+              "manual",
+              "restore"
+            ],
+            "type": "string"
+          },
+          "snapshot": {
+            "type": "object"
+          },
+          "token": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "baseVersion",
+          "browserEditSessionId",
+          "generation",
+          "imageBytes",
+          "saveKind",
+          "snapshot",
+          "token"
+        ],
+        "type": "object"
+      },
       "SessionResponseDto": {
         "properties": {
           "defaultWorkspace": {
@@ -1193,6 +1258,25 @@
           "organization",
           "role",
           "user"
+        ],
+        "type": "object"
+      },
+      "SnapshotResponseDto": {
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/DocumentDto"
+          },
+          "idempotent": {
+            "type": "boolean"
+          },
+          "snapshot": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "document",
+          "idempotent",
+          "snapshot"
         ],
         "type": "object"
       },
@@ -2346,6 +2430,65 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/draft-export": {
+      "post": {
+        "operationId": "exportDocumentDraft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "documentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftExportDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/xmind": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "A private XMind export generated from a client draft."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/export": {
       "get": {
         "operationId": "exportDocument",
@@ -2666,6 +2809,74 @@
         "summary": "",
         "tags": [
           "locks"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/snapshots": {
+      "post": {
+        "operationId": "saveDocumentSnapshot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "documentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSnapshotDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "documents"
         ]
       }
     },

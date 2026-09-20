@@ -29,6 +29,15 @@ export {
   type DocumentListResult,
   type DocumentRecord,
 } from "./repositories/document.repository.js";
+export {
+  Phase4RepositoryError,
+  type Phase4RepositoryErrorCode,
+  type Phase4SaveKind,
+  type SaveSnapshotDocument,
+  type SaveSnapshotInput,
+  type SaveSnapshotResult,
+  type SnapshotRecord,
+} from "./repositories/phase4.types.js";
 export { FolderRepository, type FolderRecord } from "./repositories/folder.repository.js";
 export {
   NotificationRepository,

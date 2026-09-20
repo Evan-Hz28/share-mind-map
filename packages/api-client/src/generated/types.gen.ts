@@ -133,6 +133,12 @@ export type DocumentResponseDto = {
     document: DocumentDto;
 };
 
+export type DraftExportDto = {
+    snapshot: {
+        [key: string]: unknown;
+    };
+};
+
 export type FolderDeleteCheckResponseDto = {
     canDelete: boolean;
     documentCount: number;
@@ -319,6 +325,19 @@ export type SafeWorkspaceDto = {
     name: string;
 };
 
+export type SaveSnapshotDto = {
+    assetIds?: Array<string>;
+    baseVersion: number;
+    browserEditSessionId: string;
+    generation: number;
+    imageBytes: number;
+    saveKind: 'auto' | 'manual' | 'restore';
+    snapshot: {
+        [key: string]: unknown;
+    };
+    token: string;
+};
+
 export type SessionResponseDto = {
     defaultWorkspace: SafeWorkspaceDto;
     effectivePermissions: Array<string>;
@@ -326,6 +345,14 @@ export type SessionResponseDto = {
     organization: SafeOrganizationDto;
     role: 'admin' | 'editor' | 'reader';
     user: SafeUserDto;
+};
+
+export type SnapshotResponseDto = {
+    document: DocumentDto;
+    idempotent: boolean;
+    snapshot: {
+        [key: string]: unknown;
+    };
 };
 
 export type StorageUsageDto = {
@@ -874,6 +901,31 @@ export type UpdateDocumentMetadataResponses = {
 
 export type UpdateDocumentMetadataResponse = UpdateDocumentMetadataResponses[keyof UpdateDocumentMetadataResponses];
 
+export type ExportDocumentDraftData = {
+    body: DraftExportDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        documentId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/draft-export';
+};
+
+export type ExportDocumentDraftResponses = {
+    /**
+     * A private XMind export generated from a client draft.
+     */
+    200: Blob | File;
+};
+
+export type ExportDocumentDraftResponse = ExportDocumentDraftResponses[keyof ExportDocumentDraftResponses];
+
 export type ExportDocumentData = {
     body?: never;
     headers?: {
@@ -1008,6 +1060,29 @@ export type HeartbeatDocumentLockResponses = {
 };
 
 export type HeartbeatDocumentLockResponse = HeartbeatDocumentLockResponses[keyof HeartbeatDocumentLockResponses];
+
+export type SaveDocumentSnapshotData = {
+    body: SaveSnapshotDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        documentId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/snapshots';
+};
+
+export type SaveDocumentSnapshotResponses = {
+    200: SnapshotResponseDto;
+    201: SnapshotResponseDto;
+};
+
+export type SaveDocumentSnapshotResponse = SaveDocumentSnapshotResponses[keyof SaveDocumentSnapshotResponses];
 
 export type CreateEditPermissionRequestData = {
     body?: never;

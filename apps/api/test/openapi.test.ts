@@ -83,6 +83,9 @@ describe("OpenAPI metadata", () => {
         document.paths["/api/v1/admin/members/{id}/password/reset"]?.post,
         document.paths["/api/v1/admin/members/{id}/account-status"]?.patch,
         document.paths["/api/v1/admin/members/{id}/sessions/revoke"]?.post,
+        document.paths["/api/v1/workspaces/{workspaceId}/documents/{documentId}/snapshots"]?.post,
+        document.paths["/api/v1/workspaces/{workspaceId}/documents/{documentId}/draft-export"]
+          ?.post,
       ];
 
       for (const operation of authenticatedMutations) {

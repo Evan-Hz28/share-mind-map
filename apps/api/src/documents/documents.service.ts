@@ -1,15 +1,25 @@
+import { createHash } from "node:crypto";
+
 import {
   AuditRepository,
   DocumentRepository,
   EntityNameValidationError,
   Phase2RepositoryError,
+  Phase4RepositoryError,
   normalizeEntityName,
   newId,
   type Database,
   type DocumentDetail,
   type DocumentRecord,
 } from "@share-mind-map/database";
-import { createInitialCloudDocument, countDocumentNodes } from "@share-mind-map/document-model";
+import {
+  DocumentModelError,
+  countDocumentNodes,
+  createInitialCloudDocument,
+  normalizeCloudDocumentVersion,
+  parseCloudDocument,
+} from "@share-mind-map/document-model";
+import { exportCloudDocumentToXMind } from "@share-mind-map/xmind";
 import { Inject, Injectable } from "@nestjs/common";
 import { sql } from "drizzle-orm";
 
@@ -17,6 +27,9 @@ import type { AuthContext } from "../auth/auth-context.js";
 import { AUTH_DATABASE } from "../auth/auth.tokens.js";
 import { sessionReference } from "../common/audit/session-reference.js";
 import { ApiError } from "../platform/errors/api-error.js";
+import type { DraftExportDto, SaveSnapshotDto } from "./dto/document-save.dto.js";
+import type { SnapshotResponseDto } from "./dto/document.dto.js";
+import { LockService } from "../locks/lock.service.js";
 import type {
   CreateDocumentDto,
   DocumentListQueryDto,
@@ -84,6 +97,14 @@ function mapRepositoryError(error: unknown): never {
         throw new ApiError("INTERNAL_ERROR");
     }
   }
+  if (error instanceof Phase4RepositoryError) {
+    throw new ApiError(error.code);
+  }
+  if (error instanceof DocumentModelError) {
+    if (error.code === "DOCUMENT_NODE_LIMIT_REACHED")
+      throw new ApiError("DOCUMENT_NODE_LIMIT_REACHED");
+    throw new ApiError("DOCUMENT_SCHEMA_INVALID");
+  }
   const databaseError = error as {
     constraint?: unknown;
     cause?: { constraint?: unknown };
@@ -99,7 +120,10 @@ export class DocumentsService {
   private readonly documents = new DocumentRepository();
   private readonly audits = new AuditRepository();
 
-  public constructor(@Inject(AUTH_DATABASE) private readonly database: Database) {}
+  public constructor(
+    @Inject(AUTH_DATABASE) private readonly database: Database,
+    private readonly locks: LockService,
+  ) {}
 
   private assertWorkspace(auth: AuthContext, workspaceId: string): void {
     if (auth.session.workspaceId !== workspaceId) throw new ApiError("PERMISSION_DENIED");
@@ -115,6 +139,123 @@ export class DocumentsService {
     const organizationId = result.rows[0]?.organization_id;
     if (organizationId === undefined) throw new ApiError("NOT_FOUND");
     return organizationId;
+  }
+
+  public async saveSnapshot(
+    auth: AuthContext,
+    workspaceId: string,
+    documentId: string,
+    input: SaveSnapshotDto,
+    idempotencyKey: string,
+    requestId: string,
+  ): Promise<SnapshotResponseDto & { idempotent: boolean }> {
+    this.assertWorkspace(auth, workspaceId);
+    if (!/^[A-Za-z0-9._:-]{1,200}$/.test(idempotencyKey)) throw new ApiError("INVALID_INPUT");
+    try {
+      const parsed = parseCloudDocument(input.snapshot);
+      if (parsed.documentId !== documentId) throw new ApiError("DOCUMENT_SCHEMA_INVALID");
+      const snapshot = normalizeCloudDocumentVersion(parsed, input.baseVersion + 1);
+      const referencedAssets = new Set<string>();
+      for (const sheet of snapshot.sheets) {
+        for (const node of Object.values(sheet.nodes)) {
+          if (node.imageAssetId !== null) referencedAssets.add(node.imageAssetId);
+        }
+      }
+      const assetIds = [...new Set(input.assetIds)];
+      if (assetIds.some((assetId) => !referencedAssets.has(assetId))) {
+        throw new ApiError("DOCUMENT_ASSET_INVALID");
+      }
+      for (const assetId of referencedAssets) {
+        if (!assetIds.includes(assetId)) throw new ApiError("DOCUMENT_ASSET_INVALID");
+      }
+      await this.locks.heartbeat(auth, workspaceId, documentId, {
+        browserEditSessionId: input.browserEditSessionId,
+        token: input.token,
+        generation: input.generation,
+      });
+      const serialized = JSON.stringify(snapshot);
+      const result = await this.database.transaction(async (transaction) => {
+        const saved = await this.documents.saveSnapshot(transaction, {
+          workspaceId,
+          documentId,
+          actorUserId: auth.session.userId,
+          baseVersion: input.baseVersion,
+          saveKind: input.saveKind,
+          snapshot,
+          snapshotSha256: createHash("sha256").update(serialized).digest("hex"),
+          snapshotJson: snapshot,
+          snapshotObjectKey: null,
+          imageBytes: input.imageBytes,
+          assetIds,
+          idempotencyKey,
+        });
+        const organizationId = await this.organizationForWorkspace(transaction, workspaceId);
+        await this.audits.append(transaction, {
+          organizationId,
+          workspaceId,
+          actorUserId: auth.session.userId,
+          actorSessionId: sessionReference(auth.sessionToken),
+          action: "document.snapshot.saved",
+          targetType: "document",
+          targetId: documentId,
+          result: "success",
+          requestId,
+          fromVersion: input.baseVersion,
+          toVersion: saved.snapshot.version,
+          metadata: {
+            saveKind: input.saveKind,
+            version: saved.snapshot.version,
+            nodeCount: countDocumentNodes(snapshot),
+            snapshotSha256: saved.snapshot.snapshotSha256,
+          },
+        });
+        return saved;
+      });
+      return {
+        idempotent: result.idempotent,
+        document: toDto(result.document),
+        snapshot: {
+          id: result.snapshot.id,
+          version: result.snapshot.version,
+          schemaVersion: result.snapshot.schemaVersion,
+          sha256: result.snapshot.snapshotSha256,
+        },
+      };
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      return mapRepositoryError(error);
+    }
+  }
+
+  public async draftExport(
+    auth: AuthContext,
+    workspaceId: string,
+    documentId: string,
+    input: DraftExportDto,
+  ): Promise<{ fileName: string; bytes: Buffer; compatibilityStatus: "full" | "partial" }> {
+    this.assertWorkspace(auth, workspaceId);
+    try {
+      const document = await this.database.$client.query<{ name: string }>(
+        `SELECT name FROM documents WHERE id = $1 AND workspace_id = $2 AND trashed_at IS NULL`,
+        [documentId, workspaceId],
+      );
+      const name = document.rows[0]?.name;
+      if (name === undefined) throw new ApiError("DOCUMENT_NOT_FOUND");
+      const parsed = parseCloudDocument(input.snapshot);
+      if (parsed.documentId !== documentId) throw new ApiError("DOCUMENT_SCHEMA_INVALID");
+      const result = await exportCloudDocumentToXMind(parsed, { assets: [] });
+      return {
+        fileName: `${Array.from(name, (character) => {
+          const code = character.codePointAt(0) ?? 0;
+          return code < 32 || '\\/:*?"<>|'.includes(character) ? "_" : character;
+        }).join("")}.xmind`,
+        bytes: result.bytes,
+        compatibilityStatus: result.compatibility.status,
+      };
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      return mapRepositoryError(error);
+    }
   }
 
   public async list(

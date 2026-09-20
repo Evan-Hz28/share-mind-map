@@ -57,3 +57,14 @@ export class DocumentDetailResponseDto {
   @ApiProperty({ type: DocumentDetailDto })
   public document!: DocumentDetailDto;
 }
+
+export class SnapshotResponseDto {
+  @ApiProperty()
+  public idempotent!: boolean;
+
+  @ApiProperty({ type: DocumentDto })
+  public document!: DocumentDto;
+
+  @ApiProperty({ type: Object })
+  public snapshot!: { id: string; version: number; schemaVersion: number; sha256: string };
+}
