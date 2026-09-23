@@ -160,8 +160,22 @@ export class MindElixirAdapter implements MindMapAdapter {
   private viewState = cloneViewState(INITIAL_VIEW_STATE);
   private readonly listeners = new Set<(document: CloudDocumentV1) => void>();
   private readonly vendorIds = new Map<string, string>();
-  private readonly operationListener = (): void => {
+  private readonly operationListener = (payload: unknown): void => {
+    const operation = payload as { name?: unknown };
+    if (operation.name === "beginEdit") {
+      this.focusEditingInput();
+      return;
+    }
     this.publishVendorSnapshot();
+  };
+  private readonly expandListener = (payload: unknown): void => {
+    const node = payload as { id?: unknown; expanded?: unknown };
+    if (typeof node.id !== "string" || typeof node.expanded !== "boolean") return;
+    if (node.id === this.requireSheet().rootNodeId) return;
+    const expandedNodeIds = new Set(this.viewState.expandedNodeIds);
+    if (node.expanded) expandedNodeIds.add(node.id);
+    else expandedNodeIds.delete(node.id);
+    this.viewState.expandedNodeIds = [...expandedNodeIds];
   };
 
   public constructor(private readonly host: HTMLElement) {}
@@ -172,16 +186,17 @@ export class MindElixirAdapter implements MindMapAdapter {
     const instance = new MindElixir({
       el: this.host,
       editable: !this.viewState.readOnly,
-      contextMenu: false,
-      toolBar: false,
-      keypress: false,
+      contextMenu: true,
+      toolBar: true,
+      keypress: true,
       allowUndo: true,
-      overflowHidden: true,
+      overflowHidden: false,
     });
     this.instance = instance;
     const error = await instance.init(this.vendorData());
     if (error !== undefined) throw error;
     this.bus().addListener("operation", this.operationListener);
+    this.bus().addListener("expandNode", this.expandListener);
     await this.applyViewState();
   }
 
@@ -223,6 +238,17 @@ export class MindElixirAdapter implements MindMapAdapter {
     await this.applyViewState();
   }
 
+  public async setAllExpanded(expanded: boolean): Promise<void> {
+    const sheet = this.requireSheet();
+    this.viewState.expandedNodeIds = expanded
+      ? Object.values(sheet.nodes)
+          .filter((node) => node.childIds.length > 0)
+          .map((node) => node.id)
+      : [];
+    this.requireInstance().refresh(this.vendorData());
+    await this.applyViewState();
+  }
+
   public setReadOnly(readOnly: boolean): void {
     this.viewState.readOnly = readOnly;
     const instance = this.requireInstance();
@@ -233,6 +259,7 @@ export class MindElixirAdapter implements MindMapAdapter {
   public destroy(): void {
     if (this.instance !== null) {
       this.bus().removeListener("operation", this.operationListener);
+      this.bus().removeListener("expandNode", this.expandListener);
       this.instance.destroy();
     }
     this.instance = null;
@@ -255,6 +282,20 @@ export class MindElixirAdapter implements MindMapAdapter {
     return standardFromVendor(snapshot, data, this.vendorIds);
   }
 
+  private focusEditingInput(): void {
+    const input = this.host.querySelector<HTMLElement>("#input-box");
+    if (input === null) return;
+    input.focus();
+
+    const selection = globalThis.getSelection();
+    if (selection === null) return;
+    const range = input.ownerDocument.createRange();
+    range.selectNodeContents(input);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
   private vendorData(): MindElixirData {
     const sheet = this.requireSheet();
     return {
@@ -263,7 +304,7 @@ export class MindElixirAdapter implements MindMapAdapter {
         this.requireNode(sheet, sheet.rootNodeId),
         new Set(this.viewState.expandedNodeIds),
       ),
-      direction: MindElixir.RIGHT,
+      direction: MindElixir.SIDE,
     };
   }
 

@@ -10,6 +10,7 @@ let realtimeLockListener:
       generation: number;
     }) => void)
   | undefined;
+let realtimeReconnect: (() => void) | undefined;
 
 vi.mock("../../src/editor/adapters/mind-elixir.js", () => ({
   MindElixirAdapter: class {
@@ -25,6 +26,10 @@ vi.mock("../../src/editor/adapters/mind-elixir.js", () => ({
 
 vi.mock("../../src/realtime/document-realtime.js", () => ({
   DocumentRealtime: class {
+    public constructor(options: { onReconnect?: () => void }) {
+      realtimeReconnect = options.onReconnect;
+    }
+
     connect(): void {}
     join(): void {}
     disconnect(): void {}
@@ -80,7 +85,9 @@ const snapshot = {
 
 beforeEach(() => {
   realtimeLockListener = undefined;
+  realtimeReconnect = undefined;
   localStorage.clear();
+  sessionStorage.clear();
   setActivePinia(createPinia());
   useAuthStore().$patch({
     state: "authenticated",
@@ -90,6 +97,197 @@ beforeEach(() => {
 });
 
 describe("DocumentView", () => {
+  it("restores the editable lease after the realtime connection reconnects", async () => {
+    useAuthStore().$patch({ session: sessionResponse("admin") });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            document: {
+              id: documentId,
+              workspaceId,
+              folderId: null,
+              name: "重连恢复文档",
+              currentVersion: 1,
+              schemaVersion: 1,
+              compatibilityStatus: "full",
+              nodeCount: 1,
+              imageBytes: 0,
+              createdAt: "2026-09-20T00:00:00.000Z",
+              updatedAt: "2026-09-20T00:00:00.000Z",
+              snapshot,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            lock: { occupied: false, generation: 0, ttlSeconds: 900, expiresAt: "" },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            lock: {
+              occupied: true,
+              generation: 1,
+              ttlSeconds: 900,
+              expiresAt: "2026-09-20T00:15:00.000Z",
+              token: "initial-token",
+            },
+          }),
+          { status: 201, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            document: {
+              id: documentId,
+              workspaceId,
+              folderId: null,
+              name: "重连恢复文档",
+              currentVersion: 1,
+              schemaVersion: 1,
+              compatibilityStatus: "full",
+              nodeCount: 1,
+              imageBytes: 0,
+              createdAt: "2026-09-20T00:00:00.000Z",
+              updatedAt: "2026-09-20T00:00:00.000Z",
+              snapshot,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            lock: {
+              occupied: true,
+              editorDisplayName: "管理员",
+              generation: 1,
+              ttlSeconds: 900,
+              expiresAt: "2026-09-20T00:15:00.000Z",
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            lock: {
+              occupied: true,
+              editorDisplayName: "管理员",
+              generation: 1,
+              ttlSeconds: 900,
+              expiresAt: "2026-09-20T00:15:00.000Z",
+              token: "recovered-token",
+            },
+          }),
+          { status: 201, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(DocumentView, { props: { workspaceId, documentId } });
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "重连恢复文档" })).toBeInTheDocument(),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "开始编辑" }));
+    await waitFor(() => {
+      expect(useEditorStore().canWrite).toBe(true);
+    });
+
+    realtimeReconnect?.();
+
+    await waitFor(() => {
+      expect(useEditorStore().canWrite).toBe(true);
+    });
+    expect(screen.getByRole("button", { name: "结束编辑" })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+  });
+
+  it("recovers the current tab edit session after a page refresh", async () => {
+    const administrator = sessionResponse("admin");
+    useAuthStore().$patch({ session: administrator });
+    sessionStorage.setItem(
+      `document-edit-session:${administrator.user.id}:${workspaceId}:${documentId}`,
+      "browser-one",
+    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            document: {
+              id: documentId,
+              workspaceId,
+              folderId: null,
+              name: "刷新恢复文档",
+              currentVersion: 1,
+              schemaVersion: 1,
+              compatibilityStatus: "full",
+              nodeCount: 1,
+              imageBytes: 0,
+              createdAt: "2026-09-20T00:00:00.000Z",
+              updatedAt: "2026-09-20T00:00:00.000Z",
+              snapshot,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            lock: {
+              occupied: true,
+              editorDisplayName: "管理员",
+              generation: 1,
+              ttlSeconds: 900,
+              expiresAt: "2026-09-20T00:15:00.000Z",
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            lock: {
+              occupied: true,
+              editorDisplayName: "管理员",
+              generation: 1,
+              ttlSeconds: 900,
+              expiresAt: "2026-09-20T00:15:00.000Z",
+              token: "recovered-token",
+            },
+          }),
+          { status: 201, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(DocumentView, { props: { workspaceId, documentId } });
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "结束编辑" })).toBeInTheDocument(),
+    );
+    expect(useEditorStore().canWrite).toBe(true);
+    const recoverRequest = (fetchMock.mock.calls as Array<[Request]>).find(([request]) =>
+      request.url.endsWith(`/documents/${documentId}/lock/recover`),
+    )?.[0];
+    expect(recoverRequest).toBeDefined();
+    expect(await recoverRequest?.clone().json()).toEqual({ browserEditSessionId: "browser-one" });
+  });
+
   it("shows loading and then a reader-safe document presentation", async () => {
     const fetchMock = vi
       .fn()

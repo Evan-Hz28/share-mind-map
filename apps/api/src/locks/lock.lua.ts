@@ -34,6 +34,20 @@ redis.call('EXPIRE', KEYS[1], ARGV[7])
 return {1, generation, ARGV[7]}
 `;
 
+export const recoverLockLua = `
+local active = redis.call('HGET', KEYS[1], 'active')
+local generation = redis.call('HGET', KEYS[1], 'generation') or '0'
+if active ~= '1' or
+   redis.call('HGET', KEYS[1], 'userId') ~= ARGV[1] or
+   redis.call('HGET', KEYS[1], 'platformSessionId') ~= ARGV[2] or
+   redis.call('HGET', KEYS[1], 'browserEditSessionId') ~= ARGV[3] then
+  return {0, generation, redis.call('TTL', KEYS[1])}
+end
+redis.call('HSET', KEYS[1], 'tokenDigest', ARGV[4], 'heartbeatAt', ARGV[5])
+redis.call('EXPIRE', KEYS[1], ARGV[6])
+return {1, generation, ARGV[6]}
+`;
+
 export const releaseLockLua = `
 if redis.call('EXISTS', KEYS[1]) == 0 then return {1, '0'} end
 local generation = redis.call('HGET', KEYS[1], 'generation') or '0'

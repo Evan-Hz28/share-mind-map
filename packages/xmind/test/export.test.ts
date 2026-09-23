@@ -56,7 +56,7 @@ describe("XMind export", () => {
       arrangeableLayerOrder: [expect.any(String)],
       zones: [],
     });
-    expect(content[0]?.rootTopic).toMatchObject({ class: "topic" });
+    expect(content[0].rootTopic).toMatchObject({ class: "topic" });
     expect(JSON.parse(entries.get("metadata.json")?.toString("utf8") ?? "null")).toEqual({
       dataStructureVersion: "3",
       creator: { name: "Kitar", version: "1.0.0" },

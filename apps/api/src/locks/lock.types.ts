@@ -9,6 +9,10 @@ export type LockAcquireResult =
   | { status: "acquired"; token: string; generation: number; ttlSeconds: number }
   | { status: "occupied"; generation: number; ttlSeconds: number };
 
+export type LockRecoverResult =
+  | { status: "recovered"; token: string; generation: number; ttlSeconds: number }
+  | { status: "lost"; generation: number; ttlSeconds: number };
+
 export type LockHeartbeatResult =
   | { status: "renewed"; generation: number; ttlSeconds: number }
   | { status: "lost"; generation: number };

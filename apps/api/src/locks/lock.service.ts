@@ -84,6 +84,24 @@ export class LockService {
     };
   }
 
+  public async recover(
+    auth: AuthContext,
+    workspaceId: string,
+    documentId: string,
+    input: AcquireLockDto,
+  ): Promise<{ lock: PublicLock & { token: string } }> {
+    await this.assertDocument(auth, workspaceId, documentId);
+    const result = await this.locks.recover({
+      documentId,
+      userId: auth.session.userId,
+      platformSessionId: this.platformSessionId(auth),
+      browserEditSessionId: input.browserEditSessionId,
+    });
+    if (result.status === "lost") throw new ApiError("LOCK_LOST");
+    const lock = await this.publicLockAndBroadcast(workspaceId, documentId);
+    return { lock: { ...lock, token: result.token } };
+  }
+
   public async release(
     auth: AuthContext,
     workspaceId: string,

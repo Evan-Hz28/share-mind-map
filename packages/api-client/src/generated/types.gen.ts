@@ -1118,6 +1118,28 @@ export type HeartbeatDocumentLockResponses = {
 
 export type HeartbeatDocumentLockResponse = HeartbeatDocumentLockResponses[keyof HeartbeatDocumentLockResponses];
 
+export type RecoverDocumentLockData = {
+    body: AcquireLockDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        documentId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}/lock/recover';
+};
+
+export type RecoverDocumentLockResponses = {
+    201: AcquireLockResponseDto;
+};
+
+export type RecoverDocumentLockResponse = RecoverDocumentLockResponses[keyof RecoverDocumentLockResponses];
+
 export type SaveDocumentSnapshotData = {
     body: SaveSnapshotDto;
     headers: {

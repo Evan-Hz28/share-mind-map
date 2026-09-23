@@ -49,6 +49,20 @@ export class LockController {
     return this.locks.acquire(getAuthContext(request), workspaceId, documentId, input);
   }
 
+  @Post("recover")
+  @Roles("editor")
+  @ApiSecurity({ sessionCookie: [], csrfToken: [] })
+  @ApiOperation({ operationId: "recoverDocumentLock" })
+  @ApiResponse({ status: 201, type: AcquireLockResponseDto })
+  public recover(
+    @Param("workspaceId", new ParseUUIDPipe({ version: "7" })) workspaceId: string,
+    @Param("documentId", new ParseUUIDPipe({ version: "7" })) documentId: string,
+    @Body() input: AcquireLockDto,
+    @Req() request: Request,
+  ): Promise<AcquireLockResponseDto> {
+    return this.locks.recover(getAuthContext(request), workspaceId, documentId, input);
+  }
+
   @Get()
   @Roles("reader")
   @ApiCookieAuth("sessionCookie")

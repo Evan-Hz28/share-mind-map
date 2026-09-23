@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } fro
 import {
   acquireDocumentLock,
   heartbeatDocumentLock,
+  recoverDocumentLock,
   releaseDocumentLock,
   type LockDto,
 } from "@share-mind-map/api-client";
@@ -40,10 +41,7 @@ let lockTimer: ReturnType<typeof setTimeout> | null = null;
 let mounted = false;
 const realtime = new DocumentRealtime({
   onVersionGap: () => void load(),
-  onReconnect: () => {
-    editor.stopEditing();
-    editor.setMode("readonly");
-  },
+  onReconnect: () => void recoverAfterRealtimeReconnect(),
 });
 
 const currentWorkspaceId = computed(
@@ -70,9 +68,38 @@ const draftKey = computed(() => {
   if (userId === undefined || currentWorkspaceId.value === "") return null;
   return DraftStore.key(userId, currentWorkspaceId.value, properties.documentId);
 });
+const editSessionKey = computed(() => {
+  const userId = auth.session?.user.id;
+  if (userId === undefined || currentWorkspaceId.value === "") return null;
+  return `document-edit-session:${userId}:${currentWorkspaceId.value}:${properties.documentId}`;
+});
 const draftAvailable = computed(
   () => draftKey.value !== null && drafts.load(draftKey.value) !== null,
 );
+
+async function recoverAfterRealtimeReconnect(): Promise<void> {
+  stopLockTimer();
+  lockState.value = "acquiring";
+  editor.stopEditing();
+  adapter?.setReadOnly(true);
+  await load();
+}
+
+function storedBrowserEditSessionId(): string | null {
+  const key = editSessionKey.value;
+  if (key === null) return null;
+  return sessionStorage.getItem(key);
+}
+
+function storeBrowserEditSessionId(browserEditSessionId: string): void {
+  const key = editSessionKey.value;
+  if (key !== null) sessionStorage.setItem(key, browserEditSessionId);
+}
+
+function clearBrowserEditSessionId(): void {
+  const key = editSessionKey.value;
+  if (key !== null) sessionStorage.removeItem(key);
+}
 
 function saveErrorCode(error: unknown): string {
   return error instanceof Error && error.message !== "" ? error.message : "NETWORK_ERROR";
@@ -84,6 +111,7 @@ function handleSaveFailure(error: unknown): void {
   if (code === "LOCK_LOST" || code === "PERMISSION_DENIED" || code === "AUTH_SESSION_EXPIRED") {
     stopLockTimer();
     editor.clearLockLease();
+    clearBrowserEditSessionId();
     editor.markLockLost();
     lockState.value = "lost";
     adapter?.setReadOnly(true);
@@ -211,6 +239,7 @@ function handleRealtimeLock(lock: {
   if (lease !== null && (!lock.occupied || lock.generation !== lease.generation)) {
     stopLockTimer();
     editor.clearLockLease();
+    clearBrowserEditSessionId();
     editor.markLockLost();
     lockState.value = "lost";
     adapter?.setReadOnly(true);
@@ -225,11 +254,54 @@ async function load(): Promise<void> {
     imageBytes.value = documents.metadata?.imageBytes ?? 0;
     editor.setDocument(documents.snapshot, documents.metadata?.currentVersion);
     await mountAdapter();
+    await recoverEditing();
     realtime.join(
       currentWorkspaceId.value,
       properties.documentId,
       documents.metadata?.currentVersion ?? 0,
     );
+  }
+}
+
+function holdLock(lock: LockDto & { token?: string }, browserEditSessionId: string): boolean {
+  if (lock.token === undefined || documents.metadata === null) return false;
+  const publicLock: LockDto = {
+    occupied: lock.occupied,
+    generation: lock.generation,
+    expiresAt: lock.expiresAt,
+    ttlSeconds: lock.ttlSeconds,
+    ...(lock.editorDisplayName === undefined ? {} : { editorDisplayName: lock.editorDisplayName }),
+    ...(lock.heartbeatAt === undefined ? {} : { heartbeatAt: lock.heartbeatAt }),
+  };
+  editor.setLockLease({ browserEditSessionId, generation: lock.generation, token: lock.token });
+  editor.startEditing(documents.metadata.currentVersion);
+  saveError.value = null;
+  documents.lock = publicLock;
+  lockState.value = "held";
+  adapter?.setReadOnly(false);
+  scheduleHeartbeat(lock.ttlSeconds);
+  return true;
+}
+
+async function recoverEditing(): Promise<void> {
+  const browserEditSessionId = storedBrowserEditSessionId();
+  if (
+    browserEditSessionId === null ||
+    !canEdit.value ||
+    mobile.value ||
+    !lockOccupied.value ||
+    documents.metadata === null
+  )
+    return;
+  lockState.value = "acquiring";
+  const result = await recoverDocumentLock({
+    client: apiClient,
+    path: { workspaceId: currentWorkspaceId.value, documentId: properties.documentId },
+    body: { browserEditSessionId },
+  });
+  if (result.data === undefined || !holdLock(result.data.lock, browserEditSessionId)) {
+    clearBrowserEditSessionId();
+    lockState.value = "idle";
   }
 }
 
@@ -254,6 +326,7 @@ async function heartbeat(): Promise<void> {
   if (result.data === undefined) {
     lockState.value = "lost";
     editor.clearLockLease();
+    clearBrowserEditSessionId();
     editor.markLockLost();
     stopLockTimer();
     adapter?.setReadOnly(true);
@@ -285,25 +358,11 @@ async function beginEditing(): Promise<void> {
     return;
   }
   const lock = result.data.lock as LockDto & { token?: string };
-  if (lock.token === undefined) {
+  if (!holdLock(lock, browserEditSessionId)) {
     lockState.value = "error";
     return;
   }
-  const publicLock: LockDto = {
-    occupied: lock.occupied,
-    generation: lock.generation,
-    expiresAt: lock.expiresAt,
-    ttlSeconds: lock.ttlSeconds,
-    ...(lock.editorDisplayName === undefined ? {} : { editorDisplayName: lock.editorDisplayName }),
-    ...(lock.heartbeatAt === undefined ? {} : { heartbeatAt: lock.heartbeatAt }),
-  };
-  editor.setLockLease({ browserEditSessionId, generation: lock.generation, token: lock.token });
-  editor.startEditing(documents.metadata.currentVersion);
-  saveError.value = null;
-  documents.lock = publicLock;
-  lockState.value = "held";
-  adapter?.setReadOnly(false);
-  scheduleHeartbeat(lock.ttlSeconds);
+  storeBrowserEditSessionId(browserEditSessionId);
 }
 
 async function endEditing(): Promise<void> {
@@ -322,11 +381,12 @@ async function endEditing(): Promise<void> {
   lockState.value = "idle";
   if (lease === null || currentWorkspaceId.value === "") return;
   editor.clearLockLease();
-  await releaseDocumentLock({
+  const result = await releaseDocumentLock({
     client: apiClient,
     path: { workspaceId: currentWorkspaceId.value, documentId: properties.documentId },
     body: lease,
   });
+  if (result.data !== undefined) clearBrowserEditSessionId();
 }
 
 async function uploadImage(file: File): Promise<string> {
@@ -398,6 +458,10 @@ async function copyDraftJson(): Promise<void> {
   if (json === undefined) return;
   await navigator.clipboard.writeText(json);
   copiedDraft.value = true;
+}
+
+async function setAllExpanded(expanded: boolean): Promise<void> {
+  await adapter?.setAllExpanded(expanded);
 }
 
 watch(readOnly, (value) => adapter?.setReadOnly(value));
@@ -508,6 +572,10 @@ onBeforeUnmount(() => {
         </template>
         <template v-else><span>编辑锁：可获取</span></template>
         <span v-if="saveError">保存状态：{{ saveError }}</span>
+      </div>
+      <div class="document-canvas-actions" aria-label="节点展开控制">
+        <button type="button" @click="setAllExpanded(true)">全部展开</button>
+        <button type="button" @click="setAllExpanded(false)">全部收起</button>
       </div>
       <div
         ref="canvas"

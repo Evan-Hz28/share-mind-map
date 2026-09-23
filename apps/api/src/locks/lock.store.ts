@@ -4,6 +4,7 @@ import {
   acquireLockLua,
   forceReleaseLockLua,
   heartbeatLockLua,
+  recoverLockLua,
   releaseLockLua,
 } from "./lock.lua.js";
 import type {
@@ -12,6 +13,7 @@ import type {
   LockHeartbeatResult,
   LockInspection,
   LockOwner,
+  LockRecoverResult,
 } from "./lock.types.js";
 
 export interface LockRedisClient {
@@ -93,6 +95,26 @@ export class LockStore {
     return status === "1"
       ? { status: "renewed", generation: Number(currentGeneration), ttlSeconds: Number(ttl) }
       : { status: "lost", generation: Number(currentGeneration) };
+  }
+
+  public async recover(owner: LockOwner): Promise<LockRecoverResult> {
+    const token = randomBytes(32).toString("base64url");
+    const [status, generation, ttl] = resultValues(
+      await this.redis.eval(
+        recoverLockLua,
+        1,
+        this.key(owner.documentId),
+        owner.userId,
+        owner.platformSessionId,
+        owner.browserEditSessionId,
+        this.digest(token),
+        this.now(),
+        String(this.options.ttlSeconds),
+      ),
+    );
+    return status === "1"
+      ? { status: "recovered", token, generation: Number(generation), ttlSeconds: Number(ttl) }
+      : { status: "lost", generation: Number(generation), ttlSeconds: Number(ttl) };
   }
 
   public async release(owner: LockOwner, token: string, generation: number): Promise<boolean> {

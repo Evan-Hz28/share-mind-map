@@ -106,6 +106,53 @@ describe("document editing locks", () => {
     expect(renewed.status).toBe(200);
   });
 
+  it("recovers a refreshed browser edit session and invalidates its old token", async () => {
+    const { workspaceId: currentWorkspaceId, documentId } = await createDocument();
+    const lockUrl = `/api/v1/workspaces/${currentWorkspaceId}/documents/${documentId}/lock`;
+    const acquired = await request(runtime.server)
+      .post(lockUrl)
+      .set("Cookie", admin.cookie)
+      .set("X-CSRF-Token", admin.csrfToken)
+      .send({ browserEditSessionId: "browser-one" });
+    expect(acquired.status).toBe(201);
+    const original = (acquired.body as { lock: { token: string; generation: number } }).lock;
+
+    const recovered = await request(runtime.server)
+      .post(`${lockUrl}/recover`)
+      .set("Cookie", admin.cookie)
+      .set("X-CSRF-Token", admin.csrfToken)
+      .send({ browserEditSessionId: "browser-one" });
+    expect(recovered.status).toBe(201);
+    const replacement = (recovered.body as { lock: { token: string; generation: number } }).lock;
+    expect(replacement.generation).toBe(original.generation);
+    expect(replacement.token).not.toBe(original.token);
+
+    const staleHeartbeat = await request(runtime.server)
+      .post(`${lockUrl}/heartbeat`)
+      .set("Cookie", admin.cookie)
+      .set("X-CSRF-Token", admin.csrfToken)
+      .send({ browserEditSessionId: "browser-one", token: original.token, generation: original.generation });
+    expect(staleHeartbeat.status).toBe(423);
+
+    const renewed = await request(runtime.server)
+      .post(`${lockUrl}/heartbeat`)
+      .set("Cookie", admin.cookie)
+      .set("X-CSRF-Token", admin.csrfToken)
+      .send({
+        browserEditSessionId: "browser-one",
+        token: replacement.token,
+        generation: replacement.generation,
+      });
+    expect(renewed.status).toBe(200);
+
+    const otherBrowser = await request(runtime.server)
+      .post(`${lockUrl}/recover`)
+      .set("Cookie", admin.cookie)
+      .set("X-CSRF-Token", admin.csrfToken)
+      .send({ browserEditSessionId: "browser-two" });
+    expect(otherBrowser.status).toBe(423);
+  });
+
   it("allows an administrator to force release and records an audit event", async () => {
     const { workspaceId: currentWorkspaceId, documentId } = await createDocument();
     const lockUrl = `/api/v1/workspaces/${currentWorkspaceId}/documents/${documentId}/lock`;

@@ -6,6 +6,7 @@ import {
   acquireLockLua,
   forceReleaseLockLua,
   heartbeatLockLua,
+  recoverLockLua,
   releaseLockLua,
 } from "../src/locks/lock.lua.js";
 import { LockStore, type LockRedisClient } from "../src/locks/lock.store.js";
@@ -59,6 +60,19 @@ class FakeRedis implements LockRedisClient {
       record.heartbeatAt = argument(args, 5);
       this.expirations.set(key, Number(args[6]));
       return [1, record.generation, Number(args[6])];
+    }
+    if (script === recoverLockLua) {
+      if (
+        record?.active !== "1" ||
+        record.userId !== args[0] ||
+        record.platformSessionId !== args[1] ||
+        record.browserEditSessionId !== args[2]
+      )
+        return [0, record?.generation ?? "0", 0];
+      record.tokenDigest = argument(args, 3);
+      record.heartbeatAt = argument(args, 4);
+      this.expirations.set(key, Number(args[5]));
+      return [1, record.generation, Number(args[5])];
     }
     if (script === releaseLockLua) {
       if (record === undefined) return [1, "0"];
@@ -155,6 +169,31 @@ describe("LockStore", () => {
     ).resolves.toBe(false);
     await expect(store.release(input, acquired.token, acquired.generation)).resolves.toBe(true);
     await expect(store.release(input, acquired.token, acquired.generation)).resolves.toBe(true);
+  });
+
+  it("recovers only the same browser edit session and invalidates its old token", async () => {
+    redis = new FakeRedis();
+    const store = new LockStore(redis, { ttlSeconds: 900, secret: "secret" });
+    const acquired = await store.acquire(input);
+
+    await expect(
+      store.recover({ ...input, browserEditSessionId: "other-browser" }),
+    ).resolves.toMatchObject({ status: "lost", generation: acquired.generation });
+
+    const recovered = await store.recover(input);
+    expect(recovered).toMatchObject({
+      status: "recovered",
+      generation: acquired.generation,
+      ttlSeconds: 900,
+    });
+    if (recovered.status !== "recovered") throw new Error("Expected lock recovery");
+    expect(recovered.token).not.toBe(acquired.token);
+    await expect(
+      store.heartbeat(input, acquired.token, acquired.generation),
+    ).resolves.toMatchObject({ status: "lost" });
+    await expect(
+      store.heartbeat(input, recovered.token, recovered.generation),
+    ).resolves.toMatchObject({ status: "renewed" });
   });
 
   it("increments generation on force release and hides the digest from inspection", async () => {

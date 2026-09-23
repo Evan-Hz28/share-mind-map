@@ -1,4 +1,5 @@
 import "element-plus/dist/index.css";
+import "mind-elixir/style.css";
 import "./app/app.css";
 
 import { createPinia } from "pinia";

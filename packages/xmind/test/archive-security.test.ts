@@ -14,7 +14,9 @@ async function createZip(entries: Array<{ path: string; data: Buffer }>): Promis
   const complete = new Promise<Buffer>((resolve, reject) => {
     zip.outputStream.on("data", (chunk: Buffer) => chunks.push(chunk));
     zip.outputStream.once("error", reject);
-    zip.outputStream.once("end", () => resolve(Buffer.concat(chunks)));
+    zip.outputStream.once("end", () => {
+      resolve(Buffer.concat(chunks));
+    });
   });
   for (const entry of entries) zip.addBuffer(entry.data, entry.path, { compress: false });
   zip.end();

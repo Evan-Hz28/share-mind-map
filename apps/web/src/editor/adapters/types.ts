@@ -17,6 +17,7 @@ export interface MindMapAdapter {
   focusNode(nodeId: string): Promise<boolean>;
   getViewState(): MindMapViewState;
   restoreViewState(state: MindMapViewState): Promise<void>;
+  setAllExpanded(expanded: boolean): Promise<void>;
   setReadOnly(readOnly: boolean): void;
   destroy(): void;
 }

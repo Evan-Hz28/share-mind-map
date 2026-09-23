@@ -883,6 +883,26 @@ a {
   background: #fff;
   border-radius: 6px;
 }
+.document-canvas-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.document-canvas-actions button {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--accent);
+  color: var(--accent-strong);
+  background: var(--surface);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.document-canvas-actions button:hover,
+.document-canvas-actions button:focus-visible {
+  color: #fff;
+  background: var(--accent);
+}
 .document-canvas--readonly {
   cursor: not-allowed;
 }

@@ -2935,6 +2935,64 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/lock/recover": {
+      "post": {
+        "operationId": "recoverDocumentLock",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "documentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcquireLockDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcquireLockResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "locks"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/snapshots": {
       "post": {
         "operationId": "saveDocumentSnapshot",
