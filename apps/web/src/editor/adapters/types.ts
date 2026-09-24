@@ -2,6 +2,8 @@ import type { CloudDocumentV1 } from "@share-mind-map/document-model";
 
 export type MindMapViewport = { x: number; y: number; zoom: number };
 
+export type MindMapLayout = "left" | "right" | "side";
+
 export type MindMapViewState = {
   selectedNodeId: string | null;
   expandedNodeIds: string[];
@@ -14,6 +16,15 @@ export interface MindMapAdapter {
   applySnapshot(document: CloudDocumentV1): Promise<void>;
   exportSnapshot(): CloudDocumentV1;
   onChange(listener: (document: CloudDocumentV1) => void): () => void;
+  undo(): void;
+  redo(): void;
+  addChild(): Promise<void>;
+  addSibling(): Promise<void>;
+  removeSelected(): Promise<void>;
+  setLayout(layout: MindMapLayout): Promise<void>;
+  fitToView(): void;
+  zoomIn(): void;
+  zoomOut(): void;
   focusNode(nodeId: string): Promise<boolean>;
   getViewState(): MindMapViewState;
   restoreViewState(state: MindMapViewState): Promise<void>;

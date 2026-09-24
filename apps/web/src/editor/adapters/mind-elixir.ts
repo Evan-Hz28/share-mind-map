@@ -12,6 +12,7 @@ import {
   cloneViewState,
   INITIAL_VIEW_STATE,
   type MindMapAdapter,
+  type MindMapLayout,
   type MindMapViewState,
 } from "./types.js";
 
@@ -30,6 +31,35 @@ type MindElixirBus = {
   addListener(name: string, listener: (payload: unknown) => void): void;
   removeListener(name: string, listener: (payload: unknown) => void): void;
 };
+
+type MapTranslation = { x: number; y: number };
+
+function readMapTranslation(transform: string): MapTranslation {
+  const match = transform.match(
+    /translate3d\(\s*(-?\d+(?:\.\d+)?)px,\s*(-?\d+(?:\.\d+)?)px,\s*0(?:px)?\s*\)/u,
+  );
+  if (match === null) return { x: 0, y: 0 };
+  return { x: Number(match[1]), y: Number(match[2]) };
+}
+
+function installUnboundedPan(instance: MindElixir): void {
+  instance.move = (dx, dy, smooth = false) => {
+    if (dx === 0 && dy === 0) return false;
+    const translation = readMapTranslation(instance.map.style.transform);
+    if (smooth) {
+      instance.map.style.transition = "transform 0.3s";
+      globalThis.setTimeout(() => {
+        instance.map.style.transition = "none";
+      }, 300);
+    }
+    const nextX = String(translation.x + dx);
+    const nextY = String(translation.y + dy);
+    const scale = String(instance.scaleVal);
+    instance.map.style.transform = `translate3d(${nextX}px, ${nextY}px, 0) scale(${scale})`;
+    instance.bus.fire("move", { dx, dy });
+    return true;
+  };
+}
 
 function uuid(value: string): string {
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)) {
@@ -192,6 +222,7 @@ export class MindElixirAdapter implements MindMapAdapter {
       allowUndo: true,
       overflowHidden: false,
     });
+    installUnboundedPan(instance);
     this.instance = instance;
     const error = await instance.init(this.vendorData());
     if (error !== undefined) throw error;
@@ -215,6 +246,66 @@ export class MindElixirAdapter implements MindMapAdapter {
   public onChange(listener: (document: CloudDocumentV1) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  public undo(): void {
+    if (this.viewState.readOnly) return;
+    this.requireInstance().undo();
+  }
+
+  public redo(): void {
+    if (this.viewState.readOnly) return;
+    this.requireInstance().redo();
+  }
+
+  public async addChild(): Promise<void> {
+    if (this.viewState.readOnly) return;
+    const instance = this.requireInstance();
+    const currentNode = instance.currentNode;
+    if (currentNode === null) return;
+
+    const vendorNode = currentNode.nodeObj as VendorNode;
+    if ((vendorNode.children?.length ?? 0) > 0) {
+      await instance.addChild();
+      return;
+    }
+
+    await this.addChildToLeaf(vendorNode.id);
+  }
+
+  public async addSibling(): Promise<void> {
+    if (this.viewState.readOnly || this.requireInstance().currentNode === null) return;
+    await this.requireInstance().insertSibling("after");
+  }
+
+  public async removeSelected(): Promise<void> {
+    if (this.viewState.readOnly) return;
+    const instance = this.requireInstance();
+    const selectedNodes = instance.currentNodes.filter((node) => node.nodeObj.parent !== undefined);
+    if (selectedNodes.length === 0) return;
+    await instance.removeNodes(selectedNodes);
+  }
+
+  public async setLayout(layout: MindMapLayout): Promise<void> {
+    const instance = this.requireInstance();
+    if (layout === "left") instance.initLeft();
+    else if (layout === "right") instance.initRight();
+    else instance.initSide();
+    await this.afterRender();
+  }
+
+  public fitToView(): void {
+    const instance = this.requireInstance();
+    instance.scaleFit();
+    this.viewState.viewport.zoom = instance.scaleVal;
+  }
+
+  public zoomIn(): void {
+    this.setZoom(this.requireInstance().scaleVal + 0.1);
+  }
+
+  public zoomOut(): void {
+    this.setZoom(this.requireInstance().scaleVal - 0.1);
   }
 
   public async focusNode(nodeId: string): Promise<boolean> {
@@ -275,6 +366,52 @@ export class MindElixirAdapter implements MindMapAdapter {
     for (const listener of this.listeners) listener(cloned);
   }
 
+  private async addChildToLeaf(vendorNodeId: string): Promise<void> {
+    const snapshot = this.snapshot;
+    if (snapshot === null) throw new Error("The adapter is not mounted.");
+
+    const sheet = snapshot.sheets[0];
+    if (sheet === undefined) throw new Error("The snapshot does not contain a sheet.");
+
+    const parentId = this.vendorIds.get(vendorNodeId) ?? vendorNodeId;
+    const parent = sheet.nodes[parentId];
+    if (parent === undefined) throw new Error(`Missing node ${parentId}.`);
+
+    const childId = globalThis.crypto.randomUUID();
+    const next = cloneCloudDocument(snapshot);
+    const nextSheet = next.sheets[0];
+    if (nextSheet === undefined) throw new Error("The snapshot does not contain a sheet.");
+
+    const nextParent = nextSheet.nodes[parentId];
+    if (nextParent === undefined) throw new Error(`Missing node ${parentId}.`);
+    nextParent.childIds = [...parent.childIds, childId];
+    nextSheet.nodes[childId] = {
+      id: childId,
+      parentId,
+      childIds: [],
+      title: "New Node",
+      priority: null,
+      notes: null,
+      labels: [],
+      icons: [],
+      style: {},
+      imageAssetId: null,
+      extensions: {},
+    };
+
+    this.snapshot = validateCloudDocumentSnapshot(next);
+    this.vendorIds.clear();
+    this.viewState.selectedNodeId = childId;
+    this.viewState.expandedNodeIds = [
+      ...new Set([...this.viewState.expandedNodeIds, parentId]),
+    ];
+    const instance = this.requireInstance();
+    instance.refresh(this.vendorData());
+    await this.applyViewState();
+    this.publishVendorSnapshot();
+    void instance.beginEdit(instance.findEle(childId, this.host));
+  }
+
   private snapshotFromVendor(): CloudDocumentV1 {
     const snapshot = this.snapshot;
     if (snapshot === null) throw new Error("The adapter is not mounted.");
@@ -322,6 +459,13 @@ export class MindElixirAdapter implements MindMapAdapter {
       instance.selectNode(node);
     }
     await this.afterRender();
+  }
+
+  private setZoom(zoom: number): void {
+    const instance = this.requireInstance();
+    const nextZoom = Math.min(instance.scaleMax, Math.max(instance.scaleMin, zoom));
+    instance.scale(nextZoom);
+    this.viewState.viewport.zoom = nextZoom;
   }
 
   private bus(): MindElixirBus {

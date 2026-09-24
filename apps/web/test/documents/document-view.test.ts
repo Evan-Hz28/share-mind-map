@@ -12,13 +12,61 @@ let realtimeLockListener:
   | undefined;
 let realtimeReconnect: (() => void) | undefined;
 
+const adapterCommands = vi.hoisted(() => ({
+  addChild: vi.fn(),
+  addSibling: vi.fn(),
+  fitToView: vi.fn(),
+  removeSelected: vi.fn(),
+  setAllExpanded: vi.fn(),
+  setLayout: vi.fn(),
+  undo: vi.fn(),
+  redo: vi.fn(),
+  zoomIn: vi.fn(),
+  zoomOut: vi.fn(),
+}));
+
 vi.mock("../../src/editor/adapters/mind-elixir.js", () => ({
   MindElixirAdapter: class {
     async mount(): Promise<void> {}
     async applySnapshot(): Promise<void> {}
+    addChild(): Promise<void> {
+      adapterCommands.addChild();
+      return Promise.resolve();
+    }
+    addSibling(): Promise<void> {
+      adapterCommands.addSibling();
+      return Promise.resolve();
+    }
+    fitToView(): void {
+      adapterCommands.fitToView();
+    }
+    removeSelected(): Promise<void> {
+      adapterCommands.removeSelected();
+      return Promise.resolve();
+    }
+    setAllExpanded(expanded: boolean): Promise<void> {
+      adapterCommands.setAllExpanded(expanded);
+      return Promise.resolve();
+    }
+    setLayout(layout: "left" | "right" | "side"): Promise<void> {
+      adapterCommands.setLayout(layout);
+      return Promise.resolve();
+    }
     setReadOnly(): void {}
+    undo(): void {
+      adapterCommands.undo();
+    }
+    redo(): void {
+      adapterCommands.redo();
+    }
     onChange(): () => void {
       return () => undefined;
+    }
+    zoomIn(): void {
+      adapterCommands.zoomIn();
+    }
+    zoomOut(): void {
+      adapterCommands.zoomOut();
     }
     destroy(): void {}
   },
@@ -88,6 +136,7 @@ beforeEach(() => {
   realtimeReconnect = undefined;
   localStorage.clear();
   sessionStorage.clear();
+  for (const command of Object.values(adapterCommands)) command.mockReset();
   setActivePinia(createPinia());
   useAuthStore().$patch({
     state: "authenticated",
@@ -327,7 +376,33 @@ describe("DocumentView", () => {
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "安全文档" })).toBeInTheDocument(),
     );
+    expect(screen.getByRole("region", { name: "编辑器" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "编辑器" })).toHaveClass("editor-shell");
+    expect(screen.getByRole("toolbar", { name: "编辑工具栏" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "思维导图画布" })).toHaveClass(
+      "document-canvas--full",
+    );
+    expect(screen.getByRole("button", { name: "添加子节点" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+    await fireEvent.click(screen.getByRole("button", { name: "全部展开" }));
+    await fireEvent.click(screen.getByRole("button", { name: "全部收起" }));
+    const fitButtons = screen.getAllByRole("button", { name: "适应画布" });
+    expect(fitButtons).toHaveLength(2);
+    const commandBarFitButton = fitButtons[0];
+    if (commandBarFitButton === undefined) throw new Error("Expected command bar fit button.");
+    await fireEvent.click(commandBarFitButton);
+    await waitFor(() => {
+      expect(adapterCommands.setAllExpanded).toHaveBeenCalledTimes(2);
+    });
+    expect(adapterCommands.setAllExpanded).toHaveBeenNthCalledWith(1, true);
+    expect(adapterCommands.setAllExpanded).toHaveBeenNthCalledWith(2, false);
+    expect(adapterCommands.fitToView).toHaveBeenCalledOnce();
+    expect(useEditorStore().dirty).toBe(false);
     expect(screen.getByText("只读模式")).toBeInTheDocument();
+    expect(screen.getByText("兼容性：完全兼容")).toHaveAttribute(
+      "title",
+      "导入内容与在线编辑器及导出格式完全兼容。",
+    );
     expect(screen.getByText(/版本 1/)).toBeInTheDocument();
     expect(screen.getByText("普通备注")).toBeInTheDocument();
     expect(document.body.innerHTML).not.toContain("v-html");
@@ -529,6 +604,8 @@ describe("DocumentView", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "结束编辑" })).toBeInTheDocument(),
     );
+    expect(screen.getByRole("button", { name: "添加子节点" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "删除" })).toBeEnabled();
 
     useEditorStore().markChanged({ ...snapshot, version: 3 } as CloudDocumentV1);
     await waitFor(() => expect(screen.getByRole("button", { name: "保存" })).toBeInTheDocument());

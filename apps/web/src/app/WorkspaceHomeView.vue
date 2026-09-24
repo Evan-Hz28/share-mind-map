@@ -1,11 +1,21 @@
 <script setup lang="ts">
-import { Bell, Document, Edit, Folder, Plus, Sort, Upload } from "@element-plus/icons-vue";
+import {
+  Bell,
+  Document,
+  Edit,
+  Folder,
+  MoreFilled,
+  Plus,
+  Sort,
+  Upload,
+} from "@element-plus/icons-vue";
 import { ElButton, ElDialog, ElIcon, ElInput, ElTag } from "element-plus";
 import { computed, onMounted, reactive, ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
 import { useAuthStore } from "../auth/auth.store.js";
+import { getCompatibilityMeta } from "../documents/compatibility.js";
 import { useWorkspaceStore } from "../workspace/workspace.store.js";
 
 const auth = useAuthStore();
@@ -140,23 +150,26 @@ onMounted(() => void load());
 
 <template>
   <section class="workspace-home" aria-labelledby="workspace-title">
-    <header class="page-heading page-heading--with-action">
-      <div>
-        <p class="eyebrow">工作区</p>
-        <h1 id="workspace-title">全部文档</h1>
-        <p>浏览一级文件夹和未归档文档。</p>
+    <header class="workspace-hero page-heading page-heading--with-action">
+      <div class="workspace-hero__intro">
+        <div class="workspace-hero__icon" aria-hidden="true"><Folder /></div>
+        <div>
+          <p class="eyebrow">工作区</p>
+          <h1 id="workspace-title">全部文档</h1>
+          <p>浏览一级文件夹和未归档文档。</p>
+        </div>
       </div>
       <div class="workspace-actions">
         <ElButton v-if="auth.role === 'reader'" @click="workspace.requestEditPermission()">
           <ElIcon><Edit /></ElIcon>申请编辑权限
         </ElButton>
-        <ElButton v-if="canEdit" type="primary" @click="openCreateFolder">
+        <ElButton v-if="canEdit" class="workspace-action--secondary" @click="openCreateFolder">
           <ElIcon><Plus /></ElIcon>新建文件夹
         </ElButton>
         <ElButton v-if="canEdit" type="primary" @click="openDocument(null)">
           <ElIcon><Document /></ElIcon>新建文档
         </ElButton>
-        <ElButton v-if="canEdit" type="primary" @click="openImport">
+        <ElButton v-if="canEdit" class="workspace-action--secondary" @click="openImport">
           <ElIcon><Upload /></ElIcon>导入 XMind
         </ElButton>
       </div>
@@ -167,10 +180,13 @@ onMounted(() => void load());
       <strong>配额提醒</strong><span>{{ quotaMessage }}</span>
     </div>
 
-    <div class="workspace-toolbar" aria-label="工作台工具栏">
-      <span class="workspace-count"
-        >{{ workspace.folders.length }} 个文件夹 · {{ workspace.documents.length }} 个文档</span
-      >
+    <div class="workspace-toolbar workspace-toolbar--summary" role="region" aria-label="工作区统计">
+      <div class="workspace-toolbar__summary">
+        <Document aria-hidden="true" />
+        <span class="workspace-count"
+          >{{ workspace.folders.length }} 个文件夹 · {{ workspace.documents.length }} 个文档</span
+        >
+      </div>
       <div class="workspace-toolbar__actions">
         <ElIcon aria-hidden="true"><Sort /></ElIcon>
         <label for="document-sort" class="visually-hidden">文档排序</label>
@@ -212,13 +228,34 @@ onMounted(() => void load());
       <p>{{ canEdit ? "创建一个文件夹或空白文档开始整理。" : "等待编辑者创建文档。" }}</p>
     </div>
     <div v-else class="workspace-board">
-      <section class="workspace-panel" aria-labelledby="folders-heading">
+      <section
+        class="workspace-panel workspace-panel--folders"
+        aria-labelledby="folders-heading"
+      >
         <header class="workspace-panel__header">
           <h2 id="folders-heading"><Folder aria-hidden="true" />一级文件夹</h2>
-          <span>{{ workspace.folders.length }}</span>
+          <div class="workspace-panel__header-actions">
+            <span class="workspace-count-pill">{{ workspace.folders.length }}</span>
+            <button
+              v-if="canEdit"
+              class="workspace-panel__add"
+              type="button"
+              aria-label="在一级文件夹中新建"
+              @click="openCreateFolder"
+            >
+              <Plus aria-hidden="true" />
+            </button>
+          </div>
         </header>
-        <div v-if="workspace.folders.length === 0" class="panel-empty">暂无文件夹</div>
-        <ul v-else class="workspace-list">
+        <div v-if="workspace.folders.length === 0" class="panel-empty panel-empty--illustrated">
+          <Folder aria-hidden="true" />
+          <strong>暂无文件夹</strong>
+          <span>创建文件夹来整理你的思维导图文档。</span>
+          <ElButton v-if="canEdit" class="panel-empty__action" @click="openCreateFolder">
+            <Plus aria-hidden="true" />新建文件夹
+          </ElButton>
+        </div>
+        <ul v-else class="workspace-list workspace-folder-list">
           <li v-for="folder in workspace.folders" :key="folder.id" class="workspace-list__item">
             <Folder aria-hidden="true" /><span class="workspace-list__name">{{ folder.name }}</span
             ><button
@@ -238,36 +275,61 @@ onMounted(() => void load());
       >
         <header class="workspace-panel__header">
           <h2 id="documents-heading"><Document aria-hidden="true" />文档</h2>
-          <span>{{ workspace.documents.length }}</span>
+          <span class="workspace-count-pill">{{ workspace.documents.length }}</span>
         </header>
         <div v-if="workspace.documents.length === 0" class="panel-empty">暂无未归档文档</div>
         <ul v-else class="workspace-list">
           <li
             v-for="document in workspace.documents"
             :key="document.id"
-            class="workspace-list__item"
+            class="workspace-document-card"
           >
-            <Document aria-hidden="true" /><RouterLink
-              class="workspace-list__name workspace-list__name--link"
+            <div class="workspace-document-card__icon" aria-hidden="true">
+              <ElIcon><Document /></ElIcon>
+            </div>
+            <RouterLink
+              class="workspace-document-card__link workspace-list__name workspace-list__name--link"
               :to="{ name: 'document', params: { documentId: document.id } }"
-              ><strong>{{ document.name }}</strong
-              ><small
-                >版本 {{ document.currentVersion }} · {{ document.nodeCount }} 个节点</small
-              ></RouterLink
-            ><ElTag
-              size="small"
-              :type="document.compatibilityStatus === 'full' ? 'success' : 'warning'"
-              >兼容性：{{ document.compatibilityStatus }}</ElTag
-            ><ElTag size="small" type="info">只读快照</ElTag
-            ><button type="button" @click="workspace.exportDocument(document.id)">导出 XMind</button
-            ><button
-              v-if="canEdit"
-              type="button"
-              :aria-label="`编辑 ${document.name}`"
-              @click="openDocument(document.id, document.name, document.folderId)"
             >
-              编辑元数据
-            </button>
+              <strong>{{ document.name }}</strong>
+              <small>版本 {{ document.currentVersion }} · {{ document.nodeCount }} 个节点</small>
+            </RouterLink>
+            <div class="workspace-document-card__meta">
+              <span
+                class="compatibility-status"
+                :title="getCompatibilityMeta(document.compatibilityStatus).description"
+                :aria-label="getCompatibilityMeta(document.compatibilityStatus).description"
+                tabindex="0"
+              >
+                <ElTag
+                  size="small"
+                  :type="document.compatibilityStatus === 'full' ? 'success' : 'warning'"
+                  >兼容性：{{ getCompatibilityMeta(document.compatibilityStatus).label }}</ElTag
+                >
+              </span>
+              <ElTag size="small" type="info">只读快照</ElTag>
+            </div>
+            <div class="workspace-document-card__actions">
+              <button
+                class="workspace-document-card__action workspace-document-card__action--secondary"
+                type="button"
+                @click="workspace.exportDocument(document.id)"
+              >
+                导出 XMind
+              </button>
+              <button
+                class="workspace-document-card__action workspace-document-card__action--primary"
+                v-if="canEdit"
+                type="button"
+                :aria-label="`编辑 ${document.name}`"
+                @click="openDocument(document.id, document.name, document.folderId)"
+              >
+                编辑元数据
+              </button>
+              <span class="workspace-document-card__more" aria-hidden="true">
+                <MoreFilled />
+              </span>
+            </div>
           </li>
         </ul>
         <ElButton v-if="workspace.documentCursor" text @click="workspace.loadMoreDocuments"
@@ -285,7 +347,7 @@ onMounted(() => void load());
       width="min(92vw, 760px)"
       :close-on-click-modal="false"
     >
-      <div class="form-stack">
+      <div class="form-stack" data-testid="xmind-import-dialog">
         <div class="field-group">
           <label for="xmind-files">选择文件（可多选，单个不超过 20 MB）</label>
           <input
@@ -390,7 +452,7 @@ onMounted(() => void load());
     </ElDialog>
 
     <ElDialog v-model="notificationOpen" title="通知" width="min(92vw, 520px)">
-      <div class="notification-list">
+      <div class="notification-list" data-testid="notification-dialog">
         <div class="notification-list__toolbar">
           <span>{{ workspace.unreadCount }} 条未读</span>
           <ElButton

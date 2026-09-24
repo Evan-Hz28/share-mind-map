@@ -12,8 +12,11 @@ import { cloneCloudDocument } from "@share-mind-map/document-model";
 import { useAuthStore } from "../auth/auth.store.js";
 import { apiClient } from "../api.js";
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
+import { getCompatibilityMeta } from "./compatibility.js";
 import { DraftStore } from "../editor/draft-store.js";
 import { useEditorStore } from "../editor/editor.store.js";
+import EditorCommandBar from "../editor/EditorCommandBar.vue";
+import EditorSideRail from "../editor/EditorSideRail.vue";
 import { SaveQueue } from "../editor/save-queue.js";
 import LockStatus from "../editor/LockStatus.vue";
 import ImageUploadControl from "../editor/assets/ImageUploadControl.vue";
@@ -29,6 +32,7 @@ const documents = useDocumentStore();
 const editor = useEditorStore();
 const drafts = new DraftStore();
 const canvas = ref<HTMLDivElement | null>(null);
+const editorShell = ref<HTMLElement | null>(null);
 const mobile = ref(false);
 const copiedDraft = ref(false);
 const saveError = ref<string | null>(null);
@@ -39,6 +43,10 @@ let unsubscribe: (() => void) | null = null;
 let mediaQuery: MediaQueryList | null = null;
 let lockTimer: ReturnType<typeof setTimeout> | null = null;
 let mounted = false;
+let resolveAdapterReady: (() => void) | null = null;
+const adapterReady = new Promise<void>((resolve) => {
+  resolveAdapterReady = resolve;
+});
 const realtime = new DocumentRealtime({
   onVersionGap: () => void load(),
   onReconnect: () => void recoverAfterRealtimeReconnect(),
@@ -202,6 +210,8 @@ async function mountAdapter(): Promise<void> {
       void saveQueue.enqueue(snapshot, "auto").catch(handleSaveFailure);
     }
   });
+  resolveAdapterReady?.();
+  resolveAdapterReady = null;
 }
 
 function handleRealtimeSnapshot(event: {
@@ -464,6 +474,69 @@ async function setAllExpanded(expanded: boolean): Promise<void> {
   await adapter?.setAllExpanded(expanded);
 }
 
+function handleSaveFailureSafely(error: unknown): void {
+  handleSaveFailure(error);
+}
+
+function runEditorCommand(command: () => void | Promise<void>): void {
+  try {
+    void adapterReady.then(() => nextTick()).then(command).catch(handleSaveFailureSafely);
+  } catch (error) {
+    handleSaveFailureSafely(error);
+  }
+}
+
+function handleAllExpanded(expanded: boolean): void {
+  runEditorCommand(() => setAllExpanded(expanded));
+}
+
+function undoEditorCommand(): void {
+  adapter?.undo();
+}
+
+function redoEditorCommand(): void {
+  adapter?.redo();
+}
+
+async function addChildEditorCommand(): Promise<void> {
+  await adapter?.addChild();
+}
+
+async function addSiblingEditorCommand(): Promise<void> {
+  await adapter?.addSibling();
+}
+
+async function removeSelectedEditorCommand(): Promise<void> {
+  await adapter?.removeSelected();
+}
+
+function fitToViewEditorCommand(): void {
+  adapter?.fitToView();
+}
+
+function zoomInEditorCommand(): void {
+  adapter?.zoomIn();
+}
+
+function zoomOutEditorCommand(): void {
+  adapter?.zoomOut();
+}
+
+async function exportCurrentXMind(): Promise<void> {
+  const snapshot = editor.draft ?? documents.snapshot;
+  if (snapshot === null) return;
+  const blob = await documents.exportDraft(snapshot);
+  downloadBlob(blob, `${documents.metadata?.name ?? "mind-map"}.xmind`);
+}
+
+async function toggleFullscreen(): Promise<void> {
+  if (document.fullscreenElement !== null) {
+    await document.exitFullscreen();
+    return;
+  }
+  await editorShell.value?.requestFullscreen();
+}
+
 watch(readOnly, (value) => adapter?.setReadOnly(value));
 
 onMounted(() => {
@@ -509,85 +582,124 @@ onBeforeUnmount(() => {
       </div>
     </template>
     <template v-else-if="documents.metadata !== null">
-      <header class="document-heading">
-        <div>
-          <a class="document-back-link" href="/workspace">返回工作区</a>
-          <p class="eyebrow">文档</p>
-          <h1 id="document-title">{{ documents.metadata.name }}</h1>
-          <p class="document-meta">
-            版本 {{ documents.metadata.currentVersion }} · 更新于
-            {{ new Date(documents.metadata.updatedAt).toLocaleString("zh-CN") }}
-          </p>
-        </div>
-        <div class="document-actions">
-          <LockStatus
-            :state="lockState"
-            :lock="documents.lock"
-            :can-edit="canEdit && !lockOccupiedByOther"
-            :mobile="mobile"
-            @begin="beginEditing"
-            @end="endEditing"
-          />
-          <ImageUploadControl
-            v-if="editor.canWrite"
-            :disabled="!editor.canWrite"
-            :upload="uploadImage"
-            @asset-selected="insertImage"
-          />
+      <section
+        ref="editorShell"
+        class="editor-shell"
+        role="region"
+        aria-label="编辑器"
+      >
+        <header class="editor-context-bar">
+          <div class="editor-context-bar__identity">
+            <a class="editor-context-bar__back" href="/workspace">工作区</a>
+            <span aria-hidden="true">›</span>
+            <span class="editor-context-bar__workspace">{{ auth.session?.defaultWorkspace.name }}</span>
+            <span aria-hidden="true">›</span>
+            <div>
+              <p class="eyebrow">文档</p>
+              <h1 id="document-title">{{ documents.metadata.name }}</h1>
+              <p class="document-meta">版本 {{ documents.metadata.currentVersion }}</p>
+            </div>
+          </div>
+          <div class="editor-context-bar__actions">
+            <span class="editor-save-state" aria-live="polite">
+              <template v-if="editor.mode === 'saving'">正在保存</template>
+              <template v-else-if="editor.dirty">存在未保存修改</template>
+              <template v-else>已保存</template>
+            </span>
+            <LockStatus
+              :state="lockState"
+              :lock="documents.lock"
+              :can-edit="canEdit && !lockOccupiedByOther"
+              :mobile="mobile"
+              @begin="beginEditing"
+              @end="endEditing"
+            />
+            <ImageUploadControl
+              v-if="editor.canWrite"
+              :disabled="!editor.canWrite"
+              :upload="uploadImage"
+              @asset-selected="insertImage"
+            />
+          </div>
+        </header>
+
+        <div v-if="editor.dirty || draftAvailable" class="document-draft-bar" role="status">
+          <span>{{
+            editor.dirty ? "存在未保存修改，已保存在本机草稿中。" : "检测到本机草稿。"
+          }}</span>
+          <span v-if="copiedDraft">已复制</span>
           <button
-            v-if="editor.dirty && editor.canWrite"
+            v-if="!editor.dirty && draftAvailable && canEdit && !mobile"
             type="button"
-            :disabled="editor.mode === 'saving'"
-            @click="saveManually"
+            @click="restoreDraft"
           >
-            {{ editor.mode === "saving" ? "保存中…" : "保存" }}
+            恢复草稿
+          </button>
+          <button v-if="!editor.dirty && draftAvailable" type="button" @click="discardStoredDraft">
+            丢弃草稿
           </button>
           <button v-if="editor.dirty" type="button" @click="copyDraftJson">复制草稿 JSON</button>
           <button v-if="editor.dirty" type="button" @click="unsaved.exportDraft">
             导出草稿 XMind
           </button>
+          <button v-if="editor.dirty" type="button" @click="unsaved.discard">放弃草稿</button>
         </div>
-      </header>
-      <div v-if="editor.dirty || draftAvailable" class="document-draft-bar" role="status">
-        <span>{{
-          editor.dirty ? "存在未保存修改，已保存在本机草稿中。" : "检测到本机草稿。"
-        }}</span>
-        <span v-if="copiedDraft">已复制</span>
-        <button
-          v-if="!editor.dirty && draftAvailable && canEdit && !mobile"
-          type="button"
-          @click="restoreDraft"
-        >
-          恢复草稿
-        </button>
-        <button v-if="!editor.dirty && draftAvailable" type="button" @click="discardStoredDraft">
-          丢弃草稿
-        </button>
-        <button v-if="editor.dirty" type="button" @click="unsaved.discard">放弃草稿</button>
-      </div>
-      <div class="document-status-bar">
-        <span>兼容性：{{ documents.compatibility }}</span>
-        <template v-if="documents.lock?.occupied">
-          <span>编辑锁：{{ documents.lock.editorDisplayName ?? "已占用" }}</span>
-        </template>
-        <template v-else><span>编辑锁：可获取</span></template>
-        <span v-if="saveError">保存状态：{{ saveError }}</span>
-      </div>
-      <div class="document-canvas-actions" aria-label="节点展开控制">
-        <button type="button" @click="setAllExpanded(true)">全部展开</button>
-        <button type="button" @click="setAllExpanded(false)">全部收起</button>
-      </div>
-      <div
-        ref="canvas"
-        class="document-canvas"
-        :class="{ 'document-canvas--readonly': readOnly }"
-        aria-label="思维导图画布"
-      />
-      <section v-if="notes.length > 0" class="document-notes" aria-labelledby="notes-title">
-        <h2 id="notes-title">节点备注</h2>
-        <article v-for="note in notes" :key="note.id">
-          <p>{{ note.text }}</p>
-        </article>
+
+        <EditorCommandBar
+          :can-write="editor.canWrite"
+          :dirty="editor.dirty"
+          :saving="editor.mode === 'saving'"
+          @undo="runEditorCommand(undoEditorCommand)"
+          @redo="runEditorCommand(redoEditorCommand)"
+          @add-child="runEditorCommand(addChildEditorCommand)"
+          @add-sibling="runEditorCommand(addSiblingEditorCommand)"
+          @remove-selected="runEditorCommand(removeSelectedEditorCommand)"
+          @save="runEditorCommand(saveManually)"
+          @export-x-mind="runEditorCommand(exportCurrentXMind)"
+          @all-expanded="handleAllExpanded"
+          @fit-to-view="runEditorCommand(fitToViewEditorCommand)"
+        />
+        <EditorSideRail
+          @fullscreen="runEditorCommand(toggleFullscreen)"
+          @fit-to-view="runEditorCommand(fitToViewEditorCommand)"
+          @zoom-in="runEditorCommand(zoomInEditorCommand)"
+          @zoom-out="runEditorCommand(zoomOutEditorCommand)"
+        />
+
+        <div class="editor-shell__status">
+          <span :title="getCompatibilityMeta(documents.compatibility).description">
+            兼容性：{{ getCompatibilityMeta(documents.compatibility).label }}
+          </span>
+          <template v-if="documents.lock?.occupied">
+            <span>编辑锁：{{ documents.lock.editorDisplayName ?? "已占用" }}</span>
+          </template>
+          <template v-else><span>编辑锁：可获取</span></template>
+          <span v-if="saveError">保存状态：{{ saveError }}</span>
+        </div>
+
+        <div
+          ref="canvas"
+          class="document-canvas document-canvas--full"
+          :class="{ 'document-canvas--readonly': readOnly }"
+          role="region"
+          aria-label="思维导图画布"
+        />
+        <div class="editor-viewport-controls" aria-label="画布视图控制">
+          <button type="button" aria-label="缩小画布" @click="runEditorCommand(zoomOutEditorCommand)">
+            −
+          </button>
+          <span aria-label="当前缩放比例">100%</span>
+          <button type="button" aria-label="放大画布" @click="runEditorCommand(zoomInEditorCommand)">
+            +
+          </button>
+        </div>
+
+        <section v-if="notes.length > 0" class="document-notes" aria-labelledby="notes-title">
+          <h2 id="notes-title">节点备注</h2>
+          <article v-for="note in notes" :key="note.id">
+            <p>{{ note.text }}</p>
+          </article>
+        </section>
       </section>
     </template>
   </section>

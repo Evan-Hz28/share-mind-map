@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { ArrowDown, Menu, User } from "@element-plus/icons-vue";
 import { computed, ref } from "vue";
-import { RouterLink, RouterView, useRouter } from "vue-router";
+import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 
 import AppLogo from "../components/AppLogo.vue";
 import { useAuthStore } from "../auth/auth.store.js";
 
 const auth = useAuthStore();
+const route = useRoute();
 const router = useRouter();
 const accountMenuOpen = ref(false);
 const navigationOpen = ref(false);
+const isEditorRoute = computed(() => route.name === "document");
 
 const roleLabel = computed(() => {
   const labels = { admin: "管理员", editor: "编辑者", reader: "只读成员" } as const;
@@ -22,8 +24,8 @@ async function logout(): Promise<void> {
 </script>
 
 <template>
-  <div class="app-shell">
-    <header class="top-bar">
+  <div class="app-shell" :class="{ 'app-shell--editor': isEditorRoute }">
+    <header class="top-bar" aria-label="应用顶部导航">
       <div class="top-bar__brand">
         <AppLogo />
         <span class="top-bar__divider" aria-hidden="true" />

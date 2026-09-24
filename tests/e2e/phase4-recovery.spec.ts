@@ -74,6 +74,8 @@ test("reloads a document through REST after a browser reconnect", async ({ brows
       await expect(page.getByRole("heading", { name: "全部文档" })).toBeVisible();
       await page.goto(`/workspace/documents/${documentId}`);
       await expect(page.getByRole("heading", { name: `Phase 4 Recovery ${suffix}` })).toBeVisible();
+      await expect(page.getByRole("toolbar", { name: "编辑工具栏" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "思维导图画布" })).toBeVisible();
       await restartApiService();
       await expect
         .poll(
@@ -93,6 +95,7 @@ test("reloads a document through REST after a browser reconnect", async ({ brows
         await page.goto(`/workspace/documents/${documentId}`);
       }
       await expect(page.getByRole("heading", { name: `Phase 4 Recovery ${suffix}` })).toBeVisible();
+      await expect(page.getByRole("toolbar", { name: "编辑工具栏" })).toBeVisible();
       await expect(page.locator("body")).not.toContainText("v-html");
       expect(consoleErrors).toEqual([]);
     } finally {

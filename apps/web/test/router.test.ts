@@ -59,6 +59,17 @@ describe("application routing and shell", () => {
     );
   });
 
+  it("marks the document route as the fullscreen editor shell", async () => {
+    const { pinia, router } = setup("reader");
+    await router.push("/workspace/documents/00000000-0000-7000-8000-000000000101");
+
+    render(AppShell, {
+      global: { plugins: [pinia, router], stubs: { RouterView: true } },
+    });
+
+    expect(document.querySelector(".app-shell")).toHaveClass("app-shell--editor");
+  });
+
   it.each(["reader", "editor"] as const)(
     "does not render Admin navigation for %s",
     async (role) => {
@@ -71,8 +82,26 @@ describe("application routing and shell", () => {
 
       expect(screen.queryByRole("link", { name: "成员管理" })).not.toBeInTheDocument();
       expect(screen.getByText("产品工作区")).toBeInTheDocument();
+      expect(screen.getByRole("banner", { name: "应用顶部导航" })).toBeInTheDocument();
     },
   );
+
+  it("renders the branded admin shell and keeps workspace navigation active", async () => {
+    const { pinia, router } = setup("admin");
+    await router.push("/workspace");
+    render(AppShell, {
+      global: { plugins: [pinia, router], stubs: { RouterView: true } },
+    });
+
+    expect(screen.getByLabelText("Kitar 思维图")).toBeInTheDocument();
+    expect(screen.getByText("产品工作区")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "工作区" })).toHaveClass("router-link-active");
+    expect(screen.getByRole("link", { name: "成员管理" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "权限与审计" })).toBeInTheDocument();
+    expect(screen.getByText("管理员")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "账户菜单" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "打开导航菜单" })).toBeInTheDocument();
+  });
 
   it("logs out through the account menu and returns to login", async () => {
     vi.stubGlobal("fetch", () => Promise.resolve(new Response(null, { status: 204 })));
