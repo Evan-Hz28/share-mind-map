@@ -34,7 +34,6 @@ const drafts = new DraftStore();
 const canvas = ref<HTMLDivElement | null>(null);
 const editorShell = ref<HTMLElement | null>(null);
 const mobile = ref(false);
-const copiedDraft = ref(false);
 const saveError = ref<string | null>(null);
 const imageBytes = ref(0);
 const lockState = ref<"idle" | "acquiring" | "held" | "lost" | "error">("idle");
@@ -175,17 +174,11 @@ function downloadBlob(blob: Blob, fileName: string): void {
   URL.revokeObjectURL(url);
 }
 
-const unsaved = useUnsavedGuard({
+useUnsavedGuard({
   dirty: () => editor.dirty,
   onDiscard: () => {
     if (draftKey.value !== null) drafts.clear(draftKey.value);
     editor.discardDraft();
-  },
-  onCopyJson: () => (draftKey.value === null ? undefined : drafts.copyJson(draftKey.value)),
-  onExportDraft: async () => {
-    if (editor.draft === null) return;
-    const blob = await documents.exportDraft(editor.draft);
-    downloadBlob(blob, `${documents.metadata?.name ?? "mind-map"}-draft.xmind`);
   },
 });
 
@@ -463,13 +456,6 @@ async function insertImage(assetId: string): Promise<void> {
   if (adapter !== null) await adapter.applySnapshot(next);
 }
 
-async function copyDraftJson(): Promise<void> {
-  const json = unsaved.copyJson();
-  if (json === undefined) return;
-  await navigator.clipboard.writeText(json);
-  copiedDraft.value = true;
-}
-
 async function setAllExpanded(expanded: boolean): Promise<void> {
   await adapter?.setAllExpanded(expanded);
 }
@@ -623,26 +609,10 @@ onBeforeUnmount(() => {
           </div>
         </header>
 
-        <div v-if="editor.dirty || draftAvailable" class="document-draft-bar" role="status">
-          <span>{{
-            editor.dirty ? "存在未保存修改，已保存在本机草稿中。" : "检测到本机草稿。"
-          }}</span>
-          <span v-if="copiedDraft">已复制</span>
-          <button
-            v-if="!editor.dirty && draftAvailable && canEdit && !mobile"
-            type="button"
-            @click="restoreDraft"
-          >
-            恢复草稿
-          </button>
-          <button v-if="!editor.dirty && draftAvailable" type="button" @click="discardStoredDraft">
-            丢弃草稿
-          </button>
-          <button v-if="editor.dirty" type="button" @click="copyDraftJson">复制草稿 JSON</button>
-          <button v-if="editor.dirty" type="button" @click="unsaved.exportDraft">
-            导出草稿 XMind
-          </button>
-          <button v-if="editor.dirty" type="button" @click="unsaved.discard">放弃草稿</button>
+        <div v-if="!editor.dirty && draftAvailable" class="document-draft-recovery" role="status">
+          <span>检测到本机草稿。</span>
+          <button v-if="canEdit && !mobile" type="button" @click="restoreDraft">恢复草稿</button>
+          <button type="button" @click="discardStoredDraft">丢弃草稿</button>
         </div>
 
         <EditorCommandBar

@@ -18,6 +18,7 @@ import {
 
 type VendorNode = {
   id: string;
+  direction?: number;
   children?: VendorNode[];
   expanded?: boolean;
   icons?: unknown[];
@@ -26,6 +27,50 @@ type VendorNode = {
   tags?: unknown[];
   topic?: unknown;
 };
+
+const LAYOUT_EXTENSION_KEY = "share-mind-map.layout";
+type BranchDirection = "left" | "right";
+
+function readBranchDirection(extensions: Record<string, unknown>): BranchDirection | undefined {
+  const layout = extensions[LAYOUT_EXTENSION_KEY];
+  if (layout === null || typeof layout !== "object" || Array.isArray(layout)) return undefined;
+  const direction = (layout as { direction?: unknown }).direction;
+  return direction === "left" || direction === "right" ? direction : undefined;
+}
+
+function withBranchDirection(
+  extensions: Record<string, CloudNodeV1["extensions"][string]>,
+  direction: BranchDirection | undefined,
+): CloudNodeV1["extensions"] {
+  if (direction === undefined) return { ...extensions };
+  return {
+    ...extensions,
+    [LAYOUT_EXTENSION_KEY]: { direction },
+  };
+}
+
+function vendorDirection(direction: BranchDirection | undefined): 0 | 1 | undefined {
+  if (direction === "left") return 0;
+  if (direction === "right") return 1;
+  return undefined;
+}
+
+function branchDirection(direction: unknown): BranchDirection | undefined {
+  if (direction === MindElixir.LEFT) return "left";
+  if (direction === MindElixir.RIGHT) return "right";
+  return undefined;
+}
+
+function defaultRootBranchDirection(
+  sheet: CloudSheetV1,
+  nodeId: string,
+): BranchDirection | undefined {
+  const root = sheet.nodes[sheet.rootNodeId];
+  if (root === undefined) return undefined;
+  const index = root.childIds.indexOf(nodeId);
+  if (index < 0) return undefined;
+  return index < Math.ceil(root.childIds.length / 2) ? "right" : "left";
+}
 
 type MindElixirBus = {
   addListener(name: string, listener: (payload: unknown) => void): void;
@@ -76,6 +121,14 @@ function toMindElixirNode(
   return {
     id: node.id,
     topic: node.title,
+    ...(node.parentId === sheet.rootNodeId
+      ? (() => {
+          const direction = vendorDirection(
+            readBranchDirection(node.extensions) ?? defaultRootBranchDirection(sheet, node.id),
+          );
+          return direction === undefined ? {} : { direction };
+        })()
+      : {}),
     expanded: node.parentId === null || expanded.has(node.id),
     children: node.childIds.map((childId) => {
       const child = sheet.nodes[childId];
@@ -123,6 +176,8 @@ function nodeFromVendor(
   previous: Record<string, CloudNodeV1>,
   idMap: Map<string, string>,
   collected: Record<string, CloudNodeV1>,
+  depth = 0,
+  persistDirections = false,
 ): CloudNodeV1 {
   const vendorId = vendor.id;
   const existingId = idMap.get(vendorId);
@@ -130,7 +185,7 @@ function nodeFromVendor(
   idMap.set(vendorId, id);
   const old = previous[id];
   const children = (vendor.children ?? []).map((child) =>
-    nodeFromVendor(child, id, previous, idMap, collected),
+    nodeFromVendor(child, id, previous, idMap, collected, depth + 1, persistDirections),
   );
   const title = typeof vendor.topic === "string" ? vendor.topic : (old?.title ?? "");
   const tags = Array.isArray(vendor.tags)
@@ -143,6 +198,10 @@ function nodeFromVendor(
     typeof vendor.note === "string"
       ? { format: "plain" as const, text: vendor.note }
       : (old?.notes ?? null);
+  const persistedDirection =
+    persistDirections && depth === 1
+      ? (branchDirection(vendor.direction) ?? readBranchDirection(old?.extensions ?? {}))
+      : undefined;
   const result: CloudNodeV1 = {
     id,
     parentId,
@@ -157,7 +216,7 @@ function nodeFromVendor(
         ? styleFromVendor(vendor.style)
         : (old?.style ?? {}),
     imageAssetId: old?.imageAssetId ?? null,
-    extensions: old?.extensions ?? {},
+    extensions: withBranchDirection(old?.extensions ?? {}, persistedDirection),
   };
   collected[result.id] = result;
   return result;
@@ -167,12 +226,13 @@ function standardFromVendor(
   base: CloudDocumentV1,
   data: MindElixirData,
   idMap: Map<string, string>,
+  persistDirections = false,
 ): CloudDocumentV1 {
   const baseSheet = base.sheets[0];
   if (baseSheet === undefined) throw new Error("The snapshot does not contain a sheet.");
   const root = data.nodeData as VendorNode;
   const nodes: Record<string, CloudNodeV1> = {};
-  const rootNode = nodeFromVendor(root, null, baseSheet.nodes, idMap, nodes);
+  const rootNode = nodeFromVendor(root, null, baseSheet.nodes, idMap, nodes, 0, persistDirections);
   const relationships = baseSheet.relationships.filter(
     (relationship) =>
       nodes[relationship.sourceNodeId] !== undefined &&
@@ -196,7 +256,9 @@ export class MindElixirAdapter implements MindMapAdapter {
       this.focusEditingInput();
       return;
     }
-    this.publishVendorSnapshot();
+    this.publishVendorSnapshot(
+      typeof operation.name === "string" && operation.name.startsWith("moveNodes"),
+    );
   };
   private readonly expandListener = (payload: unknown): void => {
     const node = payload as { id?: unknown; expanded?: unknown };
@@ -217,7 +279,7 @@ export class MindElixirAdapter implements MindMapAdapter {
       el: this.host,
       editable: !this.viewState.readOnly,
       contextMenu: true,
-      toolBar: true,
+      toolBar: false,
       keypress: true,
       allowUndo: true,
       overflowHidden: false,
@@ -359,8 +421,8 @@ export class MindElixirAdapter implements MindMapAdapter {
     this.host.replaceChildren();
   }
 
-  private publishVendorSnapshot(): void {
-    const next = this.snapshotFromVendor();
+  private publishVendorSnapshot(persistDirections = false): void {
+    const next = this.snapshotFromVendor(persistDirections);
     this.snapshot = next;
     const cloned = cloneCloudDocument(next);
     for (const listener of this.listeners) listener(cloned);
@@ -402,9 +464,7 @@ export class MindElixirAdapter implements MindMapAdapter {
     this.snapshot = validateCloudDocumentSnapshot(next);
     this.vendorIds.clear();
     this.viewState.selectedNodeId = childId;
-    this.viewState.expandedNodeIds = [
-      ...new Set([...this.viewState.expandedNodeIds, parentId]),
-    ];
+    this.viewState.expandedNodeIds = [...new Set([...this.viewState.expandedNodeIds, parentId])];
     const instance = this.requireInstance();
     instance.refresh(this.vendorData());
     await this.applyViewState();
@@ -412,11 +472,11 @@ export class MindElixirAdapter implements MindMapAdapter {
     void instance.beginEdit(instance.findEle(childId, this.host));
   }
 
-  private snapshotFromVendor(): CloudDocumentV1 {
+  private snapshotFromVendor(persistDirections = false): CloudDocumentV1 {
     const snapshot = this.snapshot;
     if (snapshot === null) throw new Error("The adapter is not mounted.");
     const data = this.requireInstance().getData();
-    return standardFromVendor(snapshot, data, this.vendorIds);
+    return standardFromVendor(snapshot, data, this.vendorIds, persistDirections);
   }
 
   private focusEditingInput(): void {

@@ -11,7 +11,7 @@ afterEach(() => {
 });
 
 describe("formal MindElixir adapter", () => {
-  it("uses a centered two-sided layout for the formal document page", async () => {
+  it("uses a centered two-sided layout without the native toolbar", async () => {
     const host = createCanvasHost();
     const adapter = new MindElixirAdapter(host);
 
@@ -30,7 +30,7 @@ describe("formal MindElixir adapter", () => {
     expect(internals.instance.contextMenu).toBe(true);
     expect(internals.instance.keypress).toBe(true);
     expect(internals.instance.overflowHidden).toBe(false);
-    expect(internals.instance.toolBar).toBe(true);
+    expect(internals.instance.toolBar).toBe(false);
 
     adapter.destroy();
   });
@@ -89,6 +89,97 @@ describe("formal MindElixir adapter", () => {
     adapter.destroy();
   });
 
+  it("restores persisted root branch directions", async () => {
+    const input = sampleDocument(31);
+    const sheet = input.sheets[0]!;
+    const root = sheet.nodes[sheet.rootNodeId]!;
+    const [firstId, secondId] = root.childIds;
+    if (firstId === undefined || secondId === undefined) throw new Error("Expected two branches.");
+    sheet.nodes[firstId]!.extensions = {
+      "share-mind-map.layout": { direction: "left" },
+    };
+    sheet.nodes[secondId]!.extensions = {
+      "share-mind-map.layout": { direction: "right" },
+    };
+    for (const [index, childId] of root.childIds.entries()) {
+      const child = sheet.nodes[childId];
+      if (child === undefined) throw new Error("Expected a root child.");
+      child.extensions = {
+        "share-mind-map.layout": { direction: index % 2 === 0 ? "left" : "right" },
+      };
+    }
+    const host = createCanvasHost();
+    const adapter = new MindElixirAdapter(host);
+
+    await adapter.mount(input);
+
+    const internals = adapter as unknown as {
+      instance: { getData(): { nodeData: { children?: Array<{ direction?: number }> } } };
+    };
+    expect(internals.instance.getData().nodeData.children?.map((node) => node.direction)).toEqual([
+      MindElixir.LEFT,
+      MindElixir.RIGHT,
+      MindElixir.LEFT,
+      MindElixir.RIGHT,
+    ]);
+
+    adapter.destroy();
+  });
+
+  it("uses the XMind default root split when a legacy snapshot has no directions", async () => {
+    const host = createCanvasHost();
+    const adapter = new MindElixirAdapter(host);
+
+    await adapter.mount(sampleDocument(31));
+
+    const internals = adapter as unknown as {
+      instance: { getData(): { nodeData: { children?: Array<{ direction?: number }> } } };
+    };
+    expect(internals.instance.getData().nodeData.children?.map((node) => node.direction)).toEqual([
+      MindElixir.RIGHT,
+      MindElixir.RIGHT,
+      MindElixir.LEFT,
+      MindElixir.LEFT,
+    ]);
+
+    adapter.destroy();
+  });
+
+  it("persists a changed root branch direction from the vendor snapshot", async () => {
+    const host = createCanvasHost();
+    const input = sampleDocument(31);
+    const adapter = new MindElixirAdapter(host);
+    const changes: unknown[] = [];
+
+    await adapter.mount(input);
+    adapter.onChange((document) => changes.push(document));
+    const internals = adapter as unknown as {
+      instance: {
+        bus: { fire(name: string, payload: unknown): void };
+        getData(): { nodeData: { children?: Array<{ direction?: number }> } };
+        nodeData: { children?: Array<{ direction?: number }> };
+      };
+    };
+    internals.instance.nodeData.children![0]!.direction = MindElixir.RIGHT;
+
+    internals.instance.bus.fire("operation", {
+      name: "moveNodesAfter",
+      target: [internals.instance.getData().nodeData],
+      destination: internals.instance.getData().nodeData,
+    });
+
+    const latest = changes.at(-1) as typeof input | undefined;
+    expect(
+      latest?.sheets[0]!.nodes[latest.sheets[0]!.nodes[latest.sheets[0]!.rootNodeId]!.childIds[0]!]!
+        .extensions,
+    ).toEqual({ "share-mind-map.layout": { direction: "right" } });
+
+    await adapter.applySnapshot(latest!);
+    expect(internals.instance.nodeData.children![0]!.direction).toBe(MindElixir.RIGHT);
+
+    adapter.destroy();
+  });
+
   it("does not emit a snapshot when a node only enters edit mode", async () => {
     const host = createCanvasHost();
     const input = sampleDocument(31);
@@ -122,8 +213,8 @@ describe("formal MindElixir adapter", () => {
 
     await adapter.mount(inputDocument);
 
-    const childId = inputDocument.sheets[0]!.nodes[inputDocument.sheets[0]!.rootNodeId]!
-      .childIds[0]!;
+    const childId =
+      inputDocument.sheets[0]!.nodes[inputDocument.sheets[0]!.rootNodeId]!.childIds[0]!;
     const internals = adapter as unknown as {
       instance: {
         beginEdit(node: HTMLElement): void;

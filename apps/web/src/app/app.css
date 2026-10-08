@@ -1095,25 +1095,25 @@ input:focus-visible {
   border-radius: 6px;
   font-size: 13px;
 }
-.document-draft-bar {
+.document-draft-recovery {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 14px;
   padding: 10px 12px;
-  border: 1px solid #ead6a0;
-  color: #72550d;
-  background: #fff9e9;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: var(--surface);
   border-radius: 6px;
   font-size: 13px;
 }
-.document-draft-bar span:first-child {
+.document-draft-recovery span:first-child {
   flex: 1;
 }
-.document-draft-bar button {
+.document-draft-recovery button {
   border: 0;
-  color: #72550d;
+  color: var(--accent);
   background: transparent;
   cursor: pointer;
   text-decoration: underline;
@@ -1401,14 +1401,14 @@ input:focus-visible {
   color: var(--muted);
   font-size: 11px;
 }
-.editor-shell .document-draft-bar {
+.editor-shell .document-draft-recovery {
   position: absolute;
   z-index: 9;
   top: 132px;
   right: 24px;
   left: 24px;
   margin: 0;
-  box-shadow: 0 5px 18px rgb(112 79 13 / 9%);
+  box-shadow: var(--shadow);
 }
 .document-canvas--full {
   /* MindElixir writes position:relative inline on its host element. */
@@ -1675,7 +1675,7 @@ input:focus-visible {
     left: 76px;
     justify-content: flex-start;
   }
-  .editor-shell .document-draft-bar {
+  .editor-shell .document-draft-recovery {
     top: 154px;
     right: 12px;
     left: 12px;

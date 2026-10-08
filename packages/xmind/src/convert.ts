@@ -109,7 +109,12 @@ function convertNode(
     icons: [...node.icons],
     style: { ...node.style },
     imageAssetId: imagePath === null ? null : uuidv5(`asset/${imagePath}`, namespace),
-    extensions: structuredClone(node.extensions),
+    extensions: {
+      ...structuredClone(node.extensions),
+      ...(node.direction === undefined
+        ? {}
+        : { "share-mind-map.layout": { direction: node.direction } }),
+    },
   };
 }
 

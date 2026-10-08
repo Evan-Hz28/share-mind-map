@@ -537,6 +537,52 @@ describe("DocumentView", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "保存" })).toBeInTheDocument());
   });
 
+  it("removes the draft recovery entry after discarding a stored draft", async () => {
+    const administrator = sessionResponse("admin");
+    useAuthStore().$patch({ session: administrator });
+    const draft = { ...snapshot, version: 1 } as CloudDocumentV1;
+    new DraftStore().save(DraftStore.key(administrator.user.id, workspaceId, documentId), draft, {
+      currentVersion: 1,
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            document: {
+              id: documentId,
+              workspaceId,
+              folderId: null,
+              name: "丢弃草稿文档",
+              currentVersion: 1,
+              schemaVersion: 1,
+              compatibilityStatus: "full",
+              nodeCount: 1,
+              imageBytes: 0,
+              createdAt: "2026-09-20T00:00:00.000Z",
+              updatedAt: "2026-09-20T00:00:00.000Z",
+              snapshot,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            lock: { occupied: false, generation: 0, ttlSeconds: -2, expiresAt: "" },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(DocumentView, { props: { workspaceId, documentId } });
+    await waitFor(() => expect(screen.getByText("检测到本机草稿。")).toBeInTheDocument());
+    await fireEvent.click(screen.getByRole("button", { name: "丢弃草稿" }));
+    await waitFor(() => expect(screen.queryByText("检测到本机草稿。")).not.toBeInTheDocument());
+  });
+
   it("saves a dirty desktop draft after acquiring the edit lock", async () => {
     useAuthStore().$patch({ session: sessionResponse("admin") });
     const fetchMock = vi
@@ -609,6 +655,8 @@ describe("DocumentView", () => {
 
     useEditorStore().markChanged({ ...snapshot, version: 3 } as CloudDocumentV1);
     await waitFor(() => expect(screen.getByRole("button", { name: "保存" })).toBeInTheDocument());
+    expect(screen.queryByText("存在未保存修改，已保存在本机草稿中。")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "复制草稿 JSON" })).not.toBeInTheDocument();
     await fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() => {
@@ -738,6 +786,7 @@ describe("DocumentView", () => {
     await waitFor(() =>
       expect(screen.getByText("编辑锁已失效，当前修改已转为只读草稿。")).toBeInTheDocument(),
     );
-    expect(screen.getByRole("button", { name: "复制草稿 JSON" })).toBeInTheDocument();
+    expect(screen.queryByText("存在未保存修改，已保存在本机草稿中。")).not.toBeInTheDocument();
+    expect(useEditorStore().draft).not.toBeNull();
   });
 });

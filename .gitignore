@@ -18,3 +18,5 @@ playwright-report/
 test-results/
 .vitest-reports/
 .tmp/
+
+docs/

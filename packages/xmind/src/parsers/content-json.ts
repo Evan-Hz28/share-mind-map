@@ -145,6 +145,70 @@ function childTopics(topic: Record<string, unknown>, path: string): Record<strin
   return records(children.attached, `${path}.children.attached`);
 }
 
+function unbalancedRightNumber(topic: Record<string, unknown>, path: string): number | undefined {
+  if (topic.extensions === undefined) return undefined;
+  const extensions = records(topic.extensions, `${path}.extensions`);
+  for (const [extensionIndex, extension] of extensions.entries()) {
+    const content = records(
+      extension.content,
+      `${path}.extensions[${String(extensionIndex)}].content`,
+    );
+    for (const entry of content) {
+      if (entry.name !== "right-number") continue;
+      const value = optionalString(
+        entry.content,
+        `${path}.extensions[${String(extensionIndex)}].content.content`,
+      );
+      if (value === undefined) continue;
+      const rightNumber = Number.parseInt(value, 10);
+      if (Number.isSafeInteger(rightNumber) && rightNumber >= 0) return rightNumber;
+    }
+  }
+  return undefined;
+}
+
+function rootDirections(
+  rootTopic: Record<string, unknown>,
+  children: readonly Record<string, unknown>[],
+  path: string,
+): Map<string, "left" | "right"> {
+  const directions = new Map<string, "left" | "right">();
+  const structureClass = optionalString(rootTopic.structureClass, `${path}.structureClass`);
+  if (structureClass?.endsWith(".logic.right") === true) {
+    for (const child of children) {
+      directions.set(requiredString(child.id, `${path}.children.attached[].id`), "right");
+    }
+    return directions;
+  }
+  if (structureClass?.endsWith(".logic.left") === true) {
+    for (const child of children) {
+      directions.set(requiredString(child.id, `${path}.children.attached[].id`), "left");
+    }
+    return directions;
+  }
+  if (structureClass === undefined) {
+    const rightCount = Math.ceil(children.length / 2);
+    children.forEach((child, index) => {
+      directions.set(
+        requiredString(child.id, `${path}.children.attached[${String(index)}].id`),
+        index < rightCount ? "right" : "left",
+      );
+    });
+    return directions;
+  }
+  if (structureClass !== "org.xmind.ui.map.unbalanced") return directions;
+
+  const rightNumber = unbalancedRightNumber(rootTopic, path);
+  if (rightNumber === undefined || rightNumber > children.length) return directions;
+  children.forEach((child, index) => {
+    directions.set(
+      requiredString(child.id, `${path}.children.attached[${String(index)}].id`),
+      index < rightNumber ? "right" : "left",
+    );
+  });
+  return directions;
+}
+
 function unknownExtensions(
   topic: Record<string, unknown>,
   path: string,
@@ -171,6 +235,9 @@ function parseNodes(
   compatibility: CompatibilityIssue[],
 ): { rootSourceId: string; nodes: Record<string, XMindNode> } {
   const nodes: Record<string, XMindNode> = {};
+  const rootSourceId = requiredString(rootTopic.id, `${sheetPath}.rootTopic.id`);
+  const rootChildren = childTopics(rootTopic, `${sheetPath}.rootTopic`);
+  const directions = rootDirections(rootTopic, rootChildren, `${sheetPath}.rootTopic`);
   const pending: {
     topic: Record<string, unknown>;
     parentSourceId: string | null;
@@ -189,10 +256,12 @@ function parseNodes(
       requiredString(child.id, `${item.path}.children.attached[${String(index)}].id`),
     );
     const markerData = markers(item.topic, item.path);
+    const direction = item.parentSourceId === rootSourceId ? directions.get(sourceId) : undefined;
     nodes[sourceId] = {
       sourceId,
       parentSourceId: item.parentSourceId,
       childSourceIds,
+      ...(direction === undefined ? {} : { direction }),
       title: optionalString(item.topic.title, `${item.path}.title`) ?? "",
       priority: markerData.priority,
       notes: notes(item.topic, item.path),
@@ -215,7 +284,7 @@ function parseNodes(
   }
 
   return {
-    rootSourceId: requiredString(rootTopic.id, `${sheetPath}.rootTopic.id`),
+    rootSourceId,
     nodes,
   };
 }

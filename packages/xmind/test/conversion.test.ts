@@ -2,6 +2,7 @@ import { countDocumentNodes } from "@share-mind-map/document-model";
 import { describe, expect, it } from "vitest";
 
 import { convertXMindToCloudDocument, type XMindInspection } from "../src/index.js";
+import { parseContentJson } from "../src/parsers/content-json.js";
 import { inspectFixture } from "./helpers.js";
 
 const identity = {
@@ -17,6 +18,171 @@ function firstSheet(inspection: XMindInspection) {
 }
 
 describe("XMind conversion", () => {
+  it("converts an unbalanced root layout into persisted branch directions", () => {
+    const inspection: XMindInspection = {
+      format: "content-json",
+      entries: ["content.json"],
+      sheets: [
+        {
+          sourceId: "layout-sheet",
+          title: "Layout sheet",
+          rootSourceId: "layout-root",
+          nodes: {
+            "layout-root": {
+              sourceId: "layout-root",
+              parentSourceId: null,
+              childSourceIds: ["right-a", "right-b", "left-a"],
+              title: "Root",
+              priority: null,
+              notes: null,
+              labels: [],
+              icons: [],
+              style: {},
+              imagePath: null,
+              extensions: {},
+            },
+            "right-a": {
+              sourceId: "right-a",
+              parentSourceId: "layout-root",
+              childSourceIds: [],
+              title: "Right A",
+              priority: null,
+              notes: null,
+              labels: [],
+              icons: [],
+              style: {},
+              imagePath: null,
+              extensions: {},
+              direction: "right",
+            },
+            "right-b": {
+              sourceId: "right-b",
+              parentSourceId: "layout-root",
+              childSourceIds: [],
+              title: "Right B",
+              priority: null,
+              notes: null,
+              labels: [],
+              icons: [],
+              style: {},
+              imagePath: null,
+              extensions: {},
+              direction: "right",
+            },
+            "left-a": {
+              sourceId: "left-a",
+              parentSourceId: "layout-root",
+              childSourceIds: [],
+              title: "Left A",
+              priority: null,
+              notes: null,
+              labels: [],
+              icons: [],
+              style: {},
+              imagePath: null,
+              extensions: {},
+              direction: "left",
+            },
+          },
+          relationships: [],
+          extensions: {},
+        },
+      ],
+      assets: {},
+      compatibility: [],
+    };
+
+    const document = convertXMindToCloudDocument(inspection, identity);
+    const sheet = document.sheets[0];
+    if (sheet === undefined) throw new Error("Expected a converted sheet.");
+    const root = sheet.nodes[sheet.rootNodeId];
+    if (root === undefined) throw new Error("Expected a converted root.");
+    const childExtensions = root.childIds.map((id) => {
+      const child = sheet.nodes[id];
+      if (child === undefined) throw new Error(`Expected converted child ${id}.`);
+      return child.extensions;
+    });
+
+    expect(childExtensions).toEqual([
+      { "share-mind-map.layout": { direction: "right" } },
+      { "share-mind-map.layout": { direction: "right" } },
+      { "share-mind-map.layout": { direction: "left" } },
+    ]);
+  });
+
+  it("reads the right branch count from an unbalanced JSON root", () => {
+    const parsed = parseContentJson(
+      Buffer.from(
+        JSON.stringify([
+          {
+            id: "layout-sheet",
+            title: "Layout sheet",
+            rootTopic: {
+              id: "layout-root",
+              title: "Root",
+              structureClass: "org.xmind.ui.map.unbalanced",
+              extensions: [
+                {
+                  provider: "org.xmind.ui.map.unbalanced",
+                  content: [{ name: "right-number", content: "2" }],
+                },
+              ],
+              children: {
+                attached: [
+                  { id: "right-a", title: "Right A" },
+                  { id: "right-b", title: "Right B" },
+                  { id: "left-a", title: "Left A" },
+                ],
+              },
+            },
+          },
+        ]),
+        "utf8",
+      ),
+    );
+
+    const sheet = parsed.sheets[0];
+    if (sheet === undefined) throw new Error("Expected a parsed sheet.");
+    expect(sheet.nodes["right-a"]?.direction).toBe("right");
+    expect(sheet.nodes["right-b"]?.direction).toBe("right");
+    expect(sheet.nodes["left-a"]?.direction).toBe("left");
+  });
+
+  it("infers the current XMind default root split when layout metadata is absent", () => {
+    const parsed = parseContentJson(
+      Buffer.from(
+        JSON.stringify([
+          {
+            id: "default-layout-sheet",
+            title: "Default layout sheet",
+            rootTopic: {
+              id: "default-layout-root",
+              title: "Root",
+              children: {
+                attached: [
+                  { id: "branch-1", title: "Branch 1" },
+                  { id: "branch-2", title: "Branch 2" },
+                  { id: "branch-3", title: "Branch 3" },
+                  { id: "branch-4", title: "Branch 4" },
+                  { id: "branch-5", title: "Branch 5" },
+                ],
+              },
+            },
+          },
+        ]),
+        "utf8",
+      ),
+    );
+
+    const sheet = parsed.sheets[0];
+    if (sheet === undefined) throw new Error("Expected a parsed sheet.");
+    expect(sheet.nodes["branch-1"]?.direction).toBe("right");
+    expect(sheet.nodes["branch-2"]?.direction).toBe("right");
+    expect(sheet.nodes["branch-3"]?.direction).toBe("right");
+    expect(sheet.nodes["branch-4"]?.direction).toBe("left");
+    expect(sheet.nodes["branch-5"]?.direction).toBe("left");
+  });
+
   it("preserves current JSON hierarchy, content, styles, and relationships", async () => {
     const inspection = await inspectFixture("current-json.xmind");
     const document = convertXMindToCloudDocument(inspection, identity);

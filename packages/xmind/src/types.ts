@@ -27,6 +27,7 @@ export interface XMindNode {
   sourceId: string;
   parentSourceId: string | null;
   childSourceIds: string[];
+  direction?: "left" | "right";
   title: string;
   priority: "P0" | "P1" | "P2" | null;
   notes: string | null;
