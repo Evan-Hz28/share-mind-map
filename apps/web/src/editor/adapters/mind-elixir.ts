@@ -8,6 +8,7 @@ import {
 } from "@share-mind-map/document-model";
 import MindElixir, { type MindElixirData, type NodeObj } from "mind-elixir";
 
+import { randomUuid } from "../../utils/uuid.js";
 import {
   cloneViewState,
   INITIAL_VIEW_STATE,
@@ -110,7 +111,7 @@ function uuid(value: string): string {
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)) {
     return value;
   }
-  return globalThis.crypto.randomUUID();
+  return randomUuid();
 }
 
 function toMindElixirNode(
@@ -439,7 +440,7 @@ export class MindElixirAdapter implements MindMapAdapter {
     const parent = sheet.nodes[parentId];
     if (parent === undefined) throw new Error(`Missing node ${parentId}.`);
 
-    const childId = globalThis.crypto.randomUUID();
+    const childId = randomUuid();
     const next = cloneCloudDocument(snapshot);
     const nextSheet = next.sheets[0];
     if (nextSheet === undefined) throw new Error("The snapshot does not contain a sheet.");

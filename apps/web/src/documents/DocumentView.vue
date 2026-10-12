@@ -25,6 +25,7 @@ import type { MindMapAdapter } from "../editor/adapters/types.js";
 import { useUnsavedGuard } from "../editor/use-unsaved-guard.js";
 import { DocumentRealtime } from "../realtime/document-realtime.js";
 import { useDocumentStore } from "./document.store.js";
+import { randomUuid } from "../utils/uuid.js";
 
 const properties = defineProps<{ documentId: string; workspaceId?: string }>();
 const auth = useAuthStore();
@@ -141,7 +142,7 @@ const saveQueue = new SaveQueue(async (snapshot, kind) => {
     snapshot,
     lease,
     kind,
-    `document-save-${globalThis.crypto.randomUUID()}`,
+    `document-save-${randomUuid()}`,
     imageBytes.value,
     editor.currentVersion ?? snapshot.version,
   );
@@ -350,7 +351,7 @@ async function heartbeat(): Promise<void> {
 async function beginEditing(): Promise<void> {
   if (!canEdit.value || mobile.value || lockOccupied.value || documents.metadata === null) return;
   lockState.value = "acquiring";
-  const browserEditSessionId = globalThis.crypto.randomUUID();
+  const browserEditSessionId = randomUuid();
   const result = await acquireDocumentLock({
     client: apiClient,
     path: { workspaceId: currentWorkspaceId.value, documentId: properties.documentId },
@@ -466,7 +467,10 @@ function handleSaveFailureSafely(error: unknown): void {
 
 function runEditorCommand(command: () => void | Promise<void>): void {
   try {
-    void adapterReady.then(() => nextTick()).then(command).catch(handleSaveFailureSafely);
+    void adapterReady
+      .then(() => nextTick())
+      .then(command)
+      .catch(handleSaveFailureSafely);
   } catch (error) {
     handleSaveFailureSafely(error);
   }
@@ -568,17 +572,14 @@ onBeforeUnmount(() => {
       </div>
     </template>
     <template v-else-if="documents.metadata !== null">
-      <section
-        ref="editorShell"
-        class="editor-shell"
-        role="region"
-        aria-label="编辑器"
-      >
+      <section ref="editorShell" class="editor-shell" role="region" aria-label="编辑器">
         <header class="editor-context-bar">
           <div class="editor-context-bar__identity">
             <a class="editor-context-bar__back" href="/workspace">工作区</a>
             <span aria-hidden="true">›</span>
-            <span class="editor-context-bar__workspace">{{ auth.session?.defaultWorkspace.name }}</span>
+            <span class="editor-context-bar__workspace">{{
+              auth.session?.defaultWorkspace.name
+            }}</span>
             <span aria-hidden="true">›</span>
             <div>
               <p class="eyebrow">文档</p>
@@ -655,11 +656,19 @@ onBeforeUnmount(() => {
           aria-label="思维导图画布"
         />
         <div class="editor-viewport-controls" aria-label="画布视图控制">
-          <button type="button" aria-label="缩小画布" @click="runEditorCommand(zoomOutEditorCommand)">
+          <button
+            type="button"
+            aria-label="缩小画布"
+            @click="runEditorCommand(zoomOutEditorCommand)"
+          >
             −
           </button>
           <span aria-label="当前缩放比例">100%</span>
-          <button type="button" aria-label="放大画布" @click="runEditorCommand(zoomInEditorCommand)">
+          <button
+            type="button"
+            aria-label="放大画布"
+            @click="runEditorCommand(zoomInEditorCommand)"
+          >
             +
           </button>
         </div>

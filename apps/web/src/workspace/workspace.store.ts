@@ -35,6 +35,7 @@ import { defineStore, type Pinia } from "pinia";
 import { io, type Socket } from "socket.io-client";
 
 import { apiClient, toApiFailure, type RequestFailure } from "../api.js";
+import { randomUuid } from "../utils/uuid.js";
 
 let importRealtimeSocket: Socket | null = null;
 
@@ -493,7 +494,7 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
           `${apiClient.config.baseUrl}/api/v1/workspaces/${this.workspaceId}/documents/${documentId}/export`,
           {
             credentials: "include",
-            headers: { "X-Request-ID": globalThis.crypto.randomUUID() },
+            headers: { "X-Request-ID": randomUuid() },
           },
         );
         if (!response.ok) {
