@@ -26,14 +26,18 @@ describe("production Compose structure", () => {
     }
   });
 
-  it("exposes every host port on loopback only", async () => {
+  it("keeps internal host ports on loopback and publishes only the web front door", async () => {
     const config = await composeConfig();
 
-    for (const service of ["web", "api", "worker", "postgres", "redis", "minio", "mailpit"]) {
+    for (const service of ["api", "worker", "postgres", "redis", "minio", "mailpit"]) {
       const bindings = hostBindings(config.services[service]);
       expect(bindings.length, `${service} published ports`).toBeGreaterThan(0);
       expect(bindings.every((binding) => binding.host_ip === "127.0.0.1")).toBe(true);
     }
+
+    const webBindings = hostBindings(config.services.web);
+    expect(webBindings.length, "web published ports").toBeGreaterThan(0);
+    expect(webBindings.every((binding) => binding.host_ip === "0.0.0.0")).toBe(true);
   });
 
   it("health-gates application services and the bucket initializer", async () => {
