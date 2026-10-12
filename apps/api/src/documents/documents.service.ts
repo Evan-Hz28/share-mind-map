@@ -12,6 +12,7 @@ import {
   type DocumentDetail,
   type DocumentRecord,
 } from "@share-mind-map/database";
+import { MinioObjectStorage, type ObjectStorage } from "@share-mind-map/storage";
 import {
   DocumentModelError,
   countDocumentNodes,
@@ -20,13 +21,15 @@ import {
   parseCloudDocument,
 } from "@share-mind-map/document-model";
 import { exportCloudDocumentToXMind } from "@share-mind-map/xmind";
-import { Inject, Injectable, Optional } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { sql } from "drizzle-orm";
 
 import type { AuthContext } from "../auth/auth-context.js";
 import { AUTH_DATABASE } from "../auth/auth.tokens.js";
 import { sessionReference } from "../common/audit/session-reference.js";
 import { ApiError } from "../platform/errors/api-error.js";
+import type { AppConfig } from "../platform/config/app-config.js";
+import { APP_CONFIG } from "../platform/config/config.module.js";
 import type { DraftExportDto, SaveSnapshotDto } from "./dto/document-save.dto.js";
 import type { SnapshotResponseDto } from "./dto/document.dto.js";
 import { LockService } from "../locks/lock.service.js";
@@ -120,12 +123,17 @@ function mapRepositoryError(error: unknown): never {
 export class DocumentsService {
   private readonly documents = new DocumentRepository();
   private readonly audits = new AuditRepository();
+  private readonly storage: ObjectStorage;
+  private readonly logger = new Logger(DocumentsService.name);
 
   public constructor(
     @Inject(AUTH_DATABASE) private readonly database: Database,
+    @Inject(APP_CONFIG) config: AppConfig,
     private readonly locks: LockService,
     @Optional() private readonly documentRooms?: DocumentRoomService,
-  ) {}
+  ) {
+    this.storage = new MinioObjectStorage(config.minio);
+  }
 
   private assertWorkspace(auth: AuthContext, workspaceId: string): void {
     if (auth.session.workspaceId !== workspaceId) throw new ApiError("PERMISSION_DENIED");
@@ -406,6 +414,56 @@ export class DocumentsService {
         return updated;
       });
       return { document: toDto(document) };
+    } catch (error) {
+      return mapRepositoryError(error);
+    }
+  }
+
+  public async remove(
+    auth: AuthContext,
+    workspaceId: string,
+    documentId: string,
+    requestId: string,
+  ): Promise<void> {
+    this.assertWorkspace(auth, workspaceId);
+    try {
+      const deleted = await this.database.transaction(async (transaction) => {
+        const result = await this.documents.permanentlyDelete(transaction, {
+          workspaceId,
+          documentId,
+        });
+        const organizationId = await this.organizationForWorkspace(transaction, workspaceId);
+        await this.audits.append(transaction, {
+          organizationId,
+          workspaceId,
+          actorUserId: auth.session.userId,
+          actorSessionId: sessionReference(auth.sessionToken),
+          action: "document.deleted",
+          targetType: "document",
+          targetId: documentId,
+          result: "success",
+          requestId,
+          fromVersion: null,
+          toVersion: null,
+          metadata: { deletedObjectCount: result.objectKeys.length },
+        });
+        return result;
+      });
+      try {
+        await this.locks.discardDocumentLock(workspaceId, documentId);
+      } catch (error) {
+        this.logger.warn(`Unable to release deleted document lock ${documentId}: ${String(error)}`);
+      }
+      const removals = await Promise.allSettled(
+        deleted.objectKeys.map((objectKey) => this.storage.remove(objectKey)),
+      );
+      for (const [index, removal] of removals.entries()) {
+        if (removal.status === "rejected") {
+          this.logger.warn(
+            `Unable to remove deleted document object ${deleted.objectKeys[index] ?? "unknown"}: ${String(removal.reason)}`,
+          );
+        }
+      }
     } catch (error) {
       return mapRepositoryError(error);
     }

@@ -166,6 +166,11 @@ export class LockService {
     return { lock: await this.publicLockAndBroadcast(workspaceId, documentId) };
   }
 
+  public async discardDocumentLock(workspaceId: string, documentId: string): Promise<void> {
+    await this.locks.forceRelease(documentId);
+    await this.publicLockAndBroadcast(workspaceId, documentId);
+  }
+
   private async assertDocument(
     auth: AuthContext,
     workspaceId: string,

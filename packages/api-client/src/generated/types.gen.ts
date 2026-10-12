@@ -867,6 +867,31 @@ export type CreateBlankDocumentResponses = {
 
 export type CreateBlankDocumentResponse = CreateBlankDocumentResponses[keyof CreateBlankDocumentResponses];
 
+export type DeleteDocumentData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        documentId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents/{documentId}';
+};
+
+export type DeleteDocumentResponses = {
+    /**
+     * Document permanently deleted.
+     */
+    204: void;
+};
+
+export type DeleteDocumentResponse = DeleteDocumentResponses[keyof DeleteDocumentResponses];
+
 export type GetDocumentMetadataData = {
     body?: never;
     headers?: {

@@ -53,9 +53,11 @@ function installWorkspaceApi(options: {
 } = {}): void {
   vi.stubGlobal(
     "fetch",
-    vi.fn((input: RequestInfo | URL) => {
-      const requestUrl = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const requestUrl =
+        typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       const url = new URL(requestUrl, location.origin);
+      const method = init?.method ?? (input instanceof Request ? input.method : "GET");
       if (options.pending) return new Promise<Response>(() => undefined);
       if (url.pathname.endsWith(`/workspaces/${workspaceId}/folders`)) {
         return Promise.resolve(
@@ -80,6 +82,9 @@ function installWorkspaceApi(options: {
       }
       if (url.pathname.endsWith(`/documents/${documentId}/export`)) {
         return Promise.resolve(new Response(new Blob(["xmind"]), { status: 200 }));
+      }
+      if (url.pathname.endsWith(`/documents/${documentId}`) && method === "DELETE") {
+        return Promise.resolve(new Response(null, { status: 204 }));
       }
       if (url.pathname === "/api/v1/admin/edit-requests") {
         return Promise.resolve(jsonResponse({ requests: [], nextCursor: null }));
@@ -158,7 +163,9 @@ describe("workspace home", () => {
     );
     expect(screen.getByRole("button", { name: "导出 XMind" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /编辑 ViewHistory客户端测试用例/iu })).toBeInTheDocument();
-    expect(document.querySelector(".workspace-document-card__more")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "更多操作 ViewHistory客户端测试用例" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps document actions independent from document navigation", async () => {
@@ -188,6 +195,39 @@ describe("workspace home", () => {
     expect(screen.queryByRole("button", { name: "新建文档" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "导入 XMind" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "编辑元数据" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "更多操作 ViewHistory客户端测试用例" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("confirms and permanently deletes a document from its more-actions menu", async () => {
+    installWorkspaceApi();
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirm);
+    const user = userEvent.setup();
+    await renderWorkspace();
+
+    await user.click(
+      await screen.findByRole("button", { name: "更多操作 ViewHistory客户端测试用例" }),
+    );
+    await user.click(await screen.findByRole("button", { name: "删除文档" }));
+
+    expect(confirm).toHaveBeenCalledWith(
+      "删除后不可恢复，确定删除「ViewHistory客户端测试用例」吗？",
+    );
+    await waitFor(() => {
+      expect(screen.queryByText("ViewHistory客户端测试用例")).not.toBeInTheDocument();
+    });
+    expect(
+      vi
+        .mocked(globalThis.fetch)
+        .mock.calls.some(
+          ([request]) =>
+            request instanceof Request &&
+            request.method === "DELETE" &&
+            request.url.endsWith(`/workspaces/${workspaceId}/documents/${documentId}`),
+        ),
+    ).toBe(true);
   });
 
   it("renders loading, denied, and empty states", async () => {

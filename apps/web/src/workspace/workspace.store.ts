@@ -9,6 +9,7 @@ import {
   createEditPermissionRequest,
   createFolder,
   createImportBatch,
+  deleteDocument as deleteWorkspaceDocument,
   getImportBatch,
   listDocuments,
   listFolders,
@@ -230,6 +231,26 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
         }
         const index = this.documents.findIndex((document) => document.id === documentId);
         if (index >= 0) this.documents[index] = result.data.document;
+        return true;
+      } finally {
+        this.mutating = false;
+      }
+    },
+
+    async deleteDocument(documentId: string): Promise<boolean> {
+      if (this.workspaceId === null) return false;
+      this.mutating = true;
+      this.error = null;
+      try {
+        const result = await deleteWorkspaceDocument({
+          client: apiClient,
+          path: { workspaceId: this.workspaceId, documentId },
+        });
+        if (result.error !== undefined) {
+          this.error = toApiFailure(result.error);
+          return false;
+        }
+        this.documents = this.documents.filter((document) => document.id !== documentId);
         return true;
       } finally {
         this.mutating = false;

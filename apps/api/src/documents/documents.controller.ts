@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
@@ -112,6 +113,26 @@ export class DocumentsController {
       input,
       getRequestId(request),
     );
+  }
+
+  @Delete(":documentId")
+  @Roles("editor")
+  @ApiSecurity({ sessionCookie: [], csrfToken: [] })
+  @ApiOperation({ operationId: "deleteDocument" })
+  @ApiResponse({ status: 204, description: "Document permanently deleted." })
+  public async remove(
+    @Param("workspaceId", new ParseUUIDPipe({ version: "7" })) workspaceId: string,
+    @Param("documentId", new ParseUUIDPipe({ version: "7" })) documentId: string,
+    @Req() request: Request,
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.documents.remove(
+      getAuthContext(request),
+      workspaceId,
+      documentId,
+      getRequestId(request),
+    );
+    response.status(204).send();
   }
 
   @Post(":documentId/snapshots")

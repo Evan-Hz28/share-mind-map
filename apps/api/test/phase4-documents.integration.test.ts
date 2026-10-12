@@ -257,4 +257,42 @@ describe("Phase 4 version-safe document snapshots", () => {
     );
     expect(after.rows[0]).toEqual(before.rows[0]);
   });
+
+  it("permanently deletes a locked document with its snapshots and releases the lock", async () => {
+    const { workspaceId: currentWorkspaceId, documentId } = await createDocument();
+    await lockDocument(currentWorkspaceId, documentId);
+
+    const deleted = await request(runtime.server)
+      .delete(`/api/v1/workspaces/${currentWorkspaceId}/documents/${documentId}`)
+      .set("Cookie", admin.cookie)
+      .set("X-CSRF-Token", admin.csrfToken);
+    expect(deleted.status).toBe(204);
+
+    const detail = await request(runtime.server)
+      .get(`/api/v1/workspaces/${currentWorkspaceId}/documents/${documentId}`)
+      .set("Cookie", admin.cookie);
+    expect(detail.status).toBe(404);
+
+    const records = await runtime.database.$client.query<{
+      documents: string;
+      snapshots: string;
+      saveRequests: string;
+    }>(
+      `SELECT
+         (SELECT count(*)::text FROM documents WHERE id = $1) AS documents,
+         (SELECT count(*)::text FROM document_snapshots WHERE document_id = $1) AS snapshots,
+         (SELECT count(*)::text FROM document_save_requests WHERE document_id = $1) AS "saveRequests"`,
+      [documentId],
+    );
+    expect(records.rows[0]).toEqual({ documents: "0", snapshots: "0", saveRequests: "0" });
+
+    const lock = await runtime.redis.hgetall(`smm:lock:document:${documentId}`);
+    expect(lock.active).toBe("0");
+
+    const audit = await runtime.database.$client.query<{ action: string; result: string }>(
+      `SELECT action, result FROM audit_logs WHERE target_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [documentId],
+    );
+    expect(audit.rows[0]).toEqual({ action: "document.deleted", result: "success" });
+  });
 });

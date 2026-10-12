@@ -28,6 +28,7 @@ const form = reactive({ name: "", folderId: "" });
 const notificationOpen = ref(false);
 const importDialogOpen = ref(false);
 const importRows = ref<Array<{ file: File; name: string; folderId: string }>>([]);
+const moreMenuDocumentId = ref<string | null>(null);
 
 const workspaceId = computed(() => auth.session?.defaultWorkspace.id ?? "");
 const canEdit = computed(() => auth.role === "editor" || auth.role === "admin");
@@ -114,6 +115,15 @@ function openDocument(documentId: string | null, name = "", folderId: string | n
   form.name = name;
   form.folderId = folderId ?? "";
   dialogOpen.value = true;
+}
+
+function toggleDocumentMenu(documentId: string): void {
+  moreMenuDocumentId.value = moreMenuDocumentId.value === documentId ? null : documentId;
+}
+
+async function deleteDocument(documentId: string, name: string): Promise<void> {
+  if (!globalThis.confirm(`删除后不可恢复，确定删除「${name}」吗？`)) return;
+  if (await workspace.deleteDocument(documentId)) moreMenuDocumentId.value = null;
 }
 
 async function submitDialog(): Promise<void> {
@@ -326,9 +336,24 @@ onMounted(() => void load());
               >
                 编辑元数据
               </button>
-              <span class="workspace-document-card__more" aria-hidden="true">
+              <button
+                v-if="canEdit"
+                class="workspace-document-card__more"
+                type="button"
+                :aria-label="`更多操作 ${document.name}`"
+                :aria-expanded="moreMenuDocumentId === document.id"
+                @click="toggleDocumentMenu(document.id)"
+              >
                 <MoreFilled />
-              </span>
+              </button>
+              <div
+                v-if="moreMenuDocumentId === document.id"
+                class="popover-menu popover-menu--right workspace-document-card__menu"
+              >
+                <button type="button" @click="deleteDocument(document.id, document.name)">
+                  删除文档
+                </button>
+              </div>
             </div>
           </li>
         </ul>
