@@ -32,7 +32,7 @@ test("keeps a second browser read-only while the first browser owns the document
         await page.getByLabel("登录名").fill(administrator.loginName);
         await page.getByLabel("密码").fill(administrator.password);
         await page.getByRole("button", { name: "登录" }).click();
-        await expect(page.getByRole("heading", { name: "全部文档" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "用例库" })).toBeVisible();
       }
       await firstPage.goto(`/workspace/documents/${documentId}`);
       await expect(

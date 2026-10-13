@@ -71,7 +71,7 @@ test("reloads a document through REST after a browser reconnect", async ({ brows
       await page.getByLabel("登录名").fill(administrator.loginName);
       await page.getByLabel("密码").fill(administrator.password);
       await page.getByRole("button", { name: "登录" }).click();
-      await expect(page.getByRole("heading", { name: "全部文档" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "用例库" })).toBeVisible();
       await page.goto(`/workspace/documents/${documentId}`);
       await expect(page.getByRole("heading", { name: `Phase 4 Recovery ${suffix}` })).toBeVisible();
       await expect(page.getByRole("toolbar", { name: "编辑工具栏" })).toBeVisible();
@@ -91,7 +91,7 @@ test("reloads a document through REST after a browser reconnect", async ({ brows
         await page.getByLabel("登录名").fill(administrator.loginName);
         await page.getByLabel("密码").fill(administrator.password);
         await page.getByRole("button", { name: "登录" }).click();
-        await expect(page.getByRole("heading", { name: "全部文档" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "用例库" })).toBeVisible();
         await page.goto(`/workspace/documents/${documentId}`);
       }
       await expect(page.getByRole("heading", { name: `Phase 4 Recovery ${suffix}` })).toBeVisible();
@@ -167,7 +167,7 @@ test("keeps a dirty browser draft after an administrator force release", async (
       await page.getByLabel("登录名").fill(administrator.loginName);
       await page.getByLabel("密码").fill(administrator.password);
       await page.getByRole("button", { name: "登录" }).click();
-      await expect(page.getByRole("heading", { name: "全部文档" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "用例库" })).toBeVisible();
       await page.goto(`/workspace/documents/${documentId}`);
       await expect(
         page.getByRole("heading", { name: `Phase 4 Dirty Force Release ${suffix}` }),
@@ -238,7 +238,7 @@ test("keeps a dirty browser draft when editing permission is revoked", async ({ 
       await page.getByLabel("登录名").fill(memberLogin);
       await page.getByLabel("密码").fill(memberPassword);
       await page.getByRole("button", { name: "登录" }).click();
-      await expect(page.getByRole("heading", { name: "全部文档" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "用例库" })).toBeVisible();
       await page.goto(`/workspace/documents/${documentId}`);
       await expect(
         page.getByRole("heading", { name: `Phase 4 Permission Revoke ${suffix}` }),

@@ -111,7 +111,7 @@ test("completes the Phase 3 mixed import and export flow", async ({ browser }) =
       const page = await pageContext.newPage();
       const diagnostics = monitorPage(page);
       await page.goto("/workspace");
-      await expect(page.getByRole("heading", { name: "全部文档" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "用例库" })).toBeVisible();
       await expect(page.getByRole("button", { name: "导入 XMind" })).toBeVisible();
       await page.getByRole("button", { name: "导入 XMind" }).click();
       await expect(page.getByRole("dialog", { name: "导入 XMind 文件" })).toBeVisible();

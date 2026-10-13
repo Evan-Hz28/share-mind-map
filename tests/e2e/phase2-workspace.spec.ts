@@ -154,7 +154,7 @@ test("completes the Phase 2 permission and workspace flow", async ({ browser }) 
     const page = await reader.newPage();
     const diagnostics = monitorPage(page);
     await page.goto("/workspace");
-    await expect(page.getByRole("heading", { name: "全部文档" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "用例库" })).toBeVisible();
     await expect(page.getByText(`Phase 2 Document ${suffix}`)).toBeVisible();
     diagnostics.assertClean();
   } finally {
