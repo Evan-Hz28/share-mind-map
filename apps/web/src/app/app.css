@@ -909,6 +909,52 @@ input:focus-visible {
   border-color: var(--color-accent-border-strong);
   box-shadow: 0 0 0 3px rgb(0 123 255 / 16%);
 }
+.import-list {
+  display: flex;
+  flex-direction: column;
+  margin: 12px 0 0;
+  border-top: 1px solid var(--border);
+}
+/* 一行 = 文件名 | 目标文档名 | 目标文件夹 | 移除;错误提示独占第二行的整行。 */
+.import-list__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.8fr) auto;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.import-list__file {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.import-list__remove {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-size: 12px;
+}
+.import-list__remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.import-list__row > .import-row-error {
+  grid-column: 1 / -1;
+}
+.import-row-error {
+  color: var(--danger);
+  font-size: 12px;
+}
+.import-batch-warning {
+  margin: 10px 0 0;
+  color: var(--danger);
+  font-size: 12px;
+}
 .import-job-list {
   margin: 12px 0 0;
   padding: 0;

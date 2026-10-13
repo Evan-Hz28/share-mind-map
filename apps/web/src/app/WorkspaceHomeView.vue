@@ -16,7 +16,21 @@ import { RouterLink } from "vue-router";
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
 import { useAuthStore } from "../auth/auth.store.js";
 import { getCompatibilityMeta } from "../documents/compatibility.js";
+import {
+  IMPORT_BATCH_MAX_FILES,
+  IMPORT_FILE_MAX_MEGABYTES,
+  normalizeImportName,
+  validateImportFile,
+  validateImportName,
+} from "../workspace/import-validation.js";
 import { useWorkspaceStore } from "../workspace/workspace.store.js";
+
+/** 待导入的一行:本地文件 + 目标文档名 + 目标文件夹。 */
+interface ImportRow {
+  file: File;
+  name: string;
+  folderId: string;
+}
 
 const auth = useAuthStore();
 const workspace = useWorkspaceStore();
@@ -27,7 +41,8 @@ const editingDocumentId = ref<string | null>(null);
 const form = reactive({ name: "", folderId: "" });
 const notificationOpen = ref(false);
 const importDialogOpen = ref(false);
-const importRows = ref<Array<{ file: File; name: string; folderId: string }>>([]);
+const importRows = ref<ImportRow[]>([]);
+const importFileInput = ref<HTMLInputElement | null>(null);
 const moreMenuDocumentId = ref<string | null>(null);
 
 const workspaceId = computed(() => auth.session?.defaultWorkspace.id ?? "");
@@ -45,6 +60,36 @@ const quotaMessage = computed(() => {
   if (threshold === "warning") return "存储配额已使用 80% 以上。";
   return "";
 });
+/**
+ * 与 importRows 按下标一一对应的逐行问题。
+ * 一定要按下标对齐:workspace.store 是拿数组下标把 batch.jobs[index] 对回 files[index] 的,
+ * 所以校验只能拦、不能把行过滤掉,否则文件和任务会错配。
+ */
+const importRowIssues = computed<Array<string | null>>(() => {
+  const seenNames = new Set<string>();
+  return importRows.value.map((row) => {
+    const normalized = normalizeImportName(row.name);
+    const duplicated = normalized !== null && seenNames.has(normalized);
+    if (normalized !== null) seenNames.add(normalized);
+    return (
+      validateImportFile(row.file) ??
+      validateImportName(row.name) ??
+      (duplicated ? "与前面某一行的目标文档名重复。" : null)
+    );
+  });
+});
+const importBatchIssue = computed<string | null>(() => {
+  const count = importRows.value.length;
+  if (count <= IMPORT_BATCH_MAX_FILES) return null;
+  const excess = count - IMPORT_BATCH_MAX_FILES;
+  return `单次最多提交 ${String(IMPORT_BATCH_MAX_FILES)} 个文件，当前选了 ${String(count)} 个，请先移除 ${String(excess)} 个。`;
+});
+const canSubmitImport = computed(
+  () =>
+    importRows.value.length > 0 &&
+    importBatchIssue.value === null &&
+    !importRowIssues.value.some((issue) => issue !== null),
+);
 
 function openCreateFolder(): void {
   dialogKind.value = "folder";
@@ -55,6 +100,21 @@ function openCreateFolder(): void {
   dialogOpen.value = true;
 }
 
+/** 文件身份,用于去重和列表 key;名字里不可能出现 NUL,拿它当分隔符。 */
+function fileKey(file: File): string {
+  return `${file.name}\u0000${String(file.size)}\u0000${String(file.lastModified)}`;
+}
+
+/**
+ * 原生 file input 的 value 不归 Vue 管,而弹窗用的 ElDialog 默认不销毁内容:
+ * 关掉再打开时控件里还挂着上次选的文件名,但 @change 不会再触发,界面就和
+ * importRows 对不上了(表现为「显示着文件名,却提示请选择至少一个文件」)。
+ * 所以每次选中项被消费掉之后就把原生控件清空。
+ */
+function clearNativeInput(): void {
+  if (importFileInput.value !== null) importFileInput.value.value = "";
+}
+
 function openImport(): void {
   importRows.value = [];
   workspace.importProgress = null;
@@ -62,19 +122,39 @@ function openImport(): void {
   workspace.importJobs = [];
   workspace.importSourceFiles = {};
   workspace.closeImportRealtime();
+  workspace.error = null;
+  clearNativeInput();
   importDialogOpen.value = true;
 }
 
+/** 追加而不是替换,这样可以先选几个、再补几个;重复选到的文件按 fileKey 忽略。 */
 function selectImportFiles(event: Event): void {
   const input = event.target as HTMLInputElement;
-  importRows.value = [...(input.files ?? [])].map((file) => ({
-    file,
-    name: file.name.replace(/\.xmind$/iu, ""),
-    folderId: "",
-  }));
+  const known = new Set(importRows.value.map((row) => fileKey(row.file)));
+  for (const file of input.files ?? []) {
+    const key = fileKey(file);
+    if (known.has(key)) continue;
+    known.add(key);
+    importRows.value.push({
+      file,
+      name: file.name.replace(/\.xmind$/iu, ""),
+      folderId: "",
+    });
+  }
+  clearNativeInput();
+}
+
+function removeImportRow(index: number): void {
+  importRows.value = importRows.value.filter((_, current) => current !== index);
+}
+
+function closeImportDialog(): void {
+  workspace.error = null;
+  importDialogOpen.value = false;
 }
 
 async function submitImport(): Promise<void> {
+  if (!canSubmitImport.value) return;
   const ok = await workspace.importFiles(
     importRows.value.map((row) => ({
       file: row.file,
@@ -82,7 +162,7 @@ async function submitImport(): Promise<void> {
       targetFolderId: row.folderId || null,
     })),
   );
-  if (ok) importDialogOpen.value = false;
+  if (ok) closeImportDialog();
 }
 
 async function cancelImport(jobId: string): Promise<void> {
@@ -238,10 +318,7 @@ onMounted(() => void load());
       <p>{{ canEdit ? "创建一个文件夹或空白文档开始整理。" : "等待编辑者创建文档。" }}</p>
     </div>
     <div v-else class="workspace-board">
-      <section
-        class="workspace-panel workspace-panel--folders"
-        aria-labelledby="folders-heading"
-      >
+      <section class="workspace-panel workspace-panel--folders" aria-labelledby="folders-heading">
         <header class="workspace-panel__header">
           <h2 id="folders-heading"><Folder aria-hidden="true" />一级文件夹</h2>
           <div class="workspace-panel__header-actions">
@@ -371,12 +448,18 @@ onMounted(() => void load());
       title="导入 XMind 文件"
       width="min(92vw, 760px)"
       :close-on-click-modal="false"
+      @close="closeImportDialog"
     >
       <div class="form-stack" data-testid="xmind-import-dialog">
+        <RequestErrorAlert :error="workspace.error" />
         <div class="field-group">
-          <label for="xmind-files">选择文件（可多选，单个不超过 20 MB）</label>
+          <label for="xmind-files"
+            >选择文件（可多选，单个不超过 {{ IMPORT_FILE_MAX_MEGABYTES }} MB，单次最多
+            {{ IMPORT_BATCH_MAX_FILES }} 个）</label
+          >
           <input
             id="xmind-files"
+            ref="importFileInput"
             type="file"
             accept=".xmind"
             multiple
@@ -384,12 +467,8 @@ onMounted(() => void load());
           />
         </div>
         <div v-if="importRows.length > 0" class="import-list">
-          <div
-            v-for="(row, index) in importRows"
-            :key="row.file.name + row.file.size + index"
-            class="import-list__row"
-          >
-            <span>{{ row.file.name }}</span>
+          <div v-for="(row, index) in importRows" :key="fileKey(row.file)" class="import-list__row">
+            <span class="import-list__file">{{ row.file.name }}</span>
             <ElInput v-model="row.name" maxlength="100" aria-label="目标文档名" />
             <select v-model="row.folderId" aria-label="目标文件夹">
               <option value="">未归档</option>
@@ -397,7 +476,20 @@ onMounted(() => void load());
                 {{ folder.name }}
               </option>
             </select>
+            <button
+              type="button"
+              class="import-list__remove"
+              :aria-label="`移除 ${row.file.name}`"
+              :disabled="workspace.importing"
+              @click="removeImportRow(index)"
+            >
+              移除
+            </button>
+            <small v-if="importRowIssues[index]" class="import-row-error">{{
+              importRowIssues[index]
+            }}</small>
           </div>
+          <p v-if="importBatchIssue" class="import-batch-warning">{{ importBatchIssue }}</p>
         </div>
         <p v-else class="panel-empty">请选择至少一个 .xmind 文件。</p>
         <p v-if="workspace.importProgress !== null" role="status">
@@ -436,11 +528,11 @@ onMounted(() => void load());
         </ul>
       </div>
       <template #footer>
-        <ElButton @click="importDialogOpen = false">取消</ElButton>
+        <ElButton @click="closeImportDialog">取消</ElButton>
         <ElButton
           type="primary"
           :loading="workspace.importing"
-          :disabled="importRows.length === 0 || workspace.importing"
+          :disabled="!canSubmitImport || workspace.importing"
           @click="submitImport"
           >开始导入</ElButton
         >

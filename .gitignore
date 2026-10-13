@@ -4,6 +4,7 @@
 
 node_modules/
 dist/
+dist-deploy/
 coverage/
 *.tsbuildinfo
 *.log
@@ -11,6 +12,7 @@ pnpm-debug.log*
 
 .DS_Store
 .idea/
+.claude/
 
 .superpowers/
 .worktrees/
