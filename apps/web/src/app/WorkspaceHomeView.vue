@@ -165,7 +165,7 @@ onMounted(() => void load());
         <div class="workspace-hero__icon" aria-hidden="true"><Folder /></div>
         <div>
           <p class="eyebrow">工作区</p>
-          <h1 id="workspace-title">全部文档</h1>
+          <h1 id="workspace-title">用例库</h1>
           <p>浏览一级文件夹和未归档文档。</p>
         </div>
       </div>

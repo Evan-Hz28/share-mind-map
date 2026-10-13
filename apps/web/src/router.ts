@@ -23,6 +23,7 @@ declare module "vue-router" {
     requiresAuth?: boolean;
     requiresAdmin?: boolean;
     allowsForcedChange?: boolean;
+    title?: string;
   }
 }
 
@@ -46,24 +47,30 @@ const routes: RouteRecordRaw[] = [
     component: AppShell,
     meta: { requiresAuth: true },
     children: [
-      { path: "workspace", name: "workspace", component: WorkspaceHomeView },
+      {
+        path: "workspace",
+        name: "workspace",
+        component: WorkspaceHomeView,
+        meta: { title: "用例库" },
+      },
       {
         path: "workspace/documents/:documentId",
         name: "document",
         component: DocumentView,
         props: (route) => ({ documentId: String(route.params.documentId) }),
+        meta: { title: "文档" },
       },
       {
         path: "admin/members",
         name: "members",
         component: MembersView,
-        meta: { requiresAdmin: true },
+        meta: { requiresAdmin: true, title: "成员管理" },
       },
       {
         path: "admin/phase2",
         name: "phase2-admin",
         component: Phase2AdminView,
-        meta: { requiresAdmin: true },
+        meta: { requiresAdmin: true, title: "权限与审计" },
       },
     ],
   },

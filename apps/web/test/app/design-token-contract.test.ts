@@ -59,4 +59,19 @@ describe("global UI design token contract", () => {
     expect(appCss).toMatch(/--color-canvas-bg:\s*#212529/);
     expect(appCss).not.toMatch(/--accent:\s*#0b8f83/);
   });
+
+  it("stacks the top bar above the tab strip", () => {
+    // 两者都是 position: relative 的同级元素,且标签栏在 DOM 里更靠后、背景不透明;
+    // 一旦 z-index 相等,顶栏里向下展开的账户菜单就会被标签栏盖住。
+    function layer(name: string): number {
+      const match = new RegExp(`${name}:\\s*(\\d+)`).exec(appCss);
+      const raw = match?.[1];
+      if (raw === undefined) throw new Error(`未找到设计令牌 ${name}`);
+      return Number(raw);
+    }
+
+    expect(layer("--app-topbar-layer")).toBeGreaterThan(layer("--app-tabs-layer"));
+    expect(appCss).toMatch(/\.top-bar\s*\{[\s\S]*?z-index:\s*var\(--app-topbar-layer\)/);
+    expect(appCss).toMatch(/\.app-tabs\s*\{[\s\S]*?z-index:\s*var\(--app-tabs-layer\)/);
+  });
 });

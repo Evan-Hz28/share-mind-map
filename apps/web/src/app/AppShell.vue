@@ -1,92 +1,76 @@
 <script setup lang="ts">
-import { ArrowDown, Menu, User } from "@element-plus/icons-vue";
-import { computed, ref } from "vue";
-import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
+import { computed, ref, watch } from "vue";
+import { RouterView, useRoute, useRouter } from "vue-router";
 
-import AppLogo from "../components/AppLogo.vue";
 import { useAuthStore } from "../auth/auth.store.js";
+import AppSidebar from "./AppSidebar.vue";
+import AppTabs from "./AppTabs.vue";
+import AppTopBar from "./AppTopBar.vue";
+import { filterNavigationByRole, navigationItems } from "./navigation.js";
+import { useAppTabsStore } from "./tabs.store.js";
 
 const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
-const accountMenuOpen = ref(false);
-const navigationOpen = ref(false);
-const isEditorRoute = computed(() => route.name === "document");
+const tabs = useAppTabsStore();
 
-const roleLabel = computed(() => {
-  const labels = { admin: "管理员", editor: "编辑者", reader: "只读成员" } as const;
-  return auth.role === null ? "" : labels[auth.role];
-});
+const sidebarCollapsed = ref(false);
+const drawerOpen = ref(false);
+const isEditorRoute = computed(() => route.name === "document");
+const menuItems = computed(() => filterNavigationByRole(navigationItems, auth.role));
+
+// 先于 AppTabs 的 setup 执行，保证标签回填发生在当前路由入栈之前。
+tabs.load(router);
+tabs.prune(auth.role);
+
+watch(
+  () => auth.role,
+  (role) => {
+    tabs.prune(role);
+    if (role !== "admin") drawerOpen.value = false;
+  },
+);
+
+function toggleSidebar(): void {
+  sidebarCollapsed.value = !sidebarCollapsed.value;
+}
+
+function closeDrawer(): void {
+  drawerOpen.value = false;
+}
 
 async function logout(): Promise<void> {
-  if (await auth.logout()) await router.replace({ name: "login" });
+  const signedOut = await auth.logout();
+  closeDrawer();
+  if (!signedOut) return;
+  tabs.closeAll(router);
+  await router.replace({ name: "login" });
 }
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'app-shell--editor': isEditorRoute }">
-    <header class="top-bar" aria-label="应用顶部导航">
-      <div class="top-bar__brand">
-        <AppLogo />
-        <span class="top-bar__divider" aria-hidden="true" />
-        <span class="workspace-name">{{ auth.session?.defaultWorkspace.name }}</span>
-      </div>
-
-      <nav class="desktop-navigation" aria-label="主导航">
-        <RouterLink to="/workspace"> 工作区 </RouterLink>
-        <RouterLink v-if="auth.role === 'admin'" to="/admin/members"> 成员管理 </RouterLink>
-        <RouterLink v-if="auth.role === 'admin'" to="/admin/phase2"> 权限与审计 </RouterLink>
-      </nav>
-
-      <div class="top-bar__actions">
-        <span class="role-status">{{ roleLabel }}</span>
-        <div class="mobile-navigation">
-          <button
-            class="icon-button"
-            type="button"
-            aria-label="打开导航菜单"
-            title="导航菜单"
-            @click="navigationOpen = !navigationOpen"
-          >
-            <Menu aria-hidden="true" />
-          </button>
-          <nav v-if="navigationOpen" class="popover-menu" aria-label="移动导航">
-            <RouterLink to="/workspace" @click="navigationOpen = false"> 工作区 </RouterLink>
-            <RouterLink
-              v-if="auth.role === 'admin'"
-              to="/admin/members"
-              @click="navigationOpen = false"
-            >
-              成员管理
-            </RouterLink>
-            <RouterLink
-              v-if="auth.role === 'admin'"
-              to="/admin/phase2"
-              @click="navigationOpen = false"
-              >权限与审计</RouterLink
-            >
-          </nav>
-        </div>
-        <div class="account-menu">
-          <button
-            class="account-button"
-            type="button"
-            aria-label="账户菜单"
-            title="账户菜单"
-            @click="accountMenuOpen = !accountMenuOpen"
-          >
-            <User aria-hidden="true" />
-            <span>{{ auth.session?.user.displayName }}</span>
-            <ArrowDown aria-hidden="true" />
-          </button>
-          <div v-if="accountMenuOpen" class="popover-menu popover-menu--right">
-            <button type="button" @click="logout">退出登录</button>
-          </div>
-        </div>
-      </div>
-    </header>
+  <div v-if="isEditorRoute" class="app-shell app-shell--editor">
+    <AppTopBar show-brand @logout="logout" />
     <main class="app-main">
       <RouterView />
     </main>
+  </div>
+
+  <div v-else class="app-shell" :class="{ 'app-drawer-open': drawerOpen }">
+    <AppSidebar
+      :items="menuItems"
+      :workspace-name="auth.session?.defaultWorkspace.name"
+      :collapsed="sidebarCollapsed"
+      @toggle-collapse="toggleSidebar"
+      @navigate="closeDrawer"
+    />
+    <div class="app-body">
+      <AppTopBar show-navigation-toggle @open-drawer="drawerOpen = true" @logout="logout" />
+      <AppTabs />
+      <main class="app-main">
+        <RouterView />
+      </main>
+    </div>
+    <div v-if="drawerOpen" class="app-drawer-backdrop" @click="closeDrawer" />
   </div>
 </template>

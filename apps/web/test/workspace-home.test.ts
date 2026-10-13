@@ -133,7 +133,7 @@ describe("workspace home", () => {
     installWorkspaceApi();
     await renderWorkspace();
 
-    expect(await screen.findByRole("heading", { name: "全部文档" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "用例库" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "新建文件夹" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "新建文档" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "导入 XMind" })).toBeInTheDocument();

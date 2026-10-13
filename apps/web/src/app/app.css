@@ -42,6 +42,22 @@
   --editor-layer-context: 8;
   --editor-layer-recovery: 9;
   --danger: #b42318;
+  --app-topbar-height: 56px;
+  --app-sidebar-width: 240px;
+  --app-sidebar-collapsed-width: 48px;
+  --app-tabs-height: 40px;
+  --app-tabs-layer: 9;
+  /* 顶栏必须高于标签栏:两者都参与层叠,而标签栏在 DOM 里更靠后、背景不透明,
+     同级 z-index 会把顶栏里向下展开的账户菜单盖住。 */
+  --app-topbar-layer: 20;
+  --app-drawer-layer: 30;
+  /* 侧边栏是深蓝 → 浅青的纵向渐变，文字/图标用白色系，靠透明度分层次。 */
+  --app-sidebar-bg: linear-gradient(to bottom, #0052d4 0%, #65c7f7 50%, #9cecfb 100%);
+  --app-sidebar-fg: #ffffff;
+  --app-sidebar-fg-muted: rgb(255 255 255 / 78%);
+  --app-sidebar-hover: rgb(255 255 255 / 16%);
+  --app-sidebar-active: rgb(255 255 255 / 26%);
+  --app-sidebar-border: rgb(255 255 255 / 22%);
 }
 
 * {
@@ -103,78 +119,249 @@ input:focus-visible {
   white-space: nowrap;
 }
 .app-logo__mark {
-  display: grid;
+  display: block;
+  flex: 0 0 auto;
   width: 34px;
   height: 34px;
-  place-items: center;
-  color: var(--color-text-inverse);
-  background: var(--accent);
-  border-radius: 8px;
-}
-.app-logo__mark svg {
-  width: 18px;
+  border-radius: 50%;
+  object-fit: cover;
 }
 .app-logo__text {
+  display: flex;
+  flex-direction: column;
   letter-spacing: 0;
+}
+.app-logo__name,
+.app-logo__tagline {
+  white-space: nowrap;
+}
+.app-logo__tagline {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 400;
+  opacity: 0.82;
+}
+
+.app-shell {
+  display: flex;
+  align-items: stretch;
+  min-height: 100vh;
+  background: var(--page);
+}
+.app-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.app-sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  width: var(--app-sidebar-width);
+  height: 100vh;
+  background: var(--app-sidebar-bg);
+  transition: width 0.25s ease;
+}
+.app-sidebar--collapsed {
+  width: var(--app-sidebar-collapsed-width);
+}
+/* 品牌区对齐 Kitar CMS 的 100px：50px 圆形 Logo + 两行文字，折叠按钮压在右上角。
+   内容靠左而不是居中：居中的话文字右端会伸到按钮底下（实测重叠 6px），
+   而且按钮已经占住了右上角，居中看起来也不是真的居中。 */
+.app-sidebar__brand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 100px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--app-sidebar-border);
+}
+.app-sidebar .app-logo {
+  gap: 14px;
+}
+.app-sidebar .app-logo__mark {
+  width: 50px;
+  height: 50px;
+}
+/* 名字从 18px 收到 14px 才让得开右上角的按钮：14px 时「Kitar TestHub」107px 宽，
+   Logo 50px + 间隙 14px + 文字 107px = 171px，右端停在 187px，按钮从 200px 起。 */
+.app-sidebar .app-logo__name {
+  font-size: 14px;
+}
+/* 副标题比名字小 3px 才分得出层次，同时它 19 个字符比名字还宽，11px 时 108px。 */
+.app-sidebar .app-logo__tagline {
+  font-size: 11px;
+}
+/* 收起按钮沿用 CMS 的 28×28 / top 12 / right 12。桌面端的鼠标控件不需要 40px 的
+   触摸尺寸，而 40px 会吃掉文字右侧仅剩的空间；窄屏整块隐藏（见文件末尾的媒体查询）。 */
+.app-sidebar .app-sidebar__collapse {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-width: 28px;
+  min-height: 28px;
+}
+.app-sidebar .app-sidebar__collapse svg {
+  width: 16px;
+}
+/* 48px 的收起态放不下 50px 的 Logo，只留菜单图标和右上角的展开按钮。 */
+.app-sidebar--collapsed .app-sidebar__brand .app-logo,
+.app-sidebar--collapsed .app-sidebar__workspace,
+.app-sidebar--collapsed .app-menu-item__label {
+  display: none;
+}
+/* 48px 里把 28px 的按钮摆正：(48 - 28) / 2 = 10，和 CMS 收起态一致。 */
+.app-sidebar--collapsed .app-sidebar__collapse {
+  right: 10px;
+}
+.app-sidebar__workspace {
+  padding: 12px 16px 0;
+}
+.app-sidebar__menu {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  overflow-y: auto;
+}
+.app-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: rgb(255 255 255 / 78%);
+  font-size: 14px;
+  text-decoration: none;
+}
+.app-menu-item:hover {
+  color: var(--app-sidebar-fg);
+  background: var(--app-sidebar-hover);
+}
+.app-menu-item.router-link-active {
+  border-color: transparent;
+  color: var(--app-sidebar-fg);
+  background: var(--app-sidebar-active);
+}
+.app-menu-item__icon {
+  flex: 0 0 auto;
+  width: 18px;
+}
+.app-sidebar--collapsed .app-menu-item {
+  justify-content: center;
+  padding: 0;
+}
+/* 品牌区、工作区名、折叠按钮的样式是和顶栏共用的，
+   只有落在侧边栏里时才换色，顶栏（编辑器态）保持原样。
+   Logo 是一张自带蓝底的圆形图，深浅底上都一样，不需要分状态处理。 */
+.app-sidebar .app-logo__text {
+  color: var(--app-sidebar-fg);
+}
+.app-sidebar .workspace-name {
+  color: var(--app-sidebar-fg-muted);
+}
+.app-sidebar .icon-button {
+  color: var(--app-sidebar-fg);
+}
+.app-sidebar .icon-button:hover {
+  background: var(--app-sidebar-hover);
+}
+
+.app-tabs {
+  position: relative;
+  z-index: var(--app-tabs-layer);
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--app-tabs-height);
+  padding: 4px 12px;
+  border-bottom: 1px solid rgb(222 226 230 / 75%);
+  background: var(--surface);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.app-tabs::-webkit-scrollbar {
+  display: none;
+}
+.app-tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+.app-tab--active {
+  border-color: var(--color-accent-soft);
+  background: var(--color-control-active);
+}
+.app-tab__label,
+.app-tab__close,
+.app-tabs__close-all {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  border-radius: 5px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.app-tab--active .app-tab__label {
+  color: var(--accent-strong);
+}
+.app-tab__label:hover,
+.app-tab__close:hover,
+.app-tabs__close-all:hover {
+  background: var(--color-surface-subtle);
+}
+.app-tab__close {
+  padding: 0 6px;
+}
+.app-tab__close svg {
+  width: 13px;
+}
+.app-tabs__close-all {
+  margin-left: auto;
 }
 
 .top-bar {
   position: relative;
-  z-index: 10;
+  z-index: var(--app-topbar-layer);
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
-  height: 64px;
-  padding: 0 28px;
+  gap: 14px;
+  height: var(--app-topbar-height);
+  padding: 0 20px;
   border-bottom: 1px solid rgb(222 226 230 / 75%);
   background: rgb(255 255 255 / 96%);
   box-shadow: 0 4px 18px rgb(33 37 41 / 4%);
 }
-.top-bar__brand,
-.top-bar__actions,
-.desktop-navigation {
-  display: flex;
-  align-items: center;
-}
-.top-bar__brand {
-  min-width: 0;
-  gap: 14px;
-}
-.top-bar__divider {
-  width: 1px;
-  height: 22px;
-  background: var(--border);
-}
 .workspace-name {
   overflow: hidden;
-  max-width: 220px;
+  max-width: 100%;
   color: var(--muted);
   font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.desktop-navigation {
-  align-self: stretch;
-  gap: 4px;
-  margin-left: 38px;
-}
-.desktop-navigation a {
-  display: flex;
-  align-items: center;
-  min-height: 38px;
-  padding: 0 15px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  color: var(--muted);
-  font-size: 14px;
-  text-decoration: none;
-}
-.desktop-navigation a.router-link-active {
-  border-color: var(--color-accent-soft);
-  color: var(--ink);
-  background: var(--color-control-active);
-}
 .top-bar__actions {
   position: relative;
+  display: flex;
+  align-items: center;
   gap: 10px;
   margin-left: auto;
 }
@@ -263,7 +450,15 @@ input:focus-visible {
 }
 
 .app-main {
-  min-height: calc(100vh - 64px);
+  flex: 1 1 auto;
+  min-height: calc(100vh - var(--app-topbar-height) - var(--app-tabs-height));
+}
+.app-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--app-drawer-layer) - 1);
+  display: none;
+  background: rgb(33 37 41 / 40%);
 }
 .members-view {
   width: min(1180px, calc(100% - 48px));
@@ -1525,12 +1720,32 @@ input:focus-visible {
 }
 
 @media (max-width: 768px) {
+  /* 侧边栏在窄屏变成抽屉，顶栏的汉堡按钮负责拉起。 */
+  .app-sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: var(--app-drawer-layer);
+    width: var(--app-sidebar-width);
+    height: auto;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+  }
+  .app-drawer-open .app-sidebar {
+    transform: translateX(0);
+  }
+  /* 抽屉用汉堡按钮和遮罩开关，不需要收起按钮；它在窄屏也凑不出 40×40 的点击区域。 */
+  .app-sidebar .app-sidebar__collapse {
+    display: none;
+  }
+  .app-drawer-backdrop {
+    display: block;
+  }
   .top-bar {
     padding: 0 12px;
   }
   .top-bar .app-logo__text,
-  .top-bar__divider,
-  .desktop-navigation,
   .account-button span,
   .account-button svg:last-child {
     display: none;
@@ -1540,6 +1755,13 @@ input:focus-visible {
   }
   .mobile-navigation {
     display: block;
+  }
+  /* 移动端所有可见按钮必须满足 40×40 的最小点击区域。 */
+  .app-tab__label,
+  .app-tab__close,
+  .app-tabs__close-all {
+    min-width: 40px;
+    min-height: 40px;
   }
   .role-status {
     padding: 3px 5px;
