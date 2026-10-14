@@ -6,7 +6,10 @@ import { createPinia } from "pinia";
 import { createApp } from "vue";
 
 import App from "./App.vue";
+import { installGlobalDropGuard } from "./app/global-drop-guard.js";
 import { createAppRouter } from "./router.js";
+
+installGlobalDropGuard();
 
 const pinia = createPinia();
 const router = createAppRouter({ pinia });

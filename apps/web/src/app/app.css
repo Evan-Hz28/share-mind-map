@@ -915,6 +915,29 @@ input:focus-visible {
   margin: 12px 0 0;
   border-top: 1px solid var(--border);
 }
+/* 弹窗的整个内容区都是拖放目标;--over 由 dragenter/dragleave 计数控制。 */
+.import-drop-zone {
+  padding: 14px;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+.import-drop-zone--over {
+  border-color: var(--color-accent-border-strong);
+  background: rgb(0 123 255 / 6%);
+}
+.import-drop-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.import-drop-summary {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 13px;
+}
 /* 一行 = 文件名 | 目标文档名 | 目标文件夹 | 移除;错误提示独占第二行的整行。 */
 .import-list__row {
   display: grid;

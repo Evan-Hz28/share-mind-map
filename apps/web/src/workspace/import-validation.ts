@@ -5,7 +5,7 @@
  * 真正的准入判定仍在 API 和 worker 里。改动任意一侧都要同步另一侧:
  * - 扩展名:apps/api/src/imports/imports.service.ts
  * - 单个文件 20 MiB:同名文件里的 MAX_FILE_BYTES
- * - 单批 1..50,以及「该用户活跃任务数 + 本次文件数 ≤ 10、同工作区 ≤ 50」:
+ * - 单批 1..100,以及「该用户活跃任务数 + 本次文件数 ≤ 150、同工作区 ≤ 300」:
  *   packages/database/src/repositories/import.repository.ts 的 createBatch
  * - 名字归一化:packages/database/src/repositories/name-normalization.ts
  *
@@ -22,13 +22,13 @@ export const IMPORT_FILE_MAX_MEGABYTES = IMPORT_FILE_MAX_BYTES / (1024 * 1024);
 export const IMPORT_FILE_MAX_NAME_LENGTH = 100;
 
 /**
- * 一次建议最多提交多少个文件。
+ * 一次最多提交多少个文件,也是为了「一个文件夹拖进来」而定的。
  *
- * 服务端卡的是「该用户 waiting/uploading/parsing/persisting 的任务数 + 本次文件数 > 10
- * 就整批拒绝」(同一工作区另有 50 的上限,但先被 10 挡住)。前端看不到当前活跃数,
- * 所以只能把「超过 10 个」当成必然失败来拦;不超过 10 个也不保证一定成功。
+ * 服务端卡的是「该用户 waiting/uploading/parsing/persisting 的任务数 + 本次文件数 > 150
+ * 就整批拒绝」(同一工作区另有 300 的上限)。前端看不到当前活跃数,
+ * 所以只能把「超过 100 个」当成必然失败来拦;不超过 100 个也不保证一定成功。
  */
-export const IMPORT_BATCH_MAX_FILES = 10;
+export const IMPORT_BATCH_MAX_FILES = 100;
 
 export function isXmindFileName(name: string): boolean {
   return name.toLocaleLowerCase().endsWith(".xmind");
@@ -67,4 +67,92 @@ export function validateImportFile(file: File): string | null {
     return `超过 ${String(IMPORT_FILE_MAX_MEGABYTES)} MB 上限。`;
   }
   return null;
+}
+
+/** 比较键:超过 100 字符的名字归一化会返回 null,这里兜一下,别让它退出查重。 */
+function dedupeKey(name: string): string {
+  return normalizeImportName(name) ?? name.trim().toLocaleLowerCase("en-US");
+}
+
+/** 去掉扩展名,得到默认文档名。 */
+function stripExtension(name: string): string {
+  return name.replace(/\.xmind$/iu, "");
+}
+
+/**
+ * 给一批路径分配默认目标文档名(拖入文件夹时用)。
+ *
+ * 默认就是文件名;只有在会撞名的时候才退到「最短的唯一路径后缀」,
+ * 例如 子目录A/登录用例.xmind 与 子目录B/登录用例.xmind 会变成
+ * 「子目录A/登录用例」和「子目录B/登录用例」——用户仍然可以逐行改。
+ *
+ * 撞名是**整组**一起消歧的:只让后来的那几行改名,先来的会白占着短名,
+ * 一批导入里出现 「登录用例」和「子目录B/登录用例」并存,读起来很怪。
+ *
+ * taken 是已经存在的行当前的名字(用户可能手改过)。既有行永远不被改名,
+ * 只当作已占用。返回的数组与 paths 下标一一对应。
+ */
+export function defaultImportNames(
+  paths: readonly string[],
+  taken: readonly string[] = [],
+): string[] {
+  const seeded = taken.map((name) => dedupeKey(name));
+  // 两种名字是两个互不相干的命名空间:文件名里不可能有 "/",路径后缀里一定有。
+  // 所以文件名只可能和文件名撞,后缀只可能和后缀撞,分开维护就够了。
+  const usedNames = new Set(seeded);
+  const usedSuffixes = new Set(seeded);
+
+  interface Member {
+    index: number;
+    path: string;
+    segments: string[];
+  }
+  const groups = new Map<string, Member[]>();
+  for (const [index, path] of paths.entries()) {
+    const segments = path.split("/").filter((segment) => segment !== "");
+    const key = dedupeKey(stripExtension(segments.at(-1) ?? ""));
+    const member: Member = { index, path, segments };
+    const group = groups.get(key);
+    if (group === undefined) groups.set(key, [member]);
+    else group.push(member);
+  }
+
+  // 按组内排在最前的那个路径排序,保证同一批输入永远得到同一个结果。
+  const ordered = [...groups.values()].sort((left, right) =>
+    (left[0]?.path ?? "").localeCompare(right[0]?.path ?? "", "zh"),
+  );
+  const names: string[] = [];
+
+  for (const members of ordered) {
+    members.sort((left, right) => left.path.localeCompare(right.path, "zh"));
+    const first = members[0];
+    if (first === undefined) continue;
+    const base = stripExtension(first.segments.at(-1) ?? "");
+    // 一组里不止一条,或者这个名字已经被既有的行占了,整组都要带路径后缀。
+    const needsSuffix = members.length > 1 || usedNames.has(dedupeKey(base));
+    for (const member of members) {
+      let assigned = base;
+      if (needsSuffix) {
+        let disambiguated: string | null = null;
+        for (let take = 2; take <= member.segments.length; take += 1) {
+          const candidate = stripExtension(member.segments.slice(-take).join("/"));
+          // 后缀太长时保留结尾:判别性最强的部分在尾部。
+          const trimmed =
+            candidate.length > IMPORT_FILE_MAX_NAME_LENGTH
+              ? candidate.slice(-IMPORT_FILE_MAX_NAME_LENGTH)
+              : candidate;
+          const key = dedupeKey(trimmed);
+          if (usedSuffixes.has(key)) continue;
+          disambiguated = trimmed;
+          break;
+        }
+        // 连完整路径都被占用了,退回文件名,交给行校验去标红。
+        assigned = disambiguated ?? base;
+      }
+      names[member.index] = assigned;
+      usedSuffixes.add(dedupeKey(assigned));
+    }
+    usedNames.add(dedupeKey(base));
+  }
+  return names;
 }

@@ -17,8 +17,16 @@ import RequestErrorAlert from "../components/RequestErrorAlert.vue";
 import { useAuthStore } from "../auth/auth.store.js";
 import { getCompatibilityMeta } from "../documents/compatibility.js";
 import {
+  collectDroppedFiles,
+  collectPickedFiles,
+  describeCollected,
+  type CollectedEntry,
+  type CollectedFiles,
+} from "../workspace/drop-collect.js";
+import {
   IMPORT_BATCH_MAX_FILES,
   IMPORT_FILE_MAX_MEGABYTES,
+  defaultImportNames,
   normalizeImportName,
   validateImportFile,
   validateImportName,
@@ -27,10 +35,16 @@ import { useWorkspaceStore } from "../workspace/workspace.store.js";
 
 /** 待导入的一行:本地文件 + 目标文档名 + 目标文件夹。 */
 interface ImportRow {
+  /** 列表 key 和移除都按它来:文件名不足以区分,目录里可能有两份同名同大小的副本。 */
+  id: number;
+  /** 相对拖入/选入根的路径,重复内容和界面展示都靠它区分。 */
+  path: string;
   file: File;
   name: string;
   folderId: string;
 }
+
+let nextImportRowId = 1;
 
 const auth = useAuthStore();
 const workspace = useWorkspaceStore();
@@ -43,6 +57,11 @@ const notificationOpen = ref(false);
 const importDialogOpen = ref(false);
 const importRows = ref<ImportRow[]>([]);
 const importFileInput = ref<HTMLInputElement | null>(null);
+const importFolderInput = ref<HTMLInputElement | null>(null);
+const importDragOver = ref(false);
+const importSummary = ref<string | null>(null);
+/** dragenter/dragleave 会在子元素之间反复冒泡,用计数抵消,免得高亮闪烁。 */
+let importDragDepth = 0;
 const moreMenuDocumentId = ref<string | null>(null);
 
 const workspaceId = computed(() => auth.session?.defaultWorkspace.id ?? "");
@@ -90,6 +109,10 @@ const canSubmitImport = computed(
     importBatchIssue.value === null &&
     !importRowIssues.value.some((issue) => issue !== null),
 );
+/** 本批还能再收几个;拖进来的目录按它截断,免得收下一堆永远提交不了的行。 */
+const importSlotsLeft = computed(() =>
+  Math.max(0, IMPORT_BATCH_MAX_FILES - importRows.value.length),
+);
 
 function openCreateFolder(): void {
   dialogKind.value = "folder";
@@ -100,9 +123,13 @@ function openCreateFolder(): void {
   dialogOpen.value = true;
 }
 
-/** 文件身份,用于去重和列表 key;名字里不可能出现 NUL,拿它当分隔符。 */
-function fileKey(file: File): string {
-  return `${file.name}\u0000${String(file.size)}\u0000${String(file.lastModified)}`;
+/**
+ * 去重用的身份。必须带上相对路径:文件名不足以区分,目录里很容易出现
+ * 两份同名同大小的副本(子目录A/登录用例.xmind 和 子目录B/登录用例.xmind
+ * 的 file.name 都是 登录用例.xmind)。名字里不可能出现 NUL,拿它当分隔符。
+ */
+function importRowKey(row: { path: string; file: File }): string {
+  return `${row.path}\u0000${String(row.file.size)}\u0000${String(row.file.lastModified)}`;
 }
 
 /**
@@ -113,10 +140,18 @@ function fileKey(file: File): string {
  */
 function clearNativeInput(): void {
   if (importFileInput.value !== null) importFileInput.value.value = "";
+  if (importFolderInput.value !== null) importFolderInput.value.value = "";
+}
+
+function resetImportDragState(): void {
+  importDragDepth = 0;
+  importDragOver.value = false;
 }
 
 function openImport(): void {
   importRows.value = [];
+  importSummary.value = null;
+  resetImportDragState();
   workspace.importProgress = null;
   workspace.importBatchId = null;
   workspace.importJobs = [];
@@ -127,29 +162,86 @@ function openImport(): void {
   importDialogOpen.value = true;
 }
 
-/** 追加而不是替换,这样可以先选几个、再补几个;重复选到的文件按 fileKey 忽略。 */
-function selectImportFiles(event: Event): void {
-  const input = event.target as HTMLInputElement;
-  const known = new Set(importRows.value.map((row) => fileKey(row.file)));
-  for (const file of input.files ?? []) {
-    const key = fileKey(file);
-    if (known.has(key)) continue;
+/**
+ * 把一次拖拽/选择的结果并进待导入列表。
+ * 去重和默认命名只在这里做一次,拖拽和两个原生控件的行为才会一致。
+ */
+function applyCollected(collected: CollectedFiles): void {
+  const known = new Set(importRows.value.map((row) => importRowKey(row)));
+  const fresh: CollectedEntry[] = [];
+  let duplicate = 0;
+  for (const entry of collected.entries) {
+    const key = importRowKey(entry);
+    if (known.has(key)) {
+      duplicate += 1;
+      continue;
+    }
     known.add(key);
+    fresh.push(entry);
+  }
+  const names = defaultImportNames(
+    fresh.map((entry) => entry.path),
+    importRows.value.map((row) => row.name),
+  );
+  for (const [index, entry] of fresh.entries()) {
     importRows.value.push({
-      file,
-      name: file.name.replace(/\.xmind$/iu, ""),
+      id: nextImportRowId,
+      path: entry.path,
+      file: entry.file,
+      name: names[index] ?? entry.file.name,
       folderId: "",
     });
+    nextImportRowId += 1;
   }
+  importSummary.value = describeCollected(collected, {
+    added: fresh.length,
+    duplicate,
+    limit: IMPORT_BATCH_MAX_FILES,
+  });
+}
+
+/**
+ * 「选择文件」和「选择文件夹」共用一个处理器:目录选择只是把层次写进了
+ * File.webkitRelativePath,展开交给 collectPickedFiles。
+ * 必须同步消费 input.files——清空原生控件之后就读不到了。
+ */
+function selectImportFiles(event: Event): void {
+  const files = (event.target as HTMLInputElement).files;
+  if (files !== null) applyCollected(collectPickedFiles(files, importSlotsLeft.value));
   clearNativeInput();
 }
 
-function removeImportRow(index: number): void {
-  importRows.value = importRows.value.filter((_, current) => current !== index);
+function handleImportDragEnter(): void {
+  importDragDepth += 1;
+  importDragOver.value = true;
+}
+
+/** dragover 会被高频触发,只用来把这里标记成合法放置目标,不参与计数。 */
+function handleImportDragOver(): void {
+  importDragOver.value = true;
+}
+
+function handleImportDragLeave(): void {
+  importDragDepth = Math.max(0, importDragDepth - 1);
+  if (importDragDepth === 0) importDragOver.value = false;
+}
+
+async function handleImportDrop(event: DragEvent): Promise<void> {
+  // drop 之后不一定还会收到 dragleave,这里必须自己复位。
+  resetImportDragState();
+  const transfer = event.dataTransfer;
+  if (transfer === null) return;
+  const limit = importSlotsLeft.value;
+  applyCollected(await collectDroppedFiles(transfer, limit));
+}
+
+function removeImportRow(id: number): void {
+  importRows.value = importRows.value.filter((row) => row.id !== id);
 }
 
 function closeImportDialog(): void {
   workspace.error = null;
+  resetImportDragState();
   importDialogOpen.value = false;
 }
 
@@ -450,8 +542,19 @@ onMounted(() => void load());
       :close-on-click-modal="false"
       @close="closeImportDialog"
     >
-      <div class="form-stack" data-testid="xmind-import-dialog">
+      <div
+        class="form-stack import-drop-zone"
+        :class="{ 'import-drop-zone--over': importDragOver }"
+        data-testid="xmind-import-dialog"
+        @dragenter.prevent="handleImportDragEnter"
+        @dragover.prevent="handleImportDragOver"
+        @dragleave="handleImportDragLeave"
+        @drop.prevent="handleImportDrop"
+      >
         <RequestErrorAlert :error="workspace.error" />
+        <p class="import-drop-hint">
+          把 .xmind 文件或整个文件夹拖到这里，目录下的 .xmind 会自动展开。
+        </p>
         <div class="field-group">
           <label for="xmind-files"
             >选择文件（可多选，单个不超过 {{ IMPORT_FILE_MAX_MEGABYTES }} MB，单次最多
@@ -466,9 +569,23 @@ onMounted(() => void load());
             @change="selectImportFiles"
           />
         </div>
+        <div class="field-group">
+          <label for="xmind-folder">选择文件夹（自动展开目录下所有 .xmind）</label>
+          <input
+            id="xmind-folder"
+            ref="importFolderInput"
+            type="file"
+            webkitdirectory
+            multiple
+            @change="selectImportFiles"
+          />
+        </div>
+        <p v-if="importSummary !== null" class="import-drop-summary" role="status">
+          {{ importSummary }}
+        </p>
         <div v-if="importRows.length > 0" class="import-list">
-          <div v-for="(row, index) in importRows" :key="fileKey(row.file)" class="import-list__row">
-            <span class="import-list__file">{{ row.file.name }}</span>
+          <div v-for="(row, index) in importRows" :key="row.id" class="import-list__row">
+            <span class="import-list__file">{{ row.path }}</span>
             <ElInput v-model="row.name" maxlength="100" aria-label="目标文档名" />
             <select v-model="row.folderId" aria-label="目标文件夹">
               <option value="">未归档</option>
@@ -479,9 +596,9 @@ onMounted(() => void load());
             <button
               type="button"
               class="import-list__remove"
-              :aria-label="`移除 ${row.file.name}`"
+              :aria-label="`移除 ${row.path}`"
               :disabled="workspace.importing"
-              @click="removeImportRow(index)"
+              @click="removeImportRow(row.id)"
             >
               移除
             </button>

@@ -311,7 +311,7 @@ describe("workspace home", () => {
     installWorkspaceApi(options);
     await renderWorkspace();
     await userEvent.click(await screen.findByRole("button", { name: "导入 XMind" }));
-    const input = await screen.findByLabelText(/选择文件/u);
+    const input = await screen.findByLabelText(/可多选/u);
     if (!(input instanceof HTMLInputElement)) throw new Error("文件输入框没有渲染。");
     return input;
   }
@@ -319,6 +319,64 @@ describe("workspace home", () => {
   /** @testing-library/vue 的 fireEvent 是异步的,必须 await 才能等到 Vue 重渲染。 */
   async function pickFiles(input: HTMLInputElement, files: File[]): Promise<void> {
     await fireEvent.change(input, { target: { files } });
+  }
+
+  /** jsdom 里没有 DragEvent / DataTransfer,只能自己造事件再挂上 dataTransfer。 */
+  async function dropOnImportDialog(dataTransfer: unknown): Promise<void> {
+    const zone = screen.getByTestId("xmind-import-dialog");
+    const event = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+    zone.dispatchEvent(event);
+    // 展开目录是异步的,多等两个宏任务让 Vue 把结果渲染出来。
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  function fakeFileEntry(file: File): FileSystemEntry {
+    return {
+      isFile: true,
+      isDirectory: false,
+      name: file.name,
+      file: (success: (file: File) => void): void => {
+        success(file);
+      },
+    } as unknown as FileSystemEntry;
+  }
+
+  function fakeDirectoryEntry(name: string, children: FileSystemEntry[]): FileSystemEntry {
+    let drained = false;
+    return {
+      isFile: false,
+      isDirectory: true,
+      name,
+      createReader: () => ({
+        readEntries: (success: (entries: FileSystemEntry[]) => void): void => {
+          success(drained ? [] : children);
+          drained = true;
+        },
+      }),
+    } as unknown as FileSystemEntry;
+  }
+
+  function entryItem(entry: FileSystemEntry): {
+    kind: string;
+    webkitGetAsEntry: () => FileSystemEntry;
+    getAsFile: () => null;
+  } {
+    return { kind: "file", webkitGetAsEntry: () => entry, getAsFile: () => null };
+  }
+
+  function importRows(): HTMLElement[] {
+    return [
+      ...screen
+        .getByTestId("xmind-import-dialog")
+        .querySelectorAll<HTMLElement>(".import-list__row"),
+    ];
+  }
+
+  /** 第 index 行当前的目标文档名。 */
+  function rowName(index: number): string {
+    return importRows()[index]?.querySelector("input")?.value ?? "";
   }
 
   function importBatchRequestCount(): number {
@@ -375,15 +433,125 @@ describe("workspace home", () => {
     expect(submitButton()).toBeDisabled();
   });
 
-  it("blocks more than ten files in one batch", async () => {
+  it("accepts a hundred files in one batch but blocks a hundred and one", async () => {
     const input = await openImportDialog();
     await pickFiles(
       input,
-      Array.from({ length: 11 }, (_, index) => new File(["x"], `case-${String(index)}.xmind`)),
+      Array.from({ length: 100 }, (_, index) => new File(["x"], `case-${String(index)}.xmind`)),
     );
 
-    expect(screen.getByText(/单次最多提交 10 个文件，当前选了 11 个/u)).toBeInTheDocument();
+    expect(importRows()).toHaveLength(100);
+    expect(submitButton()).toBeEnabled();
+
+    await pickFiles(input, [new File(["x"], "one-too-many.xmind")]);
+
+    expect(screen.getByText(/单次最多提交 100 个文件，当前选了 101 个/u)).toBeInTheDocument();
     expect(submitButton()).toBeDisabled();
+  });
+
+  it("drops a whole folder onto the dialog and expands every .xmind inside", async () => {
+    await openImportDialog();
+    await dropOnImportDialog({
+      items: [
+        entryItem(
+          fakeDirectoryEntry("用例集", [
+            fakeFileEntry(new File(["x"], "b.xmind")),
+            fakeFileEntry(new File(["x"], "notes.txt")),
+            fakeDirectoryEntry("sub", [fakeFileEntry(new File(["x"], "c.xmind"))]),
+          ]),
+        ),
+      ],
+      files: [],
+    });
+
+    // 目录 API 返回的顺序是乱的,展开后会按路径重排。
+    expect(importRows()).toHaveLength(2);
+    expect(rowName(0)).toBe("b");
+    expect(rowName(1)).toBe("c");
+    expect(screen.getByText(/已加入 2 个文件/u)).toBeInTheDocument();
+    expect(screen.getByText(/忽略 1 个非 \.xmind 文件/u)).toBeInTheDocument();
+    expect(submitButton()).toBeEnabled();
+  });
+
+  it("disambiguates same-named files from different folders with a path suffix", async () => {
+    await openImportDialog();
+    await dropOnImportDialog({
+      items: [
+        entryItem(
+          fakeDirectoryEntry("用例集", [
+            fakeDirectoryEntry("子目录A", [fakeFileEntry(new File(["x"], "登录用例.xmind"))]),
+            fakeDirectoryEntry("子目录B", [fakeFileEntry(new File(["x"], "登录用例.xmind"))]),
+          ]),
+        ),
+      ],
+      files: [],
+    });
+
+    expect(rowName(0)).toBe("子目录A/登录用例");
+    expect(rowName(1)).toBe("子目录B/登录用例");
+    expect(submitButton()).toBeEnabled();
+  });
+
+  it("highlights the drop zone while dragging and resets when the drag leaves", async () => {
+    await openImportDialog();
+    const zone = screen.getByTestId("xmind-import-dialog");
+
+    await fireEvent.dragEnter(zone);
+    expect(zone).toHaveClass("import-drop-zone--over");
+
+    await fireEvent.dragEnter(zone);
+    await fireEvent.dragLeave(zone);
+    // 只离开一层还应该保持高亮(dragenter/dragleave 会在子元素间来回冒泡)。
+    expect(zone).toHaveClass("import-drop-zone--over");
+
+    await fireEvent.dragLeave(zone);
+    expect(zone).not.toHaveClass("import-drop-zone--over");
+  });
+
+  it("expands a whole folder picked through the directory input", async () => {
+    const filePicker = await openImportDialog();
+    expect(filePicker).toBeInTheDocument();
+    const folderInput = screen.getByLabelText(/选择文件夹/u);
+    if (!(folderInput instanceof HTMLInputElement)) throw new Error("目录输入框没有渲染。");
+
+    const nested = new File(["x"], "a.xmind");
+    Object.defineProperty(nested, "webkitRelativePath", { value: "用例集/sub/a.xmind" });
+    const sketch = new File(["x"], "sketch.txt");
+    Object.defineProperty(sketch, "webkitRelativePath", { value: "用例集/sketch.txt" });
+    Object.defineProperty(folderInput, "files", {
+      value: [nested, sketch],
+      writable: true,
+      configurable: true,
+    });
+
+    await fireEvent.change(folderInput);
+
+    expect(importRows()).toHaveLength(1);
+    expect(screen.getByText("用例集/sub/a.xmind")).toBeInTheDocument();
+    expect(rowName(0)).toBe("a");
+  });
+
+  it("clears both native file inputs when the dialog is reopened", async () => {
+    const filePicker = await openImportDialog();
+    await pickFiles(filePicker, [new File(["x"], "old.xmind")]);
+    const folderInput = screen.getByLabelText(/选择文件夹/u);
+    if (!(folderInput instanceof HTMLInputElement)) throw new Error("目录输入框没有渲染。");
+
+    // jsdom 不允许给 file input 赋非空 value,只能伪造关闭前残留的显示值。
+    for (const input of [filePicker, folderInput]) {
+      Object.defineProperty(input, "value", {
+        value: "C:\\fakepath\\old.xmind",
+        writable: true,
+        configurable: true,
+      });
+    }
+
+    await userEvent.click(screen.getByRole("button", { name: "取消" }));
+    await userEvent.click(screen.getByRole("button", { name: "导入 XMind" }));
+
+    expect(filePicker.value).toBe("");
+    expect(folderInput.value).toBe("");
+    expect(screen.queryByText("old.xmind")).not.toBeInTheDocument();
   });
 
   it("blocks two rows targeting the same document name", async () => {

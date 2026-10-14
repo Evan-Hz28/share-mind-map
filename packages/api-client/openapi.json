@@ -301,7 +301,7 @@
             "items": {
               "$ref": "#/components/schemas/ImportFilePreflightDto"
             },
-            "maxItems": 50,
+            "maxItems": 100,
             "minItems": 1,
             "type": "array"
           }

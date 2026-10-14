@@ -21,7 +21,7 @@ const safeMessages: Record<string, string> = {
   IMPORT_FILE_TOO_LARGE: "单个 .xmind 文件不能超过 20 MB。",
   IMPORT_JOB_NOT_FOUND: "导入任务已不存在，请刷新页面后重试。",
   IMPORT_NOT_FOUND: "导入任务已不存在，请刷新页面后重试。",
-  IMPORT_QUEUE_LIMIT_REACHED: "导入队列已满：同时处理的导入任务不能超过 10 个，请稍后再试。",
+  IMPORT_QUEUE_LIMIT_REACHED: "导入队列已满：请等当前导入任务跑完再提交，或减少一次提交的文件数。",
   IMPORT_RETRY_NOT_ALLOWED: "这个任务当前不能重试。",
   IMPORT_SOURCE_UNAVAILABLE: "本地原文件已不可用，请点「替换文件」重新选择。",
   IMPORT_STATE_CONFLICT: "任务状态已变化，请刷新后重试。",

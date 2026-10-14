@@ -9,6 +9,17 @@ import {
   type CompatibilityStatus,
 } from "./phase3.types.js";
 
+/**
+ * 批量导入的三道上限。按「一个文件夹拖进来」的用法放宽过一次:
+ * 单批 50 → 100,单用户活跃 10 → 150,单工作区活跃 50 → 300。
+ *
+ * 判定写的是「当前活跃数 + 本次文件数 > 上限」,所以后两个必须显著大于单批上限,
+ * 否则用户只要有一个别的任务在跑,一个满批就再也进不去了。
+ */
+const MAX_BATCH_JOBS = 100;
+const MAX_ACTIVE_JOBS_PER_USER = 150;
+const MAX_ACTIVE_JOBS_PER_WORKSPACE = 300;
+
 export interface ImportBatchRecord {
   id: string;
   workspaceId: string;
@@ -191,10 +202,10 @@ export class ImportRepository {
       }>;
     },
   ): Promise<void> {
-    if (input.jobs.length === 0 || input.jobs.length > 50) {
+    if (input.jobs.length === 0 || input.jobs.length > MAX_BATCH_JOBS) {
       throw new ImportRepositoryError(
         "IMPORT_QUEUE_LIMIT_REACHED",
-        "A batch must contain 1 to 50 files.",
+        `A batch must contain 1 to ${String(MAX_BATCH_JOBS)} files.`,
       );
     }
     const workspace = await transaction.execute<{ id: string }>(sql`
@@ -214,8 +225,8 @@ export class ImportRepository {
         AND phase IN ('waiting', 'uploading', 'parsing', 'persisting')
     `);
     if (
-      (waitingByUser.rows[0]?.count ?? 0) + input.jobs.length > 10 ||
-      (waitingByWorkspace.rows[0]?.count ?? 0) + input.jobs.length > 50
+      (waitingByUser.rows[0]?.count ?? 0) + input.jobs.length > MAX_ACTIVE_JOBS_PER_USER ||
+      (waitingByWorkspace.rows[0]?.count ?? 0) + input.jobs.length > MAX_ACTIVE_JOBS_PER_WORKSPACE
     ) {
       throw new ImportRepositoryError("IMPORT_QUEUE_LIMIT_REACHED", "Import queue limit reached.");
     }
@@ -247,47 +258,63 @@ export class ImportRepository {
         "Import storage quota exceeded.",
       );
     }
-    for (const job of input.jobs) {
-      const folder =
-        job.targetFolderId === null || job.targetFolderId === undefined
-          ? null
-          : await transaction.execute<{ count: number }>(sql`
-        SELECT count(*)::int AS count FROM documents d
-        JOIN folders f ON f.id = d.folder_id
-        WHERE d.folder_id = ${job.targetFolderId} AND f.workspace_id = ${input.workspaceId} AND d.trashed_at IS NULL
+    // 下面是三个集合查询,不是每个 job 一组:整段跑在 workspaces 的 FOR UPDATE 锁里,
+    // 100 个 job 逐个查会把锁持有多出两三百次往返。三道校验抛的都是
+    // IMPORT_TARGET_CONFLICT(API 侧统一映射成 DOCUMENT_NAME_CONFLICT),所以合并顺序不影响语义。
+    //
+    // 数组参数必须包一层 sql.param:sql 模板遇到 JS 数组会展开成元组 ($1, $2),
+    // 直接写 ANY(${ids}::uuid[]) 会被 Postgres 当成「record 转 uuid[]」报 42846。
+    // sql.param 把整个数组当成**一个**参数交给驱动,node-postgres 会序列化成数组字面量。
+    const folderIds = [
+      ...new Set(
+        input.jobs
+          .map((job) => job.targetFolderId)
+          .filter((folderId): folderId is string => typeof folderId === "string"),
+      ),
+    ];
+    if (folderIds.length > 0) {
+      const owned = await transaction.execute<{ id: string }>(sql`
+        SELECT id FROM folders
+        WHERE id = ANY(${sql.param(folderIds)}::uuid[]) AND workspace_id = ${input.workspaceId} AND trashed_at IS NULL
       `);
-      if (job.targetFolderId !== null && job.targetFolderId !== undefined) {
-        const ownership = await transaction.execute<{ id: string }>(sql`
-          SELECT id FROM folders WHERE id = ${job.targetFolderId} AND workspace_id = ${input.workspaceId} AND trashed_at IS NULL
-        `);
-        if (ownership.rows[0] === undefined) {
-          throw new ImportRepositoryError(
-            "IMPORT_TARGET_CONFLICT",
-            "Target folder is not in workspace.",
-          );
-        }
+      const ownedIds = new Set(owned.rows.map((row) => row.id));
+      if (folderIds.some((folderId) => !ownedIds.has(folderId))) {
+        throw new ImportRepositoryError(
+          "IMPORT_TARGET_CONFLICT",
+          "Target folder is not in workspace.",
+        );
       }
-      if (folder !== null && (folder.rows[0]?.count ?? 0) >= 1000) {
+      const counts = await transaction.execute<{ folder_id: string; count: number }>(sql`
+        SELECT d.folder_id, count(*)::int AS count FROM documents d
+        JOIN folders f ON f.id = d.folder_id
+        WHERE d.folder_id = ANY(${sql.param(folderIds)}::uuid[])
+          AND f.workspace_id = ${input.workspaceId} AND d.trashed_at IS NULL
+        GROUP BY d.folder_id
+      `);
+      const used = new Map(counts.rows.map((row) => [row.folder_id, row.count]));
+      if (folderIds.some((folderId) => (used.get(folderId) ?? 0) >= 1000)) {
         throw new ImportRepositoryError(
           "IMPORT_TARGET_CONFLICT",
           "Target folder document limit reached.",
         );
       }
-      const conflict = await transaction.execute<{ id: string }>(sql`
-        SELECT id FROM documents
-        WHERE workspace_id = ${input.workspaceId} AND name_normalized = ${job.targetNameNormalized} AND trashed_at IS NULL
-        UNION ALL
-        SELECT id FROM import_jobs
-        WHERE workspace_id = ${input.workspaceId} AND target_name_normalized = ${job.targetNameNormalized}
-          AND phase IN ('waiting', 'uploading', 'parsing', 'persisting', 'succeeded')
-        LIMIT 1
-      `);
-      if (conflict.rows[0] !== undefined) {
-        throw new ImportRepositoryError(
-          "IMPORT_TARGET_CONFLICT",
-          "Target document name already exists.",
-        );
-      }
+    }
+    const targetNames = [...new Set(input.jobs.map((job) => job.targetNameNormalized))];
+    const conflict = await transaction.execute<{ name: string }>(sql`
+      SELECT name_normalized AS name FROM documents
+      WHERE workspace_id = ${input.workspaceId} AND name_normalized = ANY(${sql.param(targetNames)}::text[])
+        AND trashed_at IS NULL
+      UNION
+      SELECT target_name_normalized AS name FROM import_jobs
+      WHERE workspace_id = ${input.workspaceId}
+        AND target_name_normalized = ANY(${sql.param(targetNames)}::text[])
+        AND phase IN ('waiting', 'uploading', 'parsing', 'persisting', 'succeeded')
+    `);
+    if (conflict.rows[0] !== undefined) {
+      throw new ImportRepositoryError(
+        "IMPORT_TARGET_CONFLICT",
+        "Target document name already exists.",
+      );
     }
     await transaction.execute(sql`
       INSERT INTO import_batches (id, workspace_id, requested_by, total_jobs, expected_bytes, status)
@@ -313,6 +340,18 @@ export class ImportRepository {
     );
     const row = result.rows[0];
     return row === undefined ? null : toBatch(row);
+  }
+
+  /**
+   * 整批任务一次查完。读接口是被前端每 500ms 轮询的,100 个任务逐个 findJob
+   * 会变成 101 次查询,必须走这条。
+   */
+  public async listJobsByBatch(database: Database, batchId: string): Promise<ImportJobRecord[]> {
+    const result = await database.$client.query<JobRow>(
+      `SELECT ${jobColumns} FROM import_jobs WHERE batch_id = $1 ORDER BY created_at ASC, id ASC`,
+      [batchId],
+    );
+    return result.rows.map((row) => toJob(row));
   }
 
   public async findJob(database: Database, jobId: string): Promise<ImportJobRecord | null> {

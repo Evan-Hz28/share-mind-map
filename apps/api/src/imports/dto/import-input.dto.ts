@@ -41,7 +41,7 @@ export class ImportFilePreflightDto {
 }
 
 export class CreateImportBatchDto {
-  @ApiProperty({ type: [ImportFilePreflightDto], minItems: 1, maxItems: 50 })
+  @ApiProperty({ type: [ImportFilePreflightDto], minItems: 1, maxItems: 100 })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ImportFilePreflightDto)

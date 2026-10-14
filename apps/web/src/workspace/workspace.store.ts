@@ -39,6 +39,22 @@ import { randomUuid } from "../utils/uuid.js";
 
 let importRealtimeSocket: Socket | null = null;
 
+const IMPORT_POLL_INTERVAL_MS = 500;
+const IMPORT_TERMINAL_STATUSES = new Set(["succeeded", "partial", "failed", "cancelled"]);
+
+function isImportTerminal(status: string | undefined): boolean {
+  return status !== undefined && IMPORT_TERMINAL_STATUSES.has(status);
+}
+
+/**
+ * 轮询预算。以前是固定 600 次(≈5 分钟),对整目录导入太紧:批量跑完了预算也过期,
+ * importProgress 停在非终态,即使全部成功弹窗也不会自动关。改成按任务数放大,
+ * 每个任务留 30 秒,上限一小时。
+ */
+function importPollRounds(totalJobs: number): number {
+  return Math.min(Math.max(600, Math.trunc(totalJobs) * 60), 7_200);
+}
+
 interface WorkspaceState {
   workspaceId: string | null;
   folders: FolderDto[];
@@ -312,7 +328,10 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
           });
           if (upload.data === undefined) this.error = toApiFailure(upload.error);
         }
-        for (let attempt = 0; attempt < 600; attempt += 1) {
+        const rounds = importPollRounds(batch.totalJobs);
+        for (let attempt = 0; attempt < rounds; attempt += 1) {
+          // 实时推送往往已经先把终态写进来了,先看一眼可以少一次往返、也少等一轮。
+          if (isImportTerminal(this.importProgress.status)) break;
           const progress = await getImportBatch({
             client: apiClient,
             path: { workspaceId: this.workspaceId, batchId: batch.id },
@@ -320,10 +339,9 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
           if (progress.data !== undefined) {
             this.importProgress = progress.data;
             this.importJobs = progress.data.jobs;
-            if (["succeeded", "partial", "failed", "cancelled"].includes(progress.data.status))
-              break;
+            if (isImportTerminal(progress.data.status)) break;
           }
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, IMPORT_POLL_INTERVAL_MS));
         }
         await this.loadWorkspace(this.workspaceId);
         this.closeImportRealtime();
@@ -458,7 +476,9 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
       this.importJobs = this.importJobs.map((job) => (job.id === jobId ? upload.data : job));
       this.importing = true;
       try {
-        for (let attempt = 0; attempt < 600; attempt += 1) {
+        const rounds = importPollRounds(this.importProgress?.totalJobs ?? 0);
+        for (let attempt = 0; attempt < rounds; attempt += 1) {
+          if (isImportTerminal(this.importProgress?.status)) break;
           const progress = await getImportBatch({
             client: apiClient,
             path: { workspaceId: this.workspaceId, batchId: this.importBatchId },
@@ -466,10 +486,9 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
           if (progress.data !== undefined) {
             this.importProgress = progress.data;
             this.importJobs = progress.data.jobs;
-            if (["succeeded", "partial", "failed", "cancelled"].includes(progress.data.status))
-              break;
+            if (isImportTerminal(progress.data.status)) break;
           }
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, IMPORT_POLL_INTERVAL_MS));
         }
         await this.loadWorkspace(this.workspaceId);
         this.closeImportRealtime();

@@ -156,13 +156,7 @@ export class ImportsService implements OnApplicationShutdown {
     ) {
       throw new ApiError("PERMISSION_DENIED");
     }
-    const rows = await this.database.$client.query<{ id: string }>(
-      "SELECT id FROM import_jobs WHERE batch_id = $1 ORDER BY created_at ASC, id ASC",
-      [batchId],
-    );
-    const jobs = await Promise.all(
-      rows.rows.map((row) => this.imports.findJob(this.database, row.id)),
-    );
+    const jobs = await this.imports.listJobsByBatch(this.database, batchId);
     return {
       id: batch.id,
       status: batch.status,
