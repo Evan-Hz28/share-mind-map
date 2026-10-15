@@ -250,7 +250,7 @@
           "newPassword": {
             "format": "password",
             "maxLength": 128,
-            "minLength": 12,
+            "minLength": 6,
             "type": "string",
             "writeOnly": true
           }
@@ -840,7 +840,7 @@
           "password": {
             "format": "password",
             "maxLength": 128,
-            "minLength": 12,
+            "minLength": 6,
             "type": "string",
             "writeOnly": true
           }

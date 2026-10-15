@@ -22,12 +22,18 @@ describe("login-name and password policy", () => {
     },
   );
 
-  it.each([11, 129])("rejects password length %s", async (length) => {
+  it.each([5, 129])("rejects password length %s", async (length) => {
     const passwords = new PasswordService(testPasswordConfig);
 
     await expect(passwords.hash("x".repeat(length))).rejects.toMatchObject({
       code: "INVALID_INPUT",
     });
+  });
+
+  it("accepts exactly the minimum length of six", async () => {
+    const passwords = new PasswordService(testPasswordConfig);
+
+    await expect(passwords.hash("abc123")).resolves.toMatch(/^\$argon2id\$/);
   });
 
   it("counts Unicode code points rather than UTF-16 code units", async () => {

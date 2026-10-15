@@ -1,7 +1,11 @@
 import { ApiError } from "../../platform/errors/api-error.js";
 
 const loginNamePattern = /^[A-Za-z0-9._-]{3,64}$/;
-const minimumPasswordLength = 12;
+/**
+ * 下限只用于**设置**密码(见 validatePassword 的调用点):登录时只跑 verify,
+ * 所以调低它不会让任何已有账号登不进来,老密码也不会被要求改。
+ */
+const minimumPasswordLength = 6;
 const maximumPasswordLength = 128;
 
 export function validateLoginName(loginName: string): void {
