@@ -60,10 +60,10 @@ test("renders login, workspace, and administration at the supported viewport", a
   await page.getByLabel("登录名").fill(loginName);
   await page.getByLabel("密码").fill(password);
   await page.getByRole("button", { name: "登录" }).click();
-  await expect(page).toHaveURL(/\/workspace$/u);
+  await expect(page).toHaveURL(/\/home$/u);
   await expectStableLayout(page, mobile);
   await page.screenshot({
-    path: `docs/verification/screenshots/workspace-${testInfo.project.name}.png`,
+    path: `docs/verification/screenshots/home-${testInfo.project.name}.png`,
     fullPage: true,
   });
 

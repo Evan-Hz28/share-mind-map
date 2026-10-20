@@ -36,7 +36,7 @@ describe("application routing and shell", () => {
     expect(router.currentRoute.value.path).toBe("/change-password");
   });
 
-  it("redirects anonymous users to login and non-Admins to workspace", async () => {
+  it("redirects anonymous users to login and non-Admins to home", async () => {
     const pinia = createPinia();
     setActivePinia(pinia);
     const auth = useAuthStore();
@@ -47,7 +47,15 @@ describe("application routing and shell", () => {
 
     auth.$patch({ state: "authenticated", session: sessionResponse("reader"), csrfToken: "csrf" });
     await anonymousRouter.push("/admin/members");
-    expect(anonymousRouter.currentRoute.value.path).toBe("/workspace");
+    expect(anonymousRouter.currentRoute.value.path).toBe("/home");
+  });
+
+  it("opens the dashboard at the application root", async () => {
+    const { router } = setup("reader");
+
+    await router.push("/");
+
+    expect(router.currentRoute.value.name).toBe("home");
   });
 
   it("registers an authenticated document detail route", async () => {
@@ -96,6 +104,7 @@ describe("application routing and shell", () => {
 
     expect(screen.getByLabelText("Kitar TestHub")).toBeInTheDocument();
     expect(screen.getByText("产品工作区")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "首页" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "用例库" })).toHaveClass("router-link-active");
     expect(screen.getByRole("link", { name: "成员管理" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "权限与审计" })).toBeInTheDocument();
@@ -113,7 +122,7 @@ describe("application routing and shell", () => {
 
     expect(screen.getByRole("complementary", { name: "侧边导航" })).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "页面标签" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "关闭 用例库" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "关闭 首页" })).not.toBeInTheDocument();
 
     await router.push("/workspace/documents/00000000-0000-7000-8000-000000000101");
     await nextTick();
@@ -136,7 +145,7 @@ describe("application routing and shell", () => {
     await nextTick();
 
     // 首页标签固定，不可关闭；新页面各带一个关闭按钮。
-    expect(screen.queryByRole("button", { name: "关闭 用例库" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "关闭 首页" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "关闭 成员管理" }));
 
     expect(router.currentRoute.value.name).toBe("workspace");

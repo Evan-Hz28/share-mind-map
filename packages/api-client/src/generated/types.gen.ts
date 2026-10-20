@@ -385,6 +385,18 @@ export type UpdateDocumentDto = {
     name?: string;
 };
 
+export type WorkspaceOverviewDto = {
+    activeImportJobs: number;
+    documentCount: number;
+    folderCount: number;
+    nodeCount: number;
+    /**
+     * Only counted for administrators; zero for other roles.
+     */
+    pendingEditRequests: number;
+    workspaceId: string;
+};
+
 export type CreatedMemberResponseDtoWritable = {
     member: MemberResponseDto;
 };
@@ -1407,6 +1419,27 @@ export type UploadImportJobResponses = {
 };
 
 export type UploadImportJobResponse = UploadImportJobResponses[keyof UploadImportJobResponses];
+
+export type GetWorkspaceOverviewData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/overview';
+};
+
+export type GetWorkspaceOverviewResponses = {
+    200: WorkspaceOverviewDto;
+};
+
+export type GetWorkspaceOverviewResponse = GetWorkspaceOverviewResponses[keyof GetWorkspaceOverviewResponses];
 
 export type HealthLiveData = {
     body?: never;

@@ -14,7 +14,7 @@ const form = reactive({ loginName: "", password: "" });
 
 async function submit(): Promise<void> {
   if (!(await auth.login({ loginName: form.loginName.trim(), password: form.password }))) return;
-  await router.replace({ name: auth.mustChangePassword ? "change-password" : "workspace" });
+  await router.replace({ name: auth.mustChangePassword ? "change-password" : "home" });
 }
 </script>
 

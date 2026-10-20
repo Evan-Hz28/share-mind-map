@@ -2,16 +2,22 @@
 import {
   Bell,
   Document,
+  Download,
   Edit,
+  Files,
   Folder,
+  FolderOpened,
+  Grid,
+  List,
   MoreFilled,
   Plus,
+  Search,
   Sort,
   Upload,
 } from "@element-plus/icons-vue";
 import { ElButton, ElDialog, ElIcon, ElInput, ElTag } from "element-plus";
 import { computed, onMounted, reactive, ref } from "vue";
-import { RouterLink } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
 import { useAuthStore } from "../auth/auth.store.js";
@@ -48,6 +54,8 @@ let nextImportRowId = 1;
 
 const auth = useAuthStore();
 const workspace = useWorkspaceStore();
+const route = useRoute();
+const router = useRouter();
 const dialogOpen = ref(false);
 const dialogKind = ref<"folder" | "document">("folder");
 const editingFolderId = ref<string | null>(null);
@@ -63,6 +71,11 @@ const importSummary = ref<string | null>(null);
 /** dragenter/dragleave 会在子元素之间反复冒泡,用计数抵消,免得高亮闪烁。 */
 let importDragDepth = 0;
 const moreMenuDocumentId = ref<string | null>(null);
+/** "all" / "unassigned" / 文件夹 id。A 段先在已加载的文档上做筛选。 */
+const selectedFolderId = ref<string>("all");
+const folderSearch = ref("");
+const documentSearch = ref("");
+const viewMode = ref<"list" | "grid">("list");
 
 const workspaceId = computed(() => auth.session?.defaultWorkspace.id ?? "");
 const canEdit = computed(() => auth.role === "editor" || auth.role === "admin");
@@ -113,6 +126,110 @@ const canSubmitImport = computed(
 const importSlotsLeft = computed(() =>
   Math.max(0, IMPORT_BATCH_MAX_FILES - importRows.value.length),
 );
+
+const selectedFolder = computed(
+  () => workspace.folders.find((folder) => folder.id === selectedFolderId.value) ?? null,
+);
+const selectedFolderLabel = computed(() => {
+  if (selectedFolderId.value === "all") return "全部文件";
+  if (selectedFolderId.value === "unassigned") return "未归档";
+  return selectedFolder.value?.name ?? "全部文件";
+});
+const libraryDescription = computed(() => {
+  if (selectedFolderId.value === "all") return "浏览工作区内全部文件夹和未归档的文档。";
+  if (selectedFolderId.value === "unassigned") return "查看尚未归入任何文件夹的文档。";
+  return "查看该文件夹下的文档。";
+});
+const normalizedFolderQuery = computed(() => folderSearch.value.trim().toLocaleLowerCase("zh-CN"));
+const visibleFolders = computed(() => {
+  const query = normalizedFolderQuery.value;
+  if (query === "") return workspace.folders;
+  return workspace.folders.filter((folder) =>
+    folder.name.toLocaleLowerCase("zh-CN").includes(query),
+  );
+});
+/**
+ * A 段没有按文件夹查询的 API,这里只统计已加载的文档。
+ * 文档数超过一页时,「全部文件」用 `50+` 标出还有未加载的部分。
+ */
+const documentCounts = computed(() => {
+  const counts = new Map<string, number>();
+  for (const document of workspace.documents) {
+    if (document.folderId === null || document.folderId === undefined) continue;
+    counts.set(document.folderId, (counts.get(document.folderId) ?? 0) + 1);
+  }
+  return counts;
+});
+const unassignedCount = computed(
+  () =>
+    workspace.documents.filter(
+      (document) => document.folderId === null || document.folderId === undefined,
+    ).length,
+);
+const totalCountLabel = computed(
+  () =>
+    `${String(workspace.documents.length)}${workspace.documentCursor === null ? "" : "+"}`,
+);
+const scopedDocuments = computed(() => {
+  if (selectedFolderId.value === "all") return workspace.documents;
+  if (selectedFolderId.value === "unassigned") {
+    return workspace.documents.filter(
+      (document) => document.folderId === null || document.folderId === undefined,
+    );
+  }
+  return workspace.documents.filter((document) => document.folderId === selectedFolderId.value);
+});
+const visibleDocuments = computed(() => {
+  const query = documentSearch.value.trim().toLocaleLowerCase("zh-CN");
+  if (query === "") return scopedDocuments.value;
+  return scopedDocuments.value.filter((document) =>
+    document.name.toLocaleLowerCase("zh-CN").includes(query),
+  );
+});
+const documentEmptyMessage = computed(() => {
+  if (documentSearch.value.trim() !== "") return "没有匹配的文档。";
+  if (selectedFolderId.value !== "all") return "此文件夹还没有文档。";
+  return "暂无文档。";
+});
+
+const folderNames = computed(
+  () => new Map(workspace.folders.map((folder) => [folder.id, folder.name])),
+);
+
+function folderLabel(folderId: string | null | undefined): string {
+  if (folderId === null || folderId === undefined) return "未归档";
+  return folderNames.value.get(folderId) ?? "未归档";
+}
+
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function folderCount(folderId: string): number {
+  return documentCounts.value.get(folderId) ?? 0;
+}
+
+function selectAllDocuments(): void {
+  selectedFolderId.value = "all";
+  documentSearch.value = "";
+}
+
+function selectUnassigned(): void {
+  selectedFolderId.value = "unassigned";
+  documentSearch.value = "";
+}
+
+function selectFolder(folderId: string): void {
+  selectedFolderId.value = folderId;
+  documentSearch.value = "";
+}
 
 function openCreateFolder(): void {
   dialogKind.value = "folder";
@@ -327,19 +444,33 @@ async function openNotifications(): Promise<void> {
   if (workspace.notifications.length === 0) await workspace.loadNotifications();
 }
 
-onMounted(() => void load());
+/**
+ * 首页的「新建文档 / 导入 XMind」快捷入口会带 `?action=` 跳过来。
+ * 打开对应弹窗后立刻清掉查询参数,刷新或前进后退时不会再次弹出。
+ */
+async function runQuickAction(): Promise<void> {
+  const action = route.query.action;
+  if (typeof action !== "string") return;
+  if (action === "import" && canEdit.value) openImport();
+  else if (action === "create-document" && canEdit.value) openDocument(null);
+  else return;
+  await router.replace({ name: "workspace" });
+}
+
+onMounted(() => void load().then(runQuickAction));
 </script>
 
 <template>
   <section class="workspace-home" aria-labelledby="workspace-title">
-    <header class="workspace-hero page-heading page-heading--with-action">
-      <div class="workspace-hero__intro">
-        <div class="workspace-hero__icon" aria-hidden="true"><Folder /></div>
-        <div>
-          <p class="eyebrow">工作区</p>
-          <h1 id="workspace-title">用例库</h1>
-          <p>浏览一级文件夹和未归档文档。</p>
-        </div>
+    <header class="library-header page-heading page-heading--with-action">
+      <div class="library-header__intro">
+        <nav class="library-breadcrumb" aria-label="面包屑">
+          <button type="button" @click="selectAllDocuments">用例库</button>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">{{ selectedFolderLabel }}</span>
+        </nav>
+        <h1 id="workspace-title">{{ selectedFolderLabel }}</h1>
+        <p>{{ libraryDescription }}</p>
       </div>
       <div class="workspace-actions">
         <ElButton v-if="auth.role === 'reader'" @click="workspace.requestEditPermission()">
@@ -362,41 +493,6 @@ onMounted(() => void load());
       <strong>配额提醒</strong><span>{{ quotaMessage }}</span>
     </div>
 
-    <div class="workspace-toolbar workspace-toolbar--summary" role="region" aria-label="工作区统计">
-      <div class="workspace-toolbar__summary">
-        <Document aria-hidden="true" />
-        <span class="workspace-count"
-          >{{ workspace.folders.length }} 个文件夹 · {{ workspace.documents.length }} 个文档</span
-        >
-      </div>
-      <div class="workspace-toolbar__actions">
-        <ElIcon aria-hidden="true"><Sort /></ElIcon>
-        <label for="document-sort" class="visually-hidden">文档排序</label>
-        <select
-          id="document-sort"
-          :value="workspace.sort"
-          @change="
-            workspace.changeSort(($event.target as HTMLSelectElement).value as 'updatedAt' | 'name')
-          "
-        >
-          <option value="updatedAt">更新时间倒序</option>
-          <option value="name">名称正序</option>
-        </select>
-        <button
-          class="notification-button"
-          type="button"
-          aria-label="通知"
-          @click="openNotifications"
-        >
-          <Bell aria-hidden="true" /><span
-            v-if="workspace.unreadCount > 0"
-            class="notification-count"
-            >{{ workspace.unreadCount }}</span
-          >
-        </button>
-      </div>
-    </div>
-
     <div v-if="workspace.loading" class="content-state" role="status">
       <span class="loading-indicator" aria-hidden="true" />正在加载工作台
     </div>
@@ -409,57 +505,259 @@ onMounted(() => void load());
       <h2>还没有文档</h2>
       <p>{{ canEdit ? "创建一个文件夹或空白文档开始整理。" : "等待编辑者创建文档。" }}</p>
     </div>
-    <div v-else class="workspace-board">
-      <section class="workspace-panel workspace-panel--folders" aria-labelledby="folders-heading">
-        <header class="workspace-panel__header">
-          <h2 id="folders-heading"><Folder aria-hidden="true" />一级文件夹</h2>
-          <div class="workspace-panel__header-actions">
-            <span class="workspace-count-pill">{{ workspace.folders.length }}</span>
-            <button
-              v-if="canEdit"
-              class="workspace-panel__add"
-              type="button"
-              aria-label="在一级文件夹中新建"
-              @click="openCreateFolder"
-            >
-              <Plus aria-hidden="true" />
-            </button>
-          </div>
+    <div v-else class="library-layout">
+      <aside class="library-sidebar" aria-labelledby="library-folders-heading">
+        <header class="library-sidebar__header">
+          <h2 id="library-folders-heading"><FolderOpened aria-hidden="true" />用例库</h2>
+          <button
+            v-if="canEdit"
+            class="library-sidebar__add"
+            type="button"
+            aria-label="在一级文件夹中新建"
+            @click="openCreateFolder"
+          >
+            <Plus aria-hidden="true" />
+          </button>
         </header>
-        <div v-if="workspace.folders.length === 0" class="panel-empty panel-empty--illustrated">
-          <Folder aria-hidden="true" />
-          <strong>暂无文件夹</strong>
-          <span>创建文件夹来整理你的思维导图文档。</span>
-          <ElButton v-if="canEdit" class="panel-empty__action" @click="openCreateFolder">
+        <div class="library-sidebar__search">
+          <ElInput
+            v-model="folderSearch"
+            placeholder="搜索文件夹…"
+            aria-label="搜索文件夹"
+            clearable
+          >
+            <template #prefix><ElIcon><Search /></ElIcon></template>
+          </ElInput>
+        </div>
+        <ul class="library-tree">
+          <li>
+            <button
+              class="library-tree__item"
+              :class="{ 'library-tree__item--active': selectedFolderId === 'all' }"
+              type="button"
+              @click="selectAllDocuments"
+            >
+              <Files aria-hidden="true" />
+              <span class="library-tree__name">全部文件</span>
+              <span class="library-tree__count">{{ totalCountLabel }}</span>
+            </button>
+          </li>
+          <li>
+            <button
+              class="library-tree__item"
+              :class="{ 'library-tree__item--active': selectedFolderId === 'unassigned' }"
+              type="button"
+              @click="selectUnassigned"
+            >
+              <Folder aria-hidden="true" />
+              <span class="library-tree__name">未归档</span>
+              <span class="library-tree__count">{{ unassignedCount }}</span>
+            </button>
+          </li>
+          <li v-for="folder in visibleFolders" :key="folder.id" class="library-tree__folder">
+            <div
+              class="library-tree__row"
+              :class="{ 'library-tree__row--active': selectedFolderId === folder.id }"
+            >
+              <button
+                class="library-tree__item"
+                type="button"
+                @click="selectFolder(folder.id)"
+              >
+                <Folder aria-hidden="true" />
+                <span class="library-tree__name">{{ folder.name }}</span>
+                <span class="library-tree__count" :title="`已加载 ${folderCount(folder.id)} 篇`">{{
+                  folderCount(folder.id)
+                }}</span>
+              </button>
+              <button
+                v-if="canEdit"
+                class="library-tree__rename"
+                type="button"
+                :aria-label="`重命名 ${folder.name}`"
+                @click="openRenameFolder(folder.id, folder.name)"
+              >
+                重命名
+              </button>
+            </div>
+          </li>
+        </ul>
+        <div v-if="workspace.folders.length === 0" class="library-sidebar__empty">
+          <p>暂无文件夹</p>
+          <ElButton v-if="canEdit" size="small" @click="openCreateFolder">
             <Plus aria-hidden="true" />新建文件夹
           </ElButton>
         </div>
-        <ul v-else class="workspace-list workspace-folder-list">
-          <li v-for="folder in workspace.folders" :key="folder.id" class="workspace-list__item">
-            <Folder aria-hidden="true" /><span class="workspace-list__name">{{ folder.name }}</span
-            ><button
-              v-if="canEdit"
-              type="button"
-              :aria-label="`重命名 ${folder.name}`"
-              @click="openRenameFolder(folder.id, folder.name)"
+        <p v-else-if="visibleFolders.length === 0" class="library-sidebar__empty">
+          没有匹配的文件夹
+        </p>
+        <p class="library-sidebar__hint">文件夹数量基于已加载的文档统计。</p>
+      </aside>
+
+      <section class="library-content" aria-labelledby="documents-heading">
+        <h2 id="documents-heading" class="visually-hidden">文档</h2>
+        <div class="library-toolbar">
+          <ElInput
+            v-model="documentSearch"
+            class="library-toolbar__search"
+            placeholder="搜索当前文件夹下的文档…"
+            aria-label="搜索文档"
+            clearable
+          >
+            <template #prefix><ElIcon><Search /></ElIcon></template>
+          </ElInput>
+          <div class="library-toolbar__actions">
+            <ElIcon aria-hidden="true"><Sort /></ElIcon>
+            <label for="document-sort" class="visually-hidden">文档排序</label>
+            <select
+              id="document-sort"
+              :value="workspace.sort"
+              @change="
+                workspace.changeSort(($event.target as HTMLSelectElement).value as 'updatedAt' | 'name')
+              "
             >
-              重命名
+              <option value="updatedAt">更新时间倒序</option>
+              <option value="name">名称正序</option>
+            </select>
+            <div class="view-toggle" role="group" aria-label="视图切换">
+              <button
+                type="button"
+                :class="{ 'view-toggle__button--active': viewMode === 'list' }"
+                :aria-pressed="viewMode === 'list'"
+                aria-label="列表视图"
+                title="列表视图"
+                @click="viewMode = 'list'"
+              >
+                <List aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                :class="{ 'view-toggle__button--active': viewMode === 'grid' }"
+                :aria-pressed="viewMode === 'grid'"
+                aria-label="网格视图"
+                title="网格视图"
+                @click="viewMode = 'grid'"
+              >
+                <Grid aria-hidden="true" />
+              </button>
+            </div>
+            <button
+              class="notification-button"
+              type="button"
+              aria-label="通知"
+              @click="openNotifications"
+            >
+              <Bell aria-hidden="true" />
+              <span v-if="workspace.unreadCount > 0" class="notification-count">{{
+                workspace.unreadCount
+              }}</span>
             </button>
-          </li>
-        </ul>
-      </section>
-      <section
-        class="workspace-panel workspace-panel--documents"
-        aria-labelledby="documents-heading"
-      >
-        <header class="workspace-panel__header">
-          <h2 id="documents-heading"><Document aria-hidden="true" />文档</h2>
-          <span class="workspace-count-pill">{{ workspace.documents.length }}</span>
-        </header>
-        <div v-if="workspace.documents.length === 0" class="panel-empty">暂无未归档文档</div>
-        <ul v-else class="workspace-list">
-          <li
-            v-for="document in workspace.documents"
+          </div>
+        </div>
+
+        <div v-if="visibleDocuments.length === 0" class="content-state library-empty">
+          <Document class="state-icon" aria-hidden="true" />
+          <p>{{ documentEmptyMessage }}</p>
+        </div>
+        <div
+          v-else-if="viewMode === 'list'"
+          class="doc-table-wrap"
+          :class="{ 'doc-table-wrap--menu-open': moreMenuDocumentId !== null }"
+        >
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th scope="col">名称</th>
+                <th scope="col">位置</th>
+                <th scope="col">版本</th>
+                <th scope="col">节点数</th>
+                <th scope="col">最后更新</th>
+                <th scope="col" class="doc-table__actions-heading">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="document in visibleDocuments" :key="document.id">
+                <td>
+                  <div class="doc-table__name">
+                    <span class="doc-table__icon" aria-hidden="true"><Document /></span>
+                    <div>
+                      <RouterLink
+                        class="doc-table__link"
+                        :to="{ name: 'document', params: { documentId: document.id } }"
+                      >
+                        {{ document.name }}
+                      </RouterLink>
+                      <div class="doc-table__tags">
+                        <span
+                          class="compatibility-status"
+                          :title="getCompatibilityMeta(document.compatibilityStatus).description"
+                          :aria-label="getCompatibilityMeta(document.compatibilityStatus).description"
+                          tabindex="0"
+                        >
+                          <ElTag
+                            size="small"
+                            :type="document.compatibilityStatus === 'full' ? 'success' : 'warning'"
+                          >
+                            兼容性：{{ getCompatibilityMeta(document.compatibilityStatus).label }}
+                          </ElTag>
+                        </span>
+                        <ElTag size="small" type="info">只读快照</ElTag>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td class="doc-table__location">{{ folderLabel(document.folderId) }}</td>
+                <td>v{{ document.currentVersion }}</td>
+                <td>{{ document.nodeCount }}</td>
+                <td class="doc-table__updated">{{ formatDateTime(document.updatedAt) }}</td>
+                <td>
+                  <div class="doc-table__actions">
+                    <button
+                      class="doc-table__action doc-table__action--icon"
+                      type="button"
+                      aria-label="导出 XMind"
+                      title="导出 XMind"
+                      @click="workspace.exportDocument(document.id)"
+                    >
+                      <Download aria-hidden="true" />
+                    </button>
+                    <button
+                      v-if="canEdit"
+                      class="doc-table__action doc-table__action--icon"
+                      type="button"
+                      :aria-label="`编辑 ${document.name}`"
+                      :title="`编辑 ${document.name}`"
+                      @click="openDocument(document.id, document.name, document.folderId)"
+                    >
+                      <Edit aria-hidden="true" />
+                    </button>
+                    <button
+                      v-if="canEdit"
+                      class="doc-table__more"
+                      type="button"
+                      :aria-label="`更多操作 ${document.name}`"
+                      :aria-expanded="moreMenuDocumentId === document.id"
+                      @click="toggleDocumentMenu(document.id)"
+                    >
+                      <MoreFilled />
+                    </button>
+                    <div
+                      v-if="moreMenuDocumentId === document.id"
+                      class="popover-menu popover-menu--right doc-table__menu"
+                    >
+                      <button type="button" @click="deleteDocument(document.id, document.name)">
+                        删除文档
+                      </button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="workspace-document-grid">
+          <article
+            v-for="document in visibleDocuments"
             :key="document.id"
             class="workspace-document-card"
           >
@@ -471,7 +769,10 @@ onMounted(() => void load());
               :to="{ name: 'document', params: { documentId: document.id } }"
             >
               <strong>{{ document.name }}</strong>
-              <small>版本 {{ document.currentVersion }} · {{ document.nodeCount }} 个节点</small>
+              <small>
+                版本 {{ document.currentVersion }} · {{ document.nodeCount }} 个节点 ·
+                {{ folderLabel(document.folderId) }}
+              </small>
             </RouterLink>
             <div class="workspace-document-card__meta">
               <span
@@ -483,8 +784,9 @@ onMounted(() => void load());
                 <ElTag
                   size="small"
                   :type="document.compatibilityStatus === 'full' ? 'success' : 'warning'"
-                  >兼容性：{{ getCompatibilityMeta(document.compatibilityStatus).label }}</ElTag
                 >
+                  兼容性：{{ getCompatibilityMeta(document.compatibilityStatus).label }}
+                </ElTag>
               </span>
               <ElTag size="small" type="info">只读快照</ElTag>
             </div>
@@ -497,8 +799,8 @@ onMounted(() => void load());
                 导出 XMind
               </button>
               <button
-                class="workspace-document-card__action workspace-document-card__action--primary"
                 v-if="canEdit"
+                class="workspace-document-card__action workspace-document-card__action--primary"
                 type="button"
                 :aria-label="`编辑 ${document.name}`"
                 @click="openDocument(document.id, document.name, document.folderId)"
@@ -524,11 +826,15 @@ onMounted(() => void load());
                 </button>
               </div>
             </div>
-          </li>
-        </ul>
-        <ElButton v-if="workspace.documentCursor" text @click="workspace.loadMoreDocuments"
-          >加载更多</ElButton
-        >
+          </article>
+        </div>
+
+        <footer class="library-footer">
+          <span>共 {{ visibleDocuments.length }} 篇</span>
+          <ElButton v-if="workspace.documentCursor" text @click="workspace.loadMoreDocuments"
+            >加载更多</ElButton
+          >
+        </footer>
         <p v-if="isAdmin && workspace.permissionRequests.length > 0" class="admin-hint">
           有 {{ workspace.permissionRequests.length }} 条待审批申请，请前往管理面板处理。
         </p>

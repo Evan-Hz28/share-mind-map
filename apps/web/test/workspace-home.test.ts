@@ -156,9 +156,6 @@ describe("workspace home", () => {
     expect(screen.getByRole("button", { name: "新建文件夹" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "新建文档" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "导入 XMind" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "工作区统计" })).toHaveClass(
-      "workspace-toolbar--summary",
-    );
     expect(await screen.findByText("ViewHistory客户端测试用例")).toBeInTheDocument();
     const compatibilityTag = screen.getByText("兼容性：部分兼容").closest(".compatibility-status");
     expect(compatibilityTag).not.toBeNull();
@@ -168,16 +165,16 @@ describe("workspace home", () => {
       "部分内容已标准化或无法在线完整编辑，导出时可能存在差异。",
     );
     expect(screen.getByRole("button", { name: "在一级文件夹中新建" })).toBeInTheDocument();
-    expect(screen.getByText("版本 28 · 127 个节点")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "一级文件夹" })).toHaveClass(
-      "workspace-panel--folders",
-    );
-    expect(screen.getByRole("region", { name: "文档" })).toHaveClass("workspace-panel--documents");
-    expect(screen.getAllByRole("listitem")).toHaveLength(2);
-    expect(screen.getAllByRole("listitem")[1]).toHaveClass("workspace-document-card");
-    expect(screen.getByRole("link", { name: /ViewHistory客户端测试用例/iu })).toHaveClass(
-      "workspace-document-card__link",
-    );
+    expect(screen.getByRole("complementary", { name: "用例库" })).toHaveClass("library-sidebar");
+    expect(screen.getByRole("region", { name: "文档" })).toHaveClass("library-content");
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    const row = screen.getByRole("row", { name: /ViewHistory客户端测试用例/u });
+    expect(within(row).getByRole("cell", { name: "未归档" })).toBeInTheDocument();
+    expect(within(row).getByRole("cell", { name: "v28" })).toBeInTheDocument();
+    expect(within(row).getByRole("cell", { name: "127" })).toBeInTheDocument();
+    expect(
+      within(row).getByRole("link", { name: "ViewHistory客户端测试用例" }),
+    ).toHaveClass("doc-table__link");
     expect(screen.getByRole("button", { name: "导出 XMind" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /编辑 ViewHistory客户端测试用例/iu }),
@@ -185,6 +182,60 @@ describe("workspace home", () => {
     expect(
       screen.getByRole("button", { name: "更多操作 ViewHistory客户端测试用例" }),
     ).toBeInTheDocument();
+  });
+
+  it("filters the table by folder and restores it from the breadcrumb", async () => {
+    const folderDocument = {
+      ...documentRecord,
+      id: "00000000-0000-7000-8000-000000000011",
+      folderId: folder.id,
+      name: "客户端登录用例",
+    };
+    installWorkspaceApi({ documents: [documentRecord, folderDocument] });
+    await renderWorkspace();
+
+    await userEvent.click(await screen.findByRole("button", { name: /^测试文件夹/u }));
+
+    expect(screen.getByRole("heading", { level: 1, name: "测试文件夹" })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /客户端登录用例/u })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("row", { name: /ViewHistory客户端测试用例/u }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "用例库" }));
+
+    expect(screen.getByRole("heading", { level: 1, name: "全部文件" })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /ViewHistory客户端测试用例/u })).toBeInTheDocument();
+  });
+
+  it("filters folders and documents with the two search boxes", async () => {
+    installWorkspaceApi();
+    await renderWorkspace();
+
+    await userEvent.type(await screen.findByLabelText("搜索文件夹"), "不存在");
+    expect(screen.getByText("没有匹配的文件夹")).toBeInTheDocument();
+
+    await userEvent.clear(screen.getByLabelText("搜索文件夹"));
+    await userEvent.type(screen.getByLabelText("搜索文档"), "不匹配");
+    expect(screen.getByText("没有匹配的文档。")).toBeInTheDocument();
+
+    await userEvent.clear(screen.getByLabelText("搜索文档"));
+    expect(screen.getByRole("row", { name: /ViewHistory客户端测试用例/u })).toBeInTheDocument();
+  });
+
+  it("switches between the table and the card grid", async () => {
+    installWorkspaceApi();
+    await renderWorkspace();
+
+    expect(await screen.findByRole("table")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "网格视图" }));
+
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(document.querySelector(".workspace-document-card")).not.toBeNull();
+    expect(screen.getByText(/版本 28 · 127 个节点 · 未归档/u)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "列表视图" }));
+    expect(screen.getByRole("table")).toBeInTheDocument();
   });
 
   it("keeps document actions independent from document navigation", async () => {

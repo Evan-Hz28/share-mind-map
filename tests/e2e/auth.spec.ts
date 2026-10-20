@@ -39,7 +39,7 @@ test.describe.serial("authentication lifecycle", () => {
     await page.getByLabel("登录名").fill(administratorLogin);
     await page.getByLabel("密码").fill(administratorPassword);
     await page.getByRole("button", { name: "登录" }).click();
-    await expect(page).toHaveURL(/\/workspace$/u);
+    await expect(page).toHaveURL(/\/home$/u);
     await expect(page.getByRole("link", { name: "成员管理" })).toBeVisible();
 
     await page.getByRole("button", { name: "账户菜单" }).click();

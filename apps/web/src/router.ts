@@ -10,6 +10,7 @@ import {
 import MembersView from "./admin/MembersView.vue";
 import Phase2AdminView from "./admin/Phase2AdminView.vue";
 import AppShell from "./app/AppShell.vue";
+import HomeView from "./app/HomeView.vue";
 import WorkspaceHomeView from "./app/WorkspaceHomeView.vue";
 import DocumentView from "./documents/DocumentView.vue";
 import ChangePasswordView from "./auth/ChangePasswordView.vue";
@@ -28,7 +29,7 @@ declare module "vue-router" {
 }
 
 const routes: RouteRecordRaw[] = [
-  { path: "/", redirect: "/workspace" },
+  { path: "/", redirect: "/home" },
   { path: "/login", name: "login", component: LoginView, meta: { publicOnly: true } },
   {
     path: "/change-password",
@@ -47,6 +48,12 @@ const routes: RouteRecordRaw[] = [
     component: AppShell,
     meta: { requiresAuth: true },
     children: [
+      {
+        path: "home",
+        name: "home",
+        component: HomeView,
+        meta: { title: "首页" },
+      },
       {
         path: "workspace",
         name: "workspace",
@@ -74,7 +81,7 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
-  { path: "/:pathMatch(.*)*", redirect: "/workspace" },
+  { path: "/:pathMatch(.*)*", redirect: "/home" },
 ];
 
 export interface CreateAppRouterOptions {
@@ -99,10 +106,9 @@ export function createAppRouter(options: CreateAppRouterOptions): Router {
     if (auth.mustChangePassword && !to.meta.allowsForcedChange) {
       return { name: "change-password" };
     }
-    if (!auth.mustChangePassword && to.name === "change-password") return { name: "workspace" };
-    if (to.meta.requiresAdmin && auth.role !== "admin") return { name: "workspace" };
-    if (to.meta.publicOnly)
-      return { name: auth.mustChangePassword ? "change-password" : "workspace" };
+    if (!auth.mustChangePassword && to.name === "change-password") return { name: "home" };
+    if (to.meta.requiresAdmin && auth.role !== "admin") return { name: "home" };
+    if (to.meta.publicOnly) return { name: auth.mustChangePassword ? "change-password" : "home" };
     return true;
   });
   return router;

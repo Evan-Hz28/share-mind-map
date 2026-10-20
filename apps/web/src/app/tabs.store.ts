@@ -4,7 +4,7 @@ import type { Router } from "vue-router";
 import type { AppRole } from "./navigation.js";
 
 /** 首页标签固定存在且不可关闭。 */
-export const HOME_ROUTE_NAME = "workspace";
+export const HOME_ROUTE_NAME = "home";
 
 const STORAGE_KEY = "share-mind-map.app.tabs";
 

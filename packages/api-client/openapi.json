@@ -1389,6 +1389,39 @@
           }
         },
         "type": "object"
+      },
+      "WorkspaceOverviewDto": {
+        "properties": {
+          "activeImportJobs": {
+            "type": "number"
+          },
+          "documentCount": {
+            "type": "number"
+          },
+          "folderCount": {
+            "type": "number"
+          },
+          "nodeCount": {
+            "type": "number"
+          },
+          "pendingEditRequests": {
+            "description": "Only counted for administrators; zero for other roles.",
+            "type": "number"
+          },
+          "workspaceId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "activeImportJobs",
+          "documentCount",
+          "folderCount",
+          "nodeCount",
+          "pendingEditRequests",
+          "workspaceId"
+        ],
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -3613,6 +3646,45 @@
         "summary": "",
         "tags": [
           "imports"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/overview": {
+      "get": {
+        "operationId": "getWorkspaceOverview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceOverviewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "workspaces"
         ]
       }
     },

@@ -55,7 +55,7 @@ test("enforces anonymous, Reader, Editor, and Admin route/API boundaries", async
     const page = await reader.newPage();
     const diagnostics = monitorPage(page);
     await page.goto("/admin/members");
-    await expect(page).toHaveURL(/\/workspace$/u);
+    await expect(page).toHaveURL(/\/home$/u);
     await expect(page.getByRole("link", { name: "成员管理" })).toHaveCount(0);
     diagnostics.assertClean();
   } finally {
@@ -71,7 +71,7 @@ test("enforces anonymous, Reader, Editor, and Admin route/API boundaries", async
     const page = await editor.newPage();
     const diagnostics = monitorPage(page);
     await page.goto("/admin/members");
-    await expect(page).toHaveURL(/\/workspace$/u);
+    await expect(page).toHaveURL(/\/home$/u);
     await expect(page.getByRole("link", { name: "成员管理" })).toHaveCount(0);
     diagnostics.assertClean();
   } finally {

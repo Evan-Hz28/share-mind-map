@@ -12,7 +12,7 @@ async function loginUi(page: Page, loginName: string, password: string): Promise
   await page.getByLabel("登录名").fill(loginName);
   await page.getByLabel("密码").fill(password);
   await page.getByRole("button", { name: "登录" }).click();
-  await expect(page).toHaveURL(/\/workspace$/u);
+  await expect(page).toHaveURL(/\/home$/u);
 }
 
 test.describe.serial("member administration", () => {
@@ -73,7 +73,7 @@ test.describe.serial("member administration", () => {
       await readerPage.getByLabel("登录名").fill(readerLogin);
       await readerPage.getByLabel("密码").fill(readerPassword);
       await readerPage.getByRole("button", { name: "登录" }).click();
-      await expect(readerPage).toHaveURL(/\/workspace$/u);
+      await expect(readerPage).toHaveURL(/\/home$/u);
       await expect(readerPage.getByRole("link", { name: "成员管理" })).toHaveCount(0);
       await readerPage.getByRole("button", { name: "账户菜单" }).click();
       await readerPage.getByRole("button", { name: "退出登录" }).click();
