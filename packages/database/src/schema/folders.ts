@@ -19,6 +19,7 @@ export const folders = pgTable(
   {
     id: uuid("id").primaryKey(),
     workspaceId: uuid("workspace_id").notNull(),
+    parentId: uuid("parent_id"),
     name: varchar("name", { length: 50 }).notNull(),
     nameNormalized: varchar("name_normalized", { length: 50 }).notNull(),
     sortKey: bigint("sort_key", { mode: "number" }).notNull().default(0),
@@ -36,6 +37,11 @@ export const folders = pgTable(
       foreignColumns: [workspaces.id],
     }),
     foreignKey({
+      name: "folders_parent_fk",
+      columns: [table.parentId],
+      foreignColumns: [table.id],
+    }).onDelete("cascade"),
+    foreignKey({
       name: "folders_created_by_fk",
       columns: [table.createdBy],
       foreignColumns: [users.id],
@@ -47,8 +53,15 @@ export const folders = pgTable(
     }),
     check("folders_name_ck", sql`length(trim(${table.name})) > 0`),
     check("folders_name_normalized_ck", sql`length(trim(${table.nameNormalized})) > 0`),
-    uniqueIndex("folders_workspace_name_active_uq")
-      .on(table.workspaceId, table.nameNormalized)
+    uniqueIndex("folders_workspace_parent_name_active_uq")
+      .on(
+        table.workspaceId,
+        sql`coalesce(${table.parentId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+        table.nameNormalized,
+      )
+      .where(sql`${table.trashedAt} IS NULL`),
+    index("folders_workspace_parent_sort_idx")
+      .on(table.workspaceId, table.parentId, table.sortKey)
       .where(sql`${table.trashedAt} IS NULL`),
     index("folders_workspace_updated_idx")
       .on(table.workspaceId, table.updatedAt.desc(), table.id.desc())

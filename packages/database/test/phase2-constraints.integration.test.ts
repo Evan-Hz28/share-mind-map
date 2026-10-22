@@ -83,7 +83,7 @@ describe("phase 2 database constraints", () => {
          VALUES ($1, $2, ' folder ', 'folder', $3, $3)`,
         [uuidv7(), workspaceId, userId],
       ),
-    ).rejects.toMatchObject({ constraint: "folders_workspace_name_active_uq" });
+    ).rejects.toMatchObject({ constraint: "folders_workspace_parent_name_active_uq" });
 
     const documentId = uuidv7();
     await runtime.db.$client.query(

@@ -22,11 +22,16 @@ let userId: string;
 const folders = new FolderRepository();
 const documents = new DocumentRepository();
 
-async function createFolder(name: string, targetWorkspaceId = workspaceId): Promise<string> {
+async function createFolder(
+  name: string,
+  targetWorkspaceId = workspaceId,
+  parentId: string | null = null,
+): Promise<string> {
   const normalized = normalizeEntityName(name, 50);
   return runtime.db.transaction(async (transaction) => {
     const folder = await folders.create(transaction, {
       workspaceId: targetWorkspaceId,
+      parentId,
       name: normalized.displayName,
       nameNormalized: normalized.normalizedName,
       actorUserId: userId,
@@ -224,6 +229,240 @@ describe("folder and document repositories", () => {
       }),
     );
     expect(result.documentCount).toBe(1);
+    const job = await runtime.db.$client.query<{ target_folder_id: string | null }>(
+      `SELECT target_folder_id FROM import_jobs WHERE batch_id = $1`,
+      [batchId],
+    );
+    expect(job.rows[0]?.target_folder_id).toBeNull();
+  });
+
+  it("persists a custom folder order and appends new folders after it", async () => {
+    const beta = await createFolder("Beta");
+    const alpha = await createFolder("Alpha");
+    const gamma = await createFolder("Gamma");
+    // 新建文件夹排在末尾,不再退回按名称排序。
+    expect((await folders.list(runtime.db, workspaceId)).map((folder) => folder.id)).toEqual([
+      beta,
+      alpha,
+      gamma,
+    ]);
+
+    const order = [gamma, alpha, beta];
+    const count = await runtime.db.transaction((transaction) =>
+      folders.reorder(transaction, {
+        workspaceId,
+        parentId: null,
+        folderIds: order,
+        actorUserId: userId,
+      }),
+    );
+    expect(count).toBe(3);
+    expect((await folders.list(runtime.db, workspaceId)).map((folder) => folder.id)).toEqual(order);
+
+    const delta = await createFolder("Delta");
+    expect((await folders.list(runtime.db, workspaceId)).map((folder) => folder.id)).toEqual([
+      ...order,
+      delta,
+    ]);
+  });
+
+  it("rejects folder orders that do not match the current folder set", async () => {
+    const alpha = await createFolder("Alpha");
+    const beta = await createFolder("Beta");
+    const foreign = await createFolder("Foreign", otherWorkspaceId);
+
+    await expect(
+      runtime.db.transaction((transaction) =>
+        folders.reorder(transaction, {
+          workspaceId,
+          parentId: null,
+          folderIds: [alpha],
+          actorUserId: userId,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "FOLDER_ORDER_CONFLICT" });
+
+    await expect(
+      runtime.db.transaction((transaction) =>
+        folders.reorder(transaction, {
+          workspaceId,
+          parentId: null,
+          folderIds: [alpha, alpha],
+          actorUserId: userId,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "FOLDER_ORDER_CONFLICT" });
+
+    await expect(
+      runtime.db.transaction((transaction) =>
+        folders.reorder(transaction, {
+          workspaceId,
+          parentId: null,
+          folderIds: [alpha, foreign],
+          actorUserId: userId,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "FOLDER_ORDER_CONFLICT" });
+
+    expect((await folders.list(runtime.db, workspaceId)).map((folder) => folder.id)).toEqual([
+      alpha,
+      beta,
+    ]);
+  });
+
+  it("nests folders and only enforces sibling name uniqueness", async () => {
+    const root = await createFolder("Root");
+    const otherRoot = await createFolder("Other Root");
+    const child = await createFolder("Child", workspaceId, root);
+    const sameName = await createFolder("Child", workspaceId, otherRoot);
+    expect(sameName).not.toBe(child);
+
+    const listed = await folders.list(runtime.db, workspaceId);
+    expect(listed.find((folder) => folder.id === child)?.parentId).toBe(root);
+    expect(listed.find((folder) => folder.id === sameName)?.parentId).toBe(otherRoot);
+    expect(listed.find((folder) => folder.id === root)?.parentId).toBeNull();
+
+    await expect(createFolder("Child", workspaceId, root)).rejects.toMatchObject({
+      cause: { code: "23505" },
+    });
+  });
+
+  it("enforces the folder depth limit", async () => {
+    let parentId: string | null = null;
+    for (let level = 1; level <= 8; level += 1) {
+      parentId = await createFolder(`Level ${String(level)}`, workspaceId, parentId);
+    }
+    await expect(createFolder("Level 9", workspaceId, parentId)).rejects.toMatchObject({
+      code: "FOLDER_DEPTH_EXCEEDED",
+    });
+  });
+
+  it("reorders siblings and moves folders without creating cycles", async () => {
+    const root = await createFolder("Root");
+    const other = await createFolder("Other");
+    const child = await createFolder("Child", workspaceId, root);
+    const sibling = await createFolder("Sibling", workspaceId, root);
+
+    const count = await runtime.db.transaction((transaction) =>
+      folders.reorder(transaction, {
+        workspaceId,
+        parentId: root,
+        folderIds: [sibling, child],
+        actorUserId: userId,
+      }),
+    );
+    expect(count).toBe(2);
+    const children = (await folders.list(runtime.db, workspaceId)).filter(
+      (folder) => folder.parentId === root,
+    );
+    expect(children.map((folder) => folder.id)).toEqual([sibling, child]);
+
+    await expect(
+      runtime.db.transaction((transaction) =>
+        folders.reorder(transaction, {
+          workspaceId,
+          parentId: null,
+          folderIds: [sibling, child],
+          actorUserId: userId,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "FOLDER_ORDER_CONFLICT" });
+
+    const moved = await runtime.db.transaction((transaction) =>
+      folders.move(transaction, {
+        workspaceId,
+        folderId: other,
+        parentId: child,
+        actorUserId: userId,
+      }),
+    );
+    expect(moved.parentId).toBe(child);
+
+    await expect(
+      runtime.db.transaction((transaction) =>
+        folders.move(transaction, {
+          workspaceId,
+          folderId: child,
+          parentId: other,
+          actorUserId: userId,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "FOLDER_MOVE_CYCLE" });
+
+    await expect(
+      runtime.db.transaction((transaction) =>
+        folders.move(transaction, {
+          workspaceId,
+          folderId: child,
+          parentId: child,
+          actorUserId: userId,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "FOLDER_MOVE_CYCLE" });
+
+    const detached = await runtime.db.transaction((transaction) =>
+      folders.move(transaction, {
+        workspaceId,
+        folderId: other,
+        parentId: null,
+        actorUserId: userId,
+      }),
+    );
+    expect(detached.parentId).toBeNull();
+  });
+
+  it("deletes a folder subtree with all documents and detaches import jobs", async () => {
+    const root = await createFolder("Root");
+    const child = await createFolder("Child", workspaceId, root);
+    const grandchild = await createFolder("Grandchild", workspaceId, child);
+    const rootDocument = await createDocument("Root document", root);
+    const childDocument = await createDocument("Child document", child);
+    const grandchildDocument = await createDocument("Grandchild document", grandchild);
+    const outside = await createDocument("Outside");
+
+    const checked = await runtime.db.transaction((transaction) =>
+      folders.checkDelete(transaction, workspaceId, root),
+    );
+    expect(checked.documentCount).toBe(3);
+    expect(checked.descendantFolderCount).toBe(2);
+
+    const batchId = uuidv7();
+    await runtime.db.$client.query(
+      `INSERT INTO import_batches (id, workspace_id, requested_by, total_jobs)
+       VALUES ($1, $2, $3, 1)`,
+      [batchId, workspaceId, userId],
+    );
+    await runtime.db.$client.query(
+      `INSERT INTO import_jobs
+         (id, batch_id, workspace_id, requested_by, target_folder_id,
+          client_file_name, target_name, target_name_normalized, phase)
+       VALUES ($1, $2, $3, $4, $5, 'grand.xmind', 'Grand', 'grand', 'parsing')`,
+      [uuidv7(), batchId, workspaceId, userId, grandchild],
+    );
+    await expect(
+      runtime.db.transaction((transaction) =>
+        folders.deleteWithDocuments(transaction, { workspaceId, folderId: root }),
+      ),
+    ).rejects.toMatchObject({ code: "FOLDER_DELETE_BLOCKED" });
+
+    await runtime.db.$client.query(
+      `UPDATE import_jobs SET phase = 'succeeded' WHERE batch_id = $1`,
+      [batchId],
+    );
+    const result = await runtime.db.transaction((transaction) =>
+      folders.deleteWithDocuments(transaction, {
+        workspaceId,
+        folderId: root,
+        expectedDocumentCount: 3,
+      }),
+    );
+    expect(result.folderIds.sort()).toEqual([root, child, grandchild].sort());
+    expect(result.documentCount).toBe(3);
+    expect(await folders.list(runtime.db, workspaceId)).toHaveLength(0);
+    for (const documentId of [rootDocument, childDocument, grandchildDocument]) {
+      expect(await documents.findDetail(runtime.db, workspaceId, documentId)).toBeNull();
+    }
+    expect(await documents.findDetail(runtime.db, workspaceId, outside)).not.toBeNull();
     const job = await runtime.db.$client.query<{ target_folder_id: string | null }>(
       `SELECT target_folder_id FROM import_jobs WHERE batch_id = $1`,
       [batchId],

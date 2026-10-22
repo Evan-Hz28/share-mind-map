@@ -18,7 +18,12 @@ import { LockService } from "../locks/lock.service.js";
 import { ApiError } from "../platform/errors/api-error.js";
 import type { AppConfig } from "../platform/config/app-config.js";
 import { APP_CONFIG } from "../platform/config/config.module.js";
-import type { FolderNameDto } from "./dto/folder-input.dto.js";
+import type {
+  CreateFolderDto,
+  FolderNameDto,
+  MoveFolderDto,
+  ReorderFoldersDto,
+} from "./dto/folder-input.dto.js";
 import type {
   FolderDeleteCheckResponseDto,
   FolderDto,
@@ -34,6 +39,7 @@ function toDto(folder: FolderRecord): FolderDto {
   return {
     id: folder.id,
     workspaceId: folder.workspaceId,
+    parentId: folder.parentId,
     name: folder.name,
     createdAt: date(folder.createdAt),
     updatedAt: date(folder.updatedAt),
@@ -56,6 +62,12 @@ function mapRepositoryError(error: unknown): never {
         throw new ApiError("FOLDER_DELETE_BLOCKED");
       case "FOLDER_DELETE_CONFLICT":
         throw new ApiError("FOLDER_DELETE_CONFLICT");
+      case "FOLDER_ORDER_CONFLICT":
+        throw new ApiError("FOLDER_ORDER_CONFLICT");
+      case "FOLDER_DEPTH_EXCEEDED":
+        throw new ApiError("FOLDER_DEPTH_EXCEEDED");
+      case "FOLDER_MOVE_CYCLE":
+        throw new ApiError("FOLDER_MOVE_CYCLE");
       default:
         throw new ApiError("INTERNAL_ERROR");
     }
@@ -65,7 +77,9 @@ function mapRepositoryError(error: unknown): never {
     cause?: { constraint?: unknown };
   };
   const constraint = databaseError.constraint ?? databaseError.cause?.constraint;
-  if (constraint === "folders_workspace_name_active_uq") throw new ApiError("FOLDER_NAME_CONFLICT");
+  if (constraint === "folders_workspace_parent_name_active_uq") {
+    throw new ApiError("FOLDER_NAME_CONFLICT");
+  }
   throw error;
 }
 
@@ -110,7 +124,7 @@ export class FoldersService {
   public async create(
     auth: AuthContext,
     workspaceId: string,
-    input: FolderNameDto,
+    input: CreateFolderDto,
     requestId: string,
   ): Promise<FolderResponseDto> {
     this.assertWorkspace(auth, workspaceId);
@@ -120,6 +134,7 @@ export class FoldersService {
         const organizationId = await this.organizationForWorkspace(transaction, workspaceId);
         const created = await this.folders.create(transaction, {
           workspaceId,
+          parentId: input.parentId ?? null,
           name: name.displayName,
           nameNormalized: name.normalizedName,
           actorUserId: auth.session.userId,
@@ -136,7 +151,7 @@ export class FoldersService {
           requestId,
           fromVersion: null,
           toVersion: null,
-          metadata: { name: created.name },
+          metadata: { name: created.name, parentId: created.parentId },
         });
         return created;
       });
@@ -187,6 +202,81 @@ export class FoldersService {
     }
   }
 
+  public async reorder(
+    auth: AuthContext,
+    workspaceId: string,
+    input: ReorderFoldersDto,
+    requestId: string,
+  ): Promise<void> {
+    this.assertWorkspace(auth, workspaceId);
+    try {
+      await this.database.transaction(async (transaction) => {
+        const organizationId = await this.organizationForWorkspace(transaction, workspaceId);
+        const folderCount = await this.folders.reorder(transaction, {
+          workspaceId,
+          parentId: input.parentId ?? null,
+          folderIds: input.folderIds,
+          actorUserId: auth.session.userId,
+        });
+        await this.audits.append(transaction, {
+          organizationId,
+          workspaceId,
+          actorUserId: auth.session.userId,
+          actorSessionId: sessionReference(auth.sessionToken),
+          action: "folder.reordered",
+          targetType: "workspace",
+          targetId: workspaceId,
+          result: "success",
+          requestId,
+          fromVersion: null,
+          toVersion: null,
+          metadata: { folderCount, parentId: input.parentId ?? null },
+        });
+      });
+    } catch (error) {
+      return mapRepositoryError(error);
+    }
+  }
+
+  public async move(
+    auth: AuthContext,
+    workspaceId: string,
+    folderId: string,
+    input: MoveFolderDto,
+    requestId: string,
+  ): Promise<FolderResponseDto> {
+    this.assertWorkspace(auth, workspaceId);
+    try {
+      const folder = await this.database.transaction(async (transaction) => {
+        const organizationId = await this.organizationForWorkspace(transaction, workspaceId);
+        const moved = await this.folders.move(transaction, {
+          workspaceId,
+          folderId,
+          parentId: input.parentId ?? null,
+          actorUserId: auth.session.userId,
+        });
+        await this.audits.append(transaction, {
+          organizationId,
+          workspaceId,
+          actorUserId: auth.session.userId,
+          actorSessionId: sessionReference(auth.sessionToken),
+          action: "folder.moved",
+          targetType: "folder",
+          targetId: moved.id,
+          result: "success",
+          requestId,
+          fromVersion: null,
+          toVersion: null,
+          metadata: { name: moved.name, parentId: moved.parentId },
+        });
+        return moved;
+      });
+      return { folder: toDto(folder) };
+    } catch (error) {
+      return mapRepositoryError(error);
+    }
+  }
+
   public async checkDelete(
     auth: AuthContext,
     workspaceId: string,
@@ -210,13 +300,18 @@ export class FoldersService {
           requestId,
           fromVersion: null,
           toVersion: null,
-          metadata: { documentCount: result.documentCount, canDelete: result.canDelete },
+          metadata: {
+            documentCount: result.documentCount,
+            descendantFolderCount: result.descendantFolderCount,
+            canDelete: result.canDelete,
+          },
         });
         return result;
       });
       return {
         folder: toDto(checked.folder),
         documentCount: checked.documentCount,
+        descendantFolderCount: checked.descendantFolderCount,
         canDelete: checked.canDelete,
       };
     } catch (error) {
@@ -254,6 +349,7 @@ export class FoldersService {
           toVersion: null,
           metadata: {
             name: result.folder.name,
+            folderCount: result.folderIds.length,
             documentCount: result.documentCount,
             deletedObjectCount: result.objectKeys.length,
           },

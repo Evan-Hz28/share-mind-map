@@ -7,6 +7,9 @@ export class FolderDto {
   @ApiProperty({ format: "uuid" })
   public workspaceId!: string;
 
+  @ApiProperty({ type: String, format: "uuid", nullable: true })
+  public parentId!: string | null;
+
   @ApiProperty()
   public name!: string;
 
@@ -33,6 +36,9 @@ export class FolderDeleteCheckResponseDto {
 
   @ApiProperty()
   public documentCount!: number;
+
+  @ApiProperty()
+  public descendantFolderCount!: number;
 
   @ApiProperty()
   public canDelete!: boolean;

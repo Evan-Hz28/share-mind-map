@@ -47,6 +47,10 @@ function createTestRouter() {
   });
 }
 
+function parseRequestBody(body: BodyInit | null | undefined): unknown {
+  return typeof body === "string" ? JSON.parse(body) : {};
+}
+
 function installWorkspaceApi(
   options: {
     folders?: unknown[];
@@ -57,8 +61,28 @@ function installWorkspaceApi(
     storageThreshold?: "normal" | "warning" | "critical" | "exceeded";
     importFailureCode?: string;
     folderDeleteDocumentCount?: number;
+    folderDeleteDescendantCount?: number;
+    /** 第一次创建这个名称时返回 409,并把文件夹写进列表,模拟并发创建。 */
+    folderConflictOnce?: string;
   } = {},
 ): void {
+  const folderState = [...((options.folders ?? [folder]) as Array<Record<string, unknown>>)];
+  let createdFolderCount = 0;
+  let conflictServed = false;
+  const nextFolderId = (): string =>
+    `00000000-0000-7000-8000-${String(40 + createdFolderCount++).padStart(12, "0")}`;
+  const createFolderRecord = (name: string, parentId: string | null): Record<string, unknown> => {
+    const record = {
+      id: nextFolderId(),
+      workspaceId,
+      parentId,
+      name,
+      createdAt: "2026-09-23T00:00:00.000Z",
+      updatedAt: "2026-09-23T00:00:00.000Z",
+    };
+    folderState.push(record);
+    return record;
+  };
   vi.stubGlobal(
     "fetch",
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -67,11 +91,39 @@ function installWorkspaceApi(
       const url = new URL(requestUrl, location.origin);
       const method = init?.method ?? (input instanceof Request ? input.method : "GET");
       if (options.pending) return new Promise<Response>(() => undefined);
+      if (url.pathname.endsWith("/folders/order") && method === "PATCH") {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      if (url.pathname.endsWith("/folders") && method === "POST") {
+        const body = parseRequestBody(init?.body) as {
+          name?: string;
+          parentId?: string | null;
+        };
+        const name = body.name ?? "";
+        if (!conflictServed && options.folderConflictOnce === name) {
+          conflictServed = true;
+          createFolderRecord(name, body.parentId ?? null);
+          return Promise.resolve(apiError("FOLDER_NAME_CONFLICT", "conflict", 409));
+        }
+        return Promise.resolve(
+          jsonResponse({ folder: createFolderRecord(name, body.parentId ?? null) }, 201),
+        );
+      }
+      const parentMatch = /\/folders\/([^/]+)\/parent$/u.exec(url.pathname);
+      if (parentMatch !== null && method === "PATCH") {
+        const folderId = parentMatch[1];
+        const body = parseRequestBody(init?.body) as { parentId?: string | null };
+        const record = folderState.find((item) => item.id === folderId);
+        if (record === undefined) return Promise.resolve(apiError("NOT_FOUND", "missing", 404));
+        record.parentId = body.parentId ?? null;
+        return Promise.resolve(jsonResponse({ folder: record }));
+      }
       if (url.pathname.endsWith(`/folders/${folder.id}/delete-check`) && method === "POST") {
         return Promise.resolve(
           jsonResponse({
             folder,
             documentCount: options.folderDeleteDocumentCount ?? 0,
+            descendantFolderCount: options.folderDeleteDescendantCount ?? 0,
             canDelete: (options.folderDeleteDocumentCount ?? 0) === 0,
           }),
         );
@@ -79,13 +131,13 @@ function installWorkspaceApi(
       if (url.pathname.endsWith(`/folders/${folder.id}`) && method === "DELETE") {
         return Promise.resolve(new Response(null, { status: 204 }));
       }
-      if (url.pathname.endsWith(`/workspaces/${workspaceId}/folders`)) {
+      if (url.pathname.endsWith(`/workspaces/${workspaceId}/folders`) && method === "GET") {
         return Promise.resolve(
           options.failure
             ? apiError("PERMISSION_DENIED", "denied", 403)
             : options.requestFailure
               ? apiError("INTERNAL_ERROR", "failed", 500)
-              : jsonResponse({ folders: options.folders ?? [folder] }),
+              : jsonResponse({ folders: folderState }),
         );
       }
       if (url.pathname.endsWith(`/workspaces/${workspaceId}/documents`)) {
@@ -185,9 +237,9 @@ describe("workspace home", () => {
     expect(within(row).getByRole("cell", { name: "未归档" })).toBeInTheDocument();
     expect(within(row).getByRole("cell", { name: "v28" })).toBeInTheDocument();
     expect(within(row).getByRole("cell", { name: "127" })).toBeInTheDocument();
-    expect(
-      within(row).getByRole("link", { name: "ViewHistory客户端测试用例" }),
-    ).toHaveClass("doc-table__link");
+    expect(within(row).getByRole("link", { name: "ViewHistory客户端测试用例" })).toHaveClass(
+      "doc-table__link",
+    );
     expect(screen.getByRole("button", { name: "导出 XMind" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /编辑 ViewHistory客户端测试用例/iu }),
@@ -234,6 +286,118 @@ describe("workspace home", () => {
 
     await userEvent.clear(screen.getByLabelText("搜索文档"));
     expect(screen.getByRole("row", { name: /ViewHistory客户端测试用例/u })).toBeInTheDocument();
+  });
+
+  it("renders nested folders, expands them and filters documents by subtree", async () => {
+    const sibling = {
+      id: "00000000-0000-7000-8000-000000000021",
+      workspaceId,
+      parentId: null,
+      name: "另一个文件夹",
+      createdAt: "2026-09-23T00:00:00.000Z",
+      updatedAt: "2026-09-23T00:00:00.000Z",
+    };
+    const child = {
+      id: "00000000-0000-7000-8000-000000000022",
+      workspaceId,
+      parentId: folder.id,
+      name: "子目录",
+      createdAt: "2026-09-23T00:00:00.000Z",
+      updatedAt: "2026-09-23T00:00:00.000Z",
+    };
+    const grandchild = {
+      id: "00000000-0000-7000-8000-000000000023",
+      workspaceId,
+      parentId: child.id,
+      name: "深层目录",
+      createdAt: "2026-09-23T00:00:00.000Z",
+      updatedAt: "2026-09-23T00:00:00.000Z",
+    };
+    const childDocument = {
+      ...documentRecord,
+      id: "00000000-0000-7000-8000-000000000011",
+      folderId: child.id,
+      name: "子目录用例",
+    };
+    const grandchildDocument = {
+      ...documentRecord,
+      id: "00000000-0000-7000-8000-000000000012",
+      folderId: grandchild.id,
+      name: "深层用例",
+    };
+    installWorkspaceApi({
+      folders: [{ ...folder, parentId: null }, sibling, child, grandchild],
+      documents: [documentRecord, childDocument, grandchildDocument],
+    });
+    await renderWorkspace();
+
+    expect(await screen.findByRole("button", { name: /^测试文件夹/u })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^子目录/u })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "展开 测试文件夹" }));
+
+    expect(screen.getByRole("button", { name: /^子目录/u })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^子目录/u }).closest(".library-tree__row"),
+    ).toHaveStyle({ paddingLeft: "18px" });
+    await userEvent.click(screen.getByRole("button", { name: "展开 子目录" }));
+    expect(screen.getByRole("button", { name: /^深层目录/u })).toBeInTheDocument();
+
+    const rootRow = screen
+      .getByRole("button", { name: /^测试文件夹/u })
+      .closest(".library-tree__row");
+    expect(within(rootRow as HTMLElement).getByTitle("已加载 2 篇")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /^测试文件夹/u }));
+
+    expect(screen.getByRole("heading", { level: 1, name: "测试文件夹" })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /子目录用例/u })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /深层用例/u })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("row", { name: /ViewHistory客户端测试用例/u }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("moves a folder into another folder when dropped on the middle of its row", async () => {
+    const target = {
+      id: "00000000-0000-7000-8000-000000000024",
+      workspaceId,
+      parentId: null,
+      name: "目标文件夹",
+      createdAt: "2026-09-23T00:00:00.000Z",
+      updatedAt: "2026-09-23T00:00:00.000Z",
+    };
+    installWorkspaceApi({ folders: [{ ...folder, parentId: null }, target] });
+    await renderWorkspace();
+
+    const sourceItem = await screen.findByRole("button", { name: /^测试文件夹/u });
+    const targetItem = screen.getByRole("button", { name: /^目标文件夹/u });
+    const sourceRow = sourceItem.closest("li");
+    const targetRow = targetItem.closest("li");
+    if (sourceRow === null || targetRow === null) throw new Error("文件夹行没有渲染。");
+
+    sourceRow.dispatchEvent(new Event("dragstart", { bubbles: true, cancelable: true }));
+    Object.defineProperty(targetRow, "getBoundingClientRect", {
+      value: () => ({ top: 0, height: 100, left: 0, right: 100, bottom: 100, width: 100 }),
+    });
+    const dragOver = new Event("dragover", { bubbles: true, cancelable: true });
+    Object.defineProperty(dragOver, "clientY", { value: 50 });
+    targetRow.dispatchEvent(dragOver);
+
+    await waitFor(() => {
+      expect(targetRow.querySelector(".library-tree__row")).toHaveClass(
+        "library-tree__row--drop-inside",
+      );
+    });
+
+    await fireEvent.drop(targetRow);
+
+    await waitFor(async () => {
+      const bodies = (await requestBodies("PATCH", `/folders/${folder.id}/parent`)) as Array<{
+        parentId: string | null;
+      }>;
+      expect(bodies).toEqual([{ parentId: target.id }]);
+    });
   });
 
   it("switches between the table and the card grid", async () => {
@@ -313,6 +477,26 @@ describe("workspace home", () => {
     ).toBe(true);
   });
 
+  it("opens folder actions from a single more menu", async () => {
+    installWorkspaceApi();
+    await renderWorkspace();
+
+    const more = await screen.findByRole("button", { name: "更多操作 测试文件夹" });
+    expect(screen.queryByRole("button", { name: "新建子文件夹" })).not.toBeInTheDocument();
+
+    await userEvent.click(more);
+
+    expect(more).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "新建子文件夹" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重命名" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "删除" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "新建子文件夹" }));
+
+    expect(screen.queryByRole("button", { name: "新建子文件夹" })).not.toBeInTheDocument();
+    expect(await screen.findByText("创建文件夹")).toBeInTheDocument();
+  });
+
   it("checks the document count and permanently deletes a folder after confirmation", async () => {
     installWorkspaceApi({ folderDeleteDocumentCount: 2 });
     const confirm = vi.fn(() => true);
@@ -320,15 +504,16 @@ describe("workspace home", () => {
     const user = userEvent.setup();
     await renderWorkspace();
 
-    await user.click(await screen.findByRole("button", { name: "删除 测试文件夹" }));
+    await user.click(await screen.findByRole("button", { name: "更多操作 测试文件夹" }));
+    await user.click(await screen.findByRole("button", { name: "删除" }));
 
     await waitFor(() => {
       expect(confirm).toHaveBeenCalledWith(
-        "删除后不可恢复，将同时永久删除文件夹内 2 篇文档。确定删除「测试文件夹」吗？",
+        "删除后不可恢复，将同时永久删除 2 篇文档。确定删除「测试文件夹」吗？",
       );
     });
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "重命名 测试文件夹" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^测试文件夹/u })).not.toBeInTheDocument();
     });
     expect(
       vi
@@ -342,6 +527,59 @@ describe("workspace home", () => {
             ),
         ),
     ).toBe(true);
+  });
+
+  it("reorders folders by dragging and blocks dragging while filtering", async () => {
+    const alpha = {
+      ...folder,
+      id: "00000000-0000-7000-8000-000000000021",
+      name: "Alpha",
+    };
+    const beta = {
+      ...folder,
+      id: "00000000-0000-7000-8000-000000000022",
+      name: "Beta",
+    };
+    installWorkspaceApi({ folders: [alpha, beta] });
+    await renderWorkspace();
+
+    const folderNames = (): (string | null)[] =>
+      Array.from(document.querySelectorAll(".library-tree__folder .library-tree__name")).map(
+        (node) => node.textContent,
+      );
+    await screen.findByText("Alpha");
+    expect(folderNames()).toEqual(["Alpha", "Beta"]);
+
+    const alphaItem = screen.getByText("Alpha").closest("li");
+    const betaItem = screen.getByText("Beta").closest("li");
+    if (alphaItem === null || betaItem === null) throw new Error("Folder rows were not rendered.");
+    expect(betaItem).toHaveAttribute("draggable", "true");
+
+    await fireEvent.dragStart(betaItem);
+    await fireEvent.dragOver(alphaItem);
+    await fireEvent.drop(alphaItem);
+
+    await waitFor(() => {
+      expect(folderNames()).toEqual(["Beta", "Alpha"]);
+    });
+
+    const reorderRequest = vi
+      .mocked(globalThis.fetch)
+      .mock.calls.map(([request]) => request)
+      .find(
+        (request) =>
+          request instanceof Request &&
+          request.method === "PATCH" &&
+          request.url.endsWith(`/workspaces/${workspaceId}/folders/order`),
+      );
+    if (!(reorderRequest instanceof Request)) throw new Error("Reorder request was not sent.");
+    expect(await reorderRequest.clone().json()).toEqual({
+      parentId: null,
+      folderIds: [beta.id, alpha.id],
+    });
+
+    await userEvent.type(screen.getByLabelText("搜索文件夹"), "Al");
+    expect(alphaItem).toHaveAttribute("draggable", "false");
   });
 
   it("renders loading, denied, and empty states", async () => {
@@ -484,6 +722,24 @@ describe("workspace home", () => {
 
   function submitButton(): HTMLElement {
     return screen.getByRole("button", { name: "开始导入" });
+  }
+
+  /** 找到指定方法 + 路径后缀的请求体;生成器可能用 Request,也可能用 url + init。 */
+  async function requestBodies(method: string, pathSuffix: string): Promise<unknown[]> {
+    const bodies: unknown[] = [];
+    for (const [target, init] of vi.mocked(fetch).mock.calls) {
+      const request = target instanceof Request ? target : null;
+      let rawUrl: string;
+      if (target instanceof Request) rawUrl = target.url;
+      else if (target instanceof URL) rawUrl = target.href;
+      else rawUrl = target;
+      const requestMethod = request?.method ?? init?.method ?? "GET";
+      if (requestMethod !== method) continue;
+      if (!new URL(rawUrl, location.origin).pathname.endsWith(pathSuffix)) continue;
+      if (request !== null) bodies.push(await request.clone().json());
+      else bodies.push(parseRequestBody(init?.body));
+    }
+    return bodies;
   }
 
   it("reopening the import dialog drops the previous file selection", async () => {
@@ -690,5 +946,116 @@ describe("workspace home", () => {
     expect(await within(dialog).findByText(/导入队列已满/u)).toBeInTheDocument();
     expect(submitButton()).toBeInTheDocument();
     expect(within(dialog).getByText("用例.xmind")).toBeInTheDocument();
+  });
+
+  it("reuses an existing folder path and creates only the missing levels on import", async () => {
+    const existingRoot = {
+      id: "00000000-0000-7000-8000-000000000030",
+      workspaceId,
+      parentId: null,
+      name: "用例集",
+      createdAt: "2026-09-23T00:00:00.000Z",
+      updatedAt: "2026-09-23T00:00:00.000Z",
+    };
+    await openImportDialog({
+      folders: [existingRoot],
+      importFailureCode: "IMPORT_QUEUE_LIMIT_REACHED",
+    });
+    const folderInput = screen.getByLabelText(/选择文件夹/u);
+    if (!(folderInput instanceof HTMLInputElement)) throw new Error("目录输入框没有渲染。");
+    const nested = new File(["x"], "a.xmind");
+    Object.defineProperty(nested, "webkitRelativePath", { value: "用例集/子目录/a.xmind" });
+    const topLevel = new File(["x"], "b.xmind");
+    Object.defineProperty(topLevel, "webkitRelativePath", { value: "用例集/b.xmind" });
+    Object.defineProperty(folderInput, "files", {
+      value: [nested, topLevel],
+      writable: true,
+      configurable: true,
+    });
+    await fireEvent.change(folderInput);
+
+    const rowSelect = (path: string): HTMLSelectElement => {
+      const row = importRows().find((element) =>
+        element.querySelector(".import-list__file")?.textContent.includes(path),
+      );
+      const select = row?.querySelector<HTMLSelectElement>('select[aria-label="目标文件夹"]');
+      if (select === null || select === undefined) throw new Error(`没找到 ${path} 的行。`);
+      return select;
+    };
+    expect(rowSelect("用例集/b.xmind").value).toBe(`id:${existingRoot.id}`);
+    expect(rowSelect("用例集/子目录/a.xmind").value).toBe("path:用例集/子目录");
+    // 每个目标文件夹下拉都渲染同一组待创建路径。
+    expect(screen.getAllByRole("option", { name: "新建：用例集/子目录" })).toHaveLength(2);
+
+    await userEvent.click(submitButton());
+
+    const created = (await requestBodies("POST", "/folders")) as Array<{
+      name: string;
+      parentId: string | null;
+    }>;
+    expect(created).toEqual([{ name: "子目录", parentId: existingRoot.id }]);
+    const batches = (await requestBodies("POST", "/import-batches")) as Array<{
+      files: Array<{ clientFileName: string; targetFolderId: string | null }>;
+    }>;
+    expect(batches).toHaveLength(1);
+    const targetByFile = Object.fromEntries(
+      (batches[0]?.files ?? []).map((entry) => [entry.clientFileName, entry.targetFolderId]),
+    );
+    expect(targetByFile).toEqual({
+      "b.xmind": existingRoot.id,
+      "a.xmind": "00000000-0000-7000-8000-000000000040",
+    });
+  });
+
+  it("reuses a folder created concurrently instead of failing the whole import", async () => {
+    await openImportDialog({
+      folders: [],
+      folderConflictOnce: "用例集",
+      importFailureCode: "IMPORT_QUEUE_LIMIT_REACHED",
+    });
+    const folderInput = screen.getByLabelText(/选择文件夹/u);
+    if (!(folderInput instanceof HTMLInputElement)) throw new Error("目录输入框没有渲染。");
+    const file = new File(["x"], "a.xmind");
+    Object.defineProperty(file, "webkitRelativePath", { value: "用例集/a.xmind" });
+    Object.defineProperty(folderInput, "files", {
+      value: [file],
+      writable: true,
+      configurable: true,
+    });
+    await fireEvent.change(folderInput);
+
+    await userEvent.click(submitButton());
+
+    const batches = (await requestBodies("POST", "/import-batches")) as Array<{
+      files: Array<{ targetFolderId: string | null }>;
+    }>;
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.files[0]?.targetFolderId).toBe("00000000-0000-7000-8000-000000000040");
+    expect(screen.queryByText(/无法自动创建/u)).not.toBeInTheDocument();
+  });
+
+  it("falls back to unassigned when a directory name cannot become a folder", async () => {
+    await openImportDialog({ importFailureCode: "IMPORT_QUEUE_LIMIT_REACHED" });
+    const folderInput = screen.getByLabelText(/选择文件夹/u);
+    if (!(folderInput instanceof HTMLInputElement)) throw new Error("目录输入框没有渲染。");
+    const file = new File(["x"], "a.xmind");
+    Object.defineProperty(file, "webkitRelativePath", {
+      value: `${"目录".repeat(30)}/a.xmind`,
+    });
+    Object.defineProperty(folderInput, "files", {
+      value: [file],
+      writable: true,
+      configurable: true,
+    });
+    await fireEvent.change(folderInput);
+
+    await userEvent.click(submitButton());
+
+    expect(screen.getByText(/有 1 个目录无法自动创建，相关文件改为未归档。/u)).toBeInTheDocument();
+    expect(await requestBodies("POST", "/folders")).toEqual([]);
+    const batches = (await requestBodies("POST", "/import-batches")) as Array<{
+      files: Array<{ targetFolderId: string | null }>;
+    }>;
+    expect(batches[0]?.files[0]?.targetFolderId).toBeNull();
   });
 });

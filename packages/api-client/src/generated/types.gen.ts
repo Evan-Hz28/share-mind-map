@@ -86,6 +86,11 @@ export type CreateDocumentDto = {
     name: string;
 };
 
+export type CreateFolderDto = {
+    name: string;
+    parentId?: string | null;
+};
+
 export type CreateImportBatchDto = {
     files: Array<ImportFilePreflightDto>;
 };
@@ -151,6 +156,7 @@ export type DraftExportDto = {
 
 export type FolderDeleteCheckResponseDto = {
     canDelete: boolean;
+    descendantFolderCount: number;
     documentCount: number;
     folder: FolderDto;
 };
@@ -159,6 +165,7 @@ export type FolderDto = {
     createdAt: string;
     id: string;
     name: string;
+    parentId: string | null;
     updatedAt: string;
     workspaceId: string;
 };
@@ -267,6 +274,10 @@ export type MemberResponseDto = {
     userId: string;
 };
 
+export type MoveFolderDto = {
+    parentId: string | null;
+};
+
 export type NotificationDto = {
     body: string;
     createdAt: string;
@@ -311,6 +322,11 @@ export type PermissionRequestListDto = {
 export type PermissionRequestResponseDto = {
     changed: boolean;
     request: PermissionRequestDto;
+};
+
+export type ReorderFoldersDto = {
+    folderIds: Array<string>;
+    parentId?: string | null;
 };
 
 export type RevokeEditingResponseDto = {
@@ -1244,7 +1260,7 @@ export type ListFoldersResponses = {
 export type ListFoldersResponse = ListFoldersResponses[keyof ListFoldersResponses];
 
 export type CreateFolderData = {
-    body: FolderNameDto;
+    body: CreateFolderDto;
     headers?: {
         /**
          * Optional caller-provided request correlation identifier.
@@ -1331,6 +1347,49 @@ export type CheckFolderDeleteResponses = {
 };
 
 export type CheckFolderDeleteResponse = CheckFolderDeleteResponses[keyof CheckFolderDeleteResponses];
+
+export type MoveFolderData = {
+    body: MoveFolderDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        folderId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/folders/{folderId}/parent';
+};
+
+export type MoveFolderResponses = {
+    200: FolderResponseDto;
+};
+
+export type MoveFolderResponse = MoveFolderResponses[keyof MoveFolderResponses];
+
+export type ReorderFoldersData = {
+    body: ReorderFoldersDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/folders/order';
+};
+
+export type ReorderFoldersResponses = {
+    204: void;
+};
+
+export type ReorderFoldersResponse = ReorderFoldersResponses[keyof ReorderFoldersResponses];
 
 export type CreateImportBatchData = {
     body: CreateImportBatchDto;

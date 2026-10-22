@@ -42,6 +42,7 @@ describe("database migrations", () => {
       "0001_phase2_workspace",
       "0002_phase3_import_export",
       "0003_phase4_editing",
+      "0004_phase5_folder_tree",
     ]);
   });
 
@@ -74,6 +75,7 @@ describe("database migrations", () => {
       "0001_phase2_workspace",
       "0002_phase3_import_export",
       "0003_phase4_editing",
+      "0004_phase5_folder_tree",
     ]);
   });
 

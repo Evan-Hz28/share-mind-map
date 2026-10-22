@@ -30,8 +30,42 @@ export const IMPORT_FILE_MAX_NAME_LENGTH = 100;
  */
 export const IMPORT_BATCH_MAX_FILES = 100;
 
+/** 文件夹层级上限,与服务端 MAX_FOLDER_DEPTH 一致(根为第 1 层)。 */
+export const IMPORT_FOLDER_MAX_DEPTH = 8;
+
+/** 文件夹名长度上限,与服务端 normalizeEntityName(name, 50) 一致。 */
+export const IMPORT_FOLDER_MAX_NAME_LENGTH = 50;
+
 export function isXmindFileName(name: string): boolean {
   return name.toLocaleLowerCase().endsWith(".xmind");
+}
+
+/** 导入路径里的目录部分;顶层文件的返回空串。 */
+export function importFolderPath(path: string): string {
+  return path
+    .split("/")
+    .filter((segment) => segment !== "")
+    .slice(0, -1)
+    .join("/");
+}
+
+/**
+ * 单个目录段的归一化比较键,规则与服务端文件夹命名一致。
+ * 空或超长返回 null(服务端会拒绝,调用方应放弃自动归档该路径)。
+ */
+export function normalizeFolderName(input: string): string | null {
+  const displayName = toDisplayName(input);
+  if (displayName === "" || displayName.length > IMPORT_FOLDER_MAX_NAME_LENGTH) return null;
+  return displayName.toLocaleLowerCase("en-US");
+}
+
+/** 整条目录路径的归一化键;任何一段非法都返回 null。 */
+export function normalizeFolderPath(path: string): string | null {
+  const segments = path.split("/").filter((segment) => segment !== "");
+  if (segments.length === 0) return "";
+  if (segments.length > IMPORT_FOLDER_MAX_DEPTH) return null;
+  const keys = segments.map((segment) => normalizeFolderName(segment));
+  return keys.some((key) => key === null) ? null : keys.join("/");
 }
 
 /** 与服务端 normalizeEntityName 一致的展示串:NFC → 去首尾空白 → 连续空白折成一个空格。 */

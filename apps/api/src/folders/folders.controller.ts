@@ -21,7 +21,13 @@ import { PasswordChangeGuard } from "../common/guards/password-change.guard.js";
 import { RolesGuard } from "../common/guards/roles.guard.js";
 import { SessionGuard } from "../common/guards/session.guard.js";
 import { getRequestId } from "../platform/http/request-id.middleware.js";
-import { DeleteFolderQueryDto, FolderNameDto } from "./dto/folder-input.dto.js";
+import {
+  CreateFolderDto,
+  DeleteFolderQueryDto,
+  FolderNameDto,
+  MoveFolderDto,
+  ReorderFoldersDto,
+} from "./dto/folder-input.dto.js";
 import {
   FolderDeleteCheckResponseDto,
   FolderListResponseDto,
@@ -54,10 +60,45 @@ export class FoldersController {
   @ApiResponse({ status: 201, type: FolderResponseDto })
   public create(
     @Param("workspaceId", new ParseUUIDPipe({ version: "7" })) workspaceId: string,
-    @Body() input: FolderNameDto,
+    @Body() input: CreateFolderDto,
     @Req() request: Request,
   ): Promise<FolderResponseDto> {
     return this.folders.create(getAuthContext(request), workspaceId, input, getRequestId(request));
+  }
+
+  // 必须声明在 :folderId 之前,否则 "order" 会被 ParseUUIDPipe 拒成 400。
+  @Patch("order")
+  @HttpCode(204)
+  @Roles("editor")
+  @ApiSecurity({ sessionCookie: [], csrfToken: [] })
+  @ApiOperation({ operationId: "reorderFolders" })
+  @ApiResponse({ status: 204 })
+  public reorder(
+    @Param("workspaceId", new ParseUUIDPipe({ version: "7" })) workspaceId: string,
+    @Body() input: ReorderFoldersDto,
+    @Req() request: Request,
+  ): Promise<void> {
+    return this.folders.reorder(getAuthContext(request), workspaceId, input, getRequestId(request));
+  }
+
+  @Patch(":folderId/parent")
+  @Roles("editor")
+  @ApiSecurity({ sessionCookie: [], csrfToken: [] })
+  @ApiOperation({ operationId: "moveFolder" })
+  @ApiResponse({ status: 200, type: FolderResponseDto })
+  public move(
+    @Param("workspaceId", new ParseUUIDPipe({ version: "7" })) workspaceId: string,
+    @Param("folderId", new ParseUUIDPipe({ version: "7" })) folderId: string,
+    @Body() input: MoveFolderDto,
+    @Req() request: Request,
+  ): Promise<FolderResponseDto> {
+    return this.folders.move(
+      getAuthContext(request),
+      workspaceId,
+      folderId,
+      input,
+      getRequestId(request),
+    );
   }
 
   @Patch(":folderId")

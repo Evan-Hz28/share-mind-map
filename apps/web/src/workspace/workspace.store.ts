@@ -16,9 +16,11 @@ import {
   listDocuments,
   listFolders,
   listNotifications,
+  moveFolder as moveWorkspaceFolder,
   readAllNotifications,
   readNotification,
   renameFolder,
+  reorderFolders as reorderWorkspaceFolders,
   rejectEditPermissionRequest,
   retryImportJob,
   revokeMemberEditing,
@@ -167,25 +169,39 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
       }
     },
 
-    async createFolder(name: string): Promise<boolean> {
-      if (this.workspaceId === null) return false;
+    async createFolder(name: string, parentId: string | null = null): Promise<FolderDto | null> {
+      if (this.workspaceId === null) return null;
       this.mutating = true;
       this.error = null;
       try {
         const result = await createFolder({
           client: apiClient,
           path: { workspaceId: this.workspaceId },
-          body: { name },
+          body: { name, parentId },
         });
         if (result.data === undefined) {
           this.error = toApiFailure(result.error);
-          return false;
+          return null;
         }
         this.folders.push(result.data.folder);
-        return true;
+        return result.data.folder;
       } finally {
         this.mutating = false;
       }
+    },
+
+    /** 重新拉一次文件夹列表,用于并发建文件夹撞名之后重新对号。 */
+    async reloadFolders(): Promise<void> {
+      if (this.workspaceId === null) return;
+      const result = await listFolders({
+        client: apiClient,
+        path: { workspaceId: this.workspaceId },
+      });
+      if (result.data === undefined) {
+        this.error = toApiFailure(result.error);
+        return;
+      }
+      this.folders = result.data.folders;
     },
 
     async renameFolder(folderId: string, name: string): Promise<boolean> {
@@ -210,7 +226,75 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
       }
     },
 
-    async checkFolderDelete(folderId: string): Promise<number | null> {
+    async reorderFolders(parentId: string | null, folderIds: string[]): Promise<boolean> {
+      if (this.workspaceId === null) return false;
+      if (new Set(folderIds).size !== folderIds.length) return false;
+      const previous = [...this.folders];
+      const byId = new Map(previous.map((folder) => [folder.id, folder]));
+      const siblings = previous.filter((folder) => (folder.parentId ?? null) === parentId);
+      if (
+        siblings.length !== folderIds.length ||
+        folderIds.some((id) => byId.get(id) === undefined)
+      ) {
+        return false;
+      }
+      // 只替换同级节点占据的位置,其他层级和顺序原样保留。
+      let cursor = 0;
+      const siblingIds = new Set(folderIds);
+      this.folders = previous.map((folder) => {
+        if (!siblingIds.has(folder.id)) return folder;
+        const next = folderIds[cursor];
+        cursor += 1;
+        return next === undefined ? folder : (byId.get(next) ?? folder);
+      });
+      this.mutating = true;
+      this.error = null;
+      try {
+        const result = await reorderWorkspaceFolders({
+          client: apiClient,
+          path: { workspaceId: this.workspaceId },
+          body: { parentId, folderIds },
+        });
+        if (result.error !== undefined) {
+          this.folders = previous;
+          this.error = toApiFailure(result.error);
+          return false;
+        }
+        return true;
+      } catch {
+        this.folders = previous;
+        this.error = toApiFailure(undefined);
+        return false;
+      } finally {
+        this.mutating = false;
+      }
+    },
+
+    async moveFolder(folderId: string, parentId: string | null): Promise<boolean> {
+      if (this.workspaceId === null) return false;
+      this.mutating = true;
+      this.error = null;
+      try {
+        const result = await moveWorkspaceFolder({
+          client: apiClient,
+          path: { workspaceId: this.workspaceId, folderId },
+          body: { parentId },
+        });
+        if (result.data === undefined) {
+          this.error = toApiFailure(result.error);
+          return false;
+        }
+        const index = this.folders.findIndex((folder) => folder.id === folderId);
+        if (index >= 0) this.folders[index] = result.data.folder;
+        return true;
+      } finally {
+        this.mutating = false;
+      }
+    },
+
+    async checkFolderDelete(
+      folderId: string,
+    ): Promise<{ documentCount: number; descendantFolderCount: number } | null> {
       if (this.workspaceId === null) return null;
       this.error = null;
       const result = await checkFolderDelete({
@@ -221,7 +305,10 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
         this.error = toApiFailure(result.error);
         return null;
       }
-      return result.data.documentCount;
+      return {
+        documentCount: result.data.documentCount,
+        descendantFolderCount: result.data.descendantFolderCount,
+      };
     },
 
     async deleteFolder(folderId: string, expectedDocumentCount: number): Promise<boolean> {
@@ -238,8 +325,24 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
           this.error = toApiFailure(result.error);
           return false;
         }
-        this.folders = this.folders.filter((folder) => folder.id !== folderId);
-        this.documents = this.documents.filter((document) => document.folderId !== folderId);
+        const removed = new Set<string>();
+        let frontier = [folderId];
+        while (frontier.length > 0) {
+          const next: string[] = [];
+          for (const id of frontier) {
+            if (removed.has(id)) continue;
+            removed.add(id);
+            for (const child of this.folders) {
+              if (child.parentId === id) next.push(child.id);
+            }
+          }
+          frontier = next;
+        }
+        this.folders = this.folders.filter((folder) => !removed.has(folder.id));
+        this.documents = this.documents.filter((document) => {
+          const target = document.folderId;
+          return target === null || target === undefined || !removed.has(target);
+        });
         return true;
       } finally {
         this.mutating = false;

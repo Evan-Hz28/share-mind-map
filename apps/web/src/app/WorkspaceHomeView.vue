@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import {
+  ArrowDown,
+  ArrowRight,
   Bell,
   Document,
   Download,
@@ -16,6 +18,7 @@ import {
   Upload,
 } from "@element-plus/icons-vue";
 import { ElButton, ElDialog, ElIcon, ElInput, ElTag } from "element-plus";
+import type { FolderDto } from "@share-mind-map/api-client";
 import { computed, onMounted, reactive, ref } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
@@ -32,7 +35,11 @@ import {
 import {
   IMPORT_BATCH_MAX_FILES,
   IMPORT_FILE_MAX_MEGABYTES,
+  IMPORT_FOLDER_MAX_DEPTH,
   defaultImportNames,
+  importFolderPath,
+  normalizeFolderName,
+  normalizeFolderPath,
   normalizeImportName,
   validateImportFile,
   validateImportName,
@@ -47,7 +54,10 @@ interface ImportRow {
   path: string;
   file: File;
   name: string;
-  folderId: string;
+  /** 目录路径(不含文件名);顶层文件为空串。 */
+  folderPath: string;
+  /** "" 未归档 / "id:<uuid>" 已存在 / "path:<目录路径>" 提交时再创建。 */
+  folderValue: string;
 }
 
 let nextImportRowId = 1;
@@ -61,6 +71,8 @@ const dialogKind = ref<"folder" | "document">("folder");
 const editingFolderId = ref<string | null>(null);
 const editingDocumentId = ref<string | null>(null);
 const form = reactive({ name: "", folderId: "" });
+/** 新建文件夹时选定的父文件夹;重命名不使用。 */
+const creatingFolderParentId = ref<string | null>(null);
 const notificationOpen = ref(false);
 const importDialogOpen = ref(false);
 const importRows = ref<ImportRow[]>([]);
@@ -71,11 +83,18 @@ const importSummary = ref<string | null>(null);
 /** dragenter/dragleave 会在子元素之间反复冒泡,用计数抵消,免得高亮闪烁。 */
 let importDragDepth = 0;
 const moreMenuDocumentId = ref<string | null>(null);
+const moreMenuFolderId = ref<string | null>(null);
 /** "all" / "unassigned" / 文件夹 id。A 段先在已加载的文档上做筛选。 */
 const selectedFolderId = ref<string>("all");
 const folderSearch = ref("");
 const documentSearch = ref("");
 const viewMode = ref<"list" | "grid">("list");
+/** 文件夹拖拽排序的临时状态:不依赖 dataTransfer,jsdom 里也能直接派发事件。 */
+const draggingFolderId = ref<string | null>(null);
+const dragOverFolderId = ref<string | null>(null);
+const folderDropMode = ref<"before" | "after" | "inside">("before");
+/** 展开的文件夹 id。Set 原地增删不会触发更新,每次都换一个新 Set。 */
+const expandedFolderIds = ref<Set<string>>(new Set());
 
 const workspaceId = computed(() => auth.session?.defaultWorkspace.id ?? "");
 const canEdit = computed(() => auth.role === "editor" || auth.role === "admin");
@@ -126,6 +145,17 @@ const canSubmitImport = computed(
 const importSlotsLeft = computed(() =>
   Math.max(0, IMPORT_BATCH_MAX_FILES - importRows.value.length),
 );
+/** 待创建的目录路径,父目录排在子目录之前。 */
+const pendingImportFolderPaths = computed(() => {
+  const paths = new Set<string>();
+  for (const row of importRows.value) {
+    if (row.folderValue.startsWith("path:")) paths.add(row.folderValue.slice(5));
+  }
+  return [...paths].sort(
+    (left, right) =>
+      left.split("/").length - right.split("/").length || left.localeCompare(right, "zh"),
+  );
+});
 
 const selectedFolder = computed(
   () => workspace.folders.find((folder) => folder.id === selectedFolderId.value) ?? null,
@@ -141,13 +171,103 @@ const libraryDescription = computed(() => {
   return "查看该文件夹下的文档。";
 });
 const normalizedFolderQuery = computed(() => folderSearch.value.trim().toLocaleLowerCase("zh-CN"));
-const visibleFolders = computed(() => {
-  const query = normalizedFolderQuery.value;
-  if (query === "") return workspace.folders;
-  return workspace.folders.filter((folder) =>
-    folder.name.toLocaleLowerCase("zh-CN").includes(query),
-  );
+
+interface FolderTreeRow {
+  folder: FolderDto;
+  depth: number;
+  hasChildren: boolean;
+}
+
+const folderChildren = computed<Map<string, FolderDto[]>>(() => {
+  const map = new Map<string, FolderDto[]>();
+  for (const folder of workspace.folders) {
+    const key = folder.parentId ?? "";
+    const list = map.get(key);
+    if (list === undefined) map.set(key, [folder]);
+    else list.push(folder);
+  }
+  return map;
 });
+
+/** 每个文件夹的展示路径与归一化路径键,建一次给所有地方复用。 */
+const folderIndex = computed(() => {
+  const byId = new Map(workspace.folders.map((folder) => [folder.id, folder]));
+  const pathById = new Map<string, string>();
+  const keyById = new Map<string, string>();
+  const idByKey = new Map<string, string>();
+  for (const folder of workspace.folders) {
+    const chain: FolderDto[] = [];
+    let cursor: FolderDto | undefined = folder;
+    let guard = 0;
+    while (cursor !== undefined && guard <= 64) {
+      chain.unshift(cursor);
+      guard += 1;
+      cursor = cursor.parentId === null ? undefined : byId.get(cursor.parentId);
+    }
+    pathById.set(folder.id, chain.map((node) => node.name).join(" / "));
+    const keys = chain.map((node) => normalizeFolderName(node.name));
+    if (keys.every((key) => key !== null)) {
+      const key = keys.join("/");
+      keyById.set(folder.id, key);
+      idByKey.set(key, folder.id);
+    }
+  }
+  return { pathById, keyById, idByKey };
+});
+
+const folderIdByPath = computed(() => folderIndex.value.idByKey);
+
+function folderPath(folderId: string): string {
+  return folderIndex.value.pathById.get(folderId) ?? "";
+}
+
+/** 按树序展开成可渲染的行;搜索时只保留命中节点和它们的祖先,并强制展开。 */
+const folderTreeRows = computed<FolderTreeRow[]>(() => {
+  const query = normalizedFolderQuery.value;
+  const byId = new Map(workspace.folders.map((folder) => [folder.id, folder]));
+  const visible = new Set<string>();
+  if (query !== "") {
+    for (const folder of workspace.folders) {
+      if (!folder.name.toLocaleLowerCase("zh-CN").includes(query)) continue;
+      let cursor: FolderDto | undefined = folder;
+      let guard = 0;
+      while (cursor !== undefined && guard <= 64) {
+        visible.add(cursor.id);
+        guard += 1;
+        cursor = cursor.parentId === null ? undefined : byId.get(cursor.parentId);
+      }
+    }
+  }
+  const rows: FolderTreeRow[] = [];
+  const walk = (parentId: string | null, depth: number): void => {
+    for (const folder of folderChildren.value.get(parentId ?? "") ?? []) {
+      if (query !== "" && !visible.has(folder.id)) continue;
+      const children = folderChildren.value.get(folder.id) ?? [];
+      rows.push({ folder, depth, hasChildren: children.length > 0 });
+      if (query !== "" || expandedFolderIds.value.has(folder.id)) walk(folder.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return rows;
+});
+
+/** 下拉选择器用全量树,不受搜索和展开状态影响。 */
+const folderSelectOptions = computed<Array<{ id: string; path: string; depth: number }>>(() => {
+  const options: Array<{ id: string; path: string; depth: number }> = [];
+  const walk = (parentId: string | null, depth: number): void => {
+    for (const folder of folderChildren.value.get(parentId ?? "") ?? []) {
+      options.push({ id: folder.id, path: folderPath(folder.id), depth });
+      walk(folder.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return options;
+});
+
+/** 过滤后列表是子集,下标映射不到全量顺序,搜索时直接禁用拖拽。 */
+const canReorderFolders = computed(
+  () => canEdit.value && normalizedFolderQuery.value === "" && !workspace.mutating,
+);
 /**
  * A 段没有按文件夹查询的 API,这里只统计已加载的文档。
  * 文档数超过一页时,「全部文件」用 `50+` 标出还有未加载的部分。
@@ -159,6 +279,35 @@ const documentCounts = computed(() => {
     counts.set(document.folderId, (counts.get(document.folderId) ?? 0) + 1);
   }
   return counts;
+});
+/** 文件夹计数按整棵子树聚合,选中父文件夹时看到的数量才对得上。 */
+const folderSubtreeCounts = computed(() => {
+  const counts = new Map<string, number>();
+  const sum = (folderId: string, guard: number): number => {
+    let total = documentCounts.value.get(folderId) ?? 0;
+    if (guard <= 64) {
+      for (const child of folderChildren.value.get(folderId) ?? []) {
+        total += sum(child.id, guard + 1);
+      }
+    }
+    counts.set(folderId, total);
+    return total;
+  };
+  for (const root of folderChildren.value.get("") ?? []) sum(root.id, 0);
+  return counts;
+});
+/** 选中文件夹及其所有后代 id;选中的不是文件夹时返回 null。 */
+const selectedSubtreeIds = computed<Set<string> | null>(() => {
+  const selected = selectedFolderId.value;
+  if (selected === "all" || selected === "unassigned") return null;
+  const ids = new Set<string>();
+  const walk = (folderId: string, guard: number): void => {
+    if (ids.has(folderId) || guard > 64) return;
+    ids.add(folderId);
+    for (const child of folderChildren.value.get(folderId) ?? []) walk(child.id, guard + 1);
+  };
+  walk(selected, 0);
+  return ids;
 });
 const unassignedCount = computed(
   () =>
@@ -177,7 +326,13 @@ const scopedDocuments = computed(() => {
       (document) => document.folderId === null || document.folderId === undefined,
     );
   }
-  return workspace.documents.filter((document) => document.folderId === selectedFolderId.value);
+  const subtree = selectedSubtreeIds.value;
+  return workspace.documents.filter(
+    (document) =>
+      document.folderId !== null &&
+      document.folderId !== undefined &&
+      (subtree?.has(document.folderId) ?? false),
+  );
 });
 const visibleDocuments = computed(() => {
   const query = documentSearch.value.trim().toLocaleLowerCase("zh-CN");
@@ -192,13 +347,9 @@ const documentEmptyMessage = computed(() => {
   return "暂无文档。";
 });
 
-const folderNames = computed(
-  () => new Map(workspace.folders.map((folder) => [folder.id, folder.name])),
-);
-
 function folderLabel(folderId: string | null | undefined): string {
   if (folderId === null || folderId === undefined) return "未归档";
-  return folderNames.value.get(folderId) ?? "未归档";
+  return folderPath(folderId) || "未归档";
 }
 
 function formatDateTime(iso: string): string {
@@ -213,7 +364,7 @@ function formatDateTime(iso: string): string {
 }
 
 function folderCount(folderId: string): number {
-  return documentCounts.value.get(folderId) ?? 0;
+  return folderSubtreeCounts.value.get(folderId) ?? 0;
 }
 
 function selectAllDocuments(): void {
@@ -231,13 +382,34 @@ function selectFolder(folderId: string): void {
   documentSearch.value = "";
 }
 
-function openCreateFolder(): void {
+function openCreateFolder(parentId: string | null = null): void {
   dialogKind.value = "folder";
   editingFolderId.value = null;
   editingDocumentId.value = null;
+  creatingFolderParentId.value = parentId;
   form.name = "";
   form.folderId = "";
   dialogOpen.value = true;
+}
+
+function toggleFolderExpanded(folderId: string): void {
+  const next = new Set(expandedFolderIds.value);
+  if (next.has(folderId)) next.delete(folderId);
+  else next.add(folderId);
+  expandedFolderIds.value = next;
+}
+
+/** 目标是不是源自己或源的后代,用来拦掉「拖进自己的子树」这种非法移动。 */
+function isSelfOrDescendant(folderId: string, ancestorId: string): boolean {
+  const byId = new Map(workspace.folders.map((folder) => [folder.id, folder]));
+  let cursor: FolderDto | undefined = byId.get(folderId);
+  let guard = 0;
+  while (cursor !== undefined && guard <= 64) {
+    if (cursor.id === ancestorId) return true;
+    guard += 1;
+    cursor = cursor.parentId === null ? undefined : byId.get(cursor.parentId);
+  }
+  return false;
 }
 
 /**
@@ -301,12 +473,21 @@ function applyCollected(collected: CollectedFiles): void {
     importRows.value.map((row) => row.name),
   );
   for (const [index, entry] of fresh.entries()) {
+    const entryFolderPath = importFolderPath(entry.path);
+    const key = normalizeFolderPath(entryFolderPath);
+    const existingId = key === null ? undefined : folderIdByPath.value.get(key);
     importRows.value.push({
       id: nextImportRowId,
       path: entry.path,
       file: entry.file,
       name: names[index] ?? entry.file.name,
-      folderId: "",
+      folderPath: entryFolderPath,
+      folderValue:
+        existingId !== undefined
+          ? `id:${existingId}`
+          : entryFolderPath === ""
+            ? ""
+            : `path:${entryFolderPath}`,
     });
     nextImportRowId += 1;
   }
@@ -362,13 +543,66 @@ function closeImportDialog(): void {
   importDialogOpen.value = false;
 }
 
+/**
+ * 按目录自动归档:把 "path:" 的行逐级落成真实文件夹。
+ * 撞名(别处刚建了同名)就重拉列表复用;层级超限/名字超长/数量到顶则放弃,
+ * 该路径下的行退回未归档,不让整批导入失败。
+ */
+async function ensureFolderPath(path: string): Promise<string | null> {
+  const segments = path.split("/").filter((segment) => segment !== "");
+  if (segments.length === 0 || segments.length > IMPORT_FOLDER_MAX_DEPTH) return null;
+  let parentId: string | null = null;
+  let key = "";
+  for (const segment of segments) {
+    const segmentKey = normalizeFolderName(segment);
+    if (segmentKey === null) return null;
+    key = key === "" ? segmentKey : `${key}/${segmentKey}`;
+    const existing = folderIdByPath.value.get(key);
+    if (existing !== undefined) {
+      parentId = existing;
+      continue;
+    }
+    const folder = await workspace.createFolder(segment, parentId);
+    if (folder === null) {
+      if (workspace.error?.code === "FOLDER_NAME_CONFLICT") {
+        await workspace.reloadFolders();
+        const retry = folderIdByPath.value.get(key);
+        if (retry !== undefined) {
+          parentId = retry;
+          continue;
+        }
+      }
+      return null;
+    }
+    parentId = folder.id;
+  }
+  return parentId;
+}
+
+async function prepareImportFolders(): Promise<void> {
+  let abandoned = 0;
+  for (const path of pendingImportFolderPaths.value) {
+    const folderId = await ensureFolderPath(path);
+    for (const row of importRows.value) {
+      if (row.folderValue !== `path:${path}`) continue;
+      if (folderId === null) row.folderValue = "";
+      else row.folderValue = `id:${folderId}`;
+    }
+    if (folderId === null) abandoned += 1;
+  }
+  if (abandoned > 0) {
+    importSummary.value = `${importSummary.value ?? ""}有 ${String(abandoned)} 个目录无法自动创建，相关文件改为未归档。`;
+  }
+}
+
 async function submitImport(): Promise<void> {
   if (!canSubmitImport.value) return;
+  await prepareImportFolders();
   const ok = await workspace.importFiles(
     importRows.value.map((row) => ({
       file: row.file,
       targetName: row.name,
-      targetFolderId: row.folderId || null,
+      targetFolderId: row.folderValue.startsWith("id:") ? row.folderValue.slice(3) : null,
     })),
   );
   if (ok) closeImportDialog();
@@ -408,6 +642,27 @@ function openDocument(documentId: string | null, name = "", folderId: string | n
 
 function toggleDocumentMenu(documentId: string): void {
   moreMenuDocumentId.value = moreMenuDocumentId.value === documentId ? null : documentId;
+  if (moreMenuDocumentId.value !== null) moreMenuFolderId.value = null;
+}
+
+function toggleFolderMenu(folderId: string): void {
+  moreMenuFolderId.value = moreMenuFolderId.value === folderId ? null : folderId;
+  if (moreMenuFolderId.value !== null) moreMenuDocumentId.value = null;
+}
+
+function createSubfolder(folderId: string): void {
+  moreMenuFolderId.value = null;
+  openCreateFolder(folderId);
+}
+
+function renameFolderFromMenu(folderId: string, name: string): void {
+  moreMenuFolderId.value = null;
+  openRenameFolder(folderId, name);
+}
+
+async function deleteFolderFromMenu(folderId: string, name: string): Promise<void> {
+  moreMenuFolderId.value = null;
+  await deleteFolder(folderId, name);
 }
 
 async function deleteDocument(documentId: string, name: string): Promise<void> {
@@ -416,25 +671,141 @@ async function deleteDocument(documentId: string, name: string): Promise<void> {
 }
 
 async function deleteFolder(folderId: string, name: string): Promise<void> {
-  const documentCount = await workspace.checkFolderDelete(folderId);
-  if (documentCount === null) return;
-  const message =
-    documentCount === 0
-      ? `确定删除空文件夹「${name}」吗？`
-      : `删除后不可恢复，将同时永久删除文件夹内 ${String(documentCount)} 篇文档。确定删除「${name}」吗？`;
-  if (!globalThis.confirm(message)) return;
-  if (await workspace.deleteFolder(folderId, documentCount)) {
-    if (selectedFolderId.value === folderId) selectedFolderId.value = "all";
+  const counts = await workspace.checkFolderDelete(folderId);
+  if (counts === null) return;
+  const details: string[] = [];
+  if (counts.descendantFolderCount > 0) {
+    details.push(`${String(counts.descendantFolderCount)} 个子文件夹`);
   }
+  if (counts.documentCount > 0) details.push(`${String(counts.documentCount)} 篇文档`);
+  const message =
+    details.length === 0
+      ? `确定删除空文件夹「${name}」吗？`
+      : `删除后不可恢复，将同时永久删除 ${details.join("、")}。确定删除「${name}」吗？`;
+  if (!globalThis.confirm(message)) return;
+  const selectionWasInside =
+    selectedFolderId.value === folderId ||
+    (selectedFolderId.value !== "all" &&
+      selectedFolderId.value !== "unassigned" &&
+      isSelfOrDescendant(selectedFolderId.value, folderId));
+  if (await workspace.deleteFolder(folderId, counts.documentCount)) {
+    if (selectionWasInside) selectedFolderId.value = "all";
+  }
+}
+
+function folderDragStart(event: DragEvent, folderId: string): void {
+  if (!canReorderFolders.value) {
+    event.preventDefault();
+    return;
+  }
+  draggingFolderId.value = folderId;
+  folderDropMode.value = "before";
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    // 只在拖出侧边栏时有用;内部排序不读它,所以测试不用造 DataTransfer。
+    event.dataTransfer.setData("text/plain", folderId);
+  }
+}
+
+function siblingIdsOf(parentId: string | null): string[] {
+  return workspace.folders
+    .filter((folder) => (folder.parentId ?? null) === parentId)
+    .map((folder) => folder.id);
+}
+
+/**
+ * 行上分三段:上 30% 插到前面、下 30% 插到后面、中间放进文件夹。
+ * 目标在源的子树里时不允许「放进」,退化成插到后面。
+ */
+function folderDragOver(event: DragEvent, folderId: string): void {
+  if (draggingFolderId.value === null || draggingFolderId.value === folderId) return;
+  const row = event.currentTarget as HTMLElement | null;
+  const rect = row?.getBoundingClientRect();
+  dragOverFolderId.value = folderId;
+  if (rect === undefined || rect.height <= 0) {
+    folderDropMode.value = "before";
+    return;
+  }
+  const ratio = (event.clientY - rect.top) / rect.height;
+  if (ratio < 0.3) folderDropMode.value = "before";
+  else if (ratio > 0.7) folderDropMode.value = "after";
+  else {
+    folderDropMode.value = isSelfOrDescendant(folderId, draggingFolderId.value)
+      ? "after"
+      : "inside";
+  }
+}
+
+function folderDragLeave(folderId: string): void {
+  if (dragOverFolderId.value !== folderId) return;
+  dragOverFolderId.value = null;
+  folderDropMode.value = "before";
+}
+
+function resetFolderDragState(): void {
+  draggingFolderId.value = null;
+  dragOverFolderId.value = null;
+  folderDropMode.value = "before";
+}
+
+async function folderDrop(event: DragEvent, targetId: string): Promise<void> {
+  event.preventDefault();
+  const sourceId = draggingFolderId.value;
+  const mode = folderDropMode.value;
+  resetFolderDragState();
+  if (sourceId === null || sourceId === targetId) return;
+  const byId = new Map(workspace.folders.map((folder) => [folder.id, folder]));
+  const source = byId.get(sourceId);
+  const target = byId.get(targetId);
+  if (source === undefined || target === undefined) return;
+
+  if (mode === "inside") {
+    if (isSelfOrDescendant(targetId, sourceId)) return;
+    if (await workspace.moveFolder(sourceId, targetId)) {
+      expandedFolderIds.value = new Set([...expandedFolderIds.value, targetId]);
+    }
+    return;
+  }
+
+  const parentId = target.parentId ?? null;
+  const ids = siblingIdsOf(parentId).filter((id) => id !== sourceId);
+  const at = ids.indexOf(targetId);
+  if (at < 0) return;
+  ids.splice(mode === "after" ? at + 1 : at, 0, sourceId);
+  if ((source.parentId ?? null) !== parentId) {
+    if (!(await workspace.moveFolder(sourceId, parentId))) return;
+  }
+  await workspace.reorderFolders(parentId, ids);
+}
+
+/** 拖到「全部文件」＝移回顶层。 */
+async function folderDropOnRoot(event: DragEvent): Promise<void> {
+  event.preventDefault();
+  const sourceId = draggingFolderId.value;
+  resetFolderDragState();
+  if (sourceId === null) return;
+  const source = workspace.folders.find((folder) => folder.id === sourceId);
+  if (source === undefined || (source.parentId ?? null) === null) return;
+  const ids = siblingIdsOf(null).filter((id) => id !== sourceId);
+  ids.push(sourceId);
+  if (!(await workspace.moveFolder(sourceId, null))) return;
+  await workspace.reorderFolders(null, ids);
 }
 
 async function submitDialog(): Promise<void> {
   const name = form.name.trim();
   if (name === "") return;
+  const createdFolder =
+    dialogKind.value === "folder" && editingFolderId.value === null
+      ? await workspace.createFolder(name, creatingFolderParentId.value)
+      : null;
+  if (createdFolder !== null && creatingFolderParentId.value !== null) {
+    expandedFolderIds.value = new Set([...expandedFolderIds.value, creatingFolderParentId.value]);
+  }
   const succeeded =
     dialogKind.value === "folder"
       ? editingFolderId.value === null
-        ? await workspace.createFolder(name)
+        ? createdFolder !== null
         : await workspace.renameFolder(editingFolderId.value, name)
       : editingDocumentId.value === null
         ? await workspace.createDocument(name, form.folderId || null)
@@ -489,7 +860,7 @@ onMounted(() => void load().then(runQuickAction));
         <ElButton v-if="auth.role === 'reader'" @click="workspace.requestEditPermission()">
           <ElIcon><Edit /></ElIcon>申请编辑权限
         </ElButton>
-        <ElButton v-if="canEdit" class="workspace-action--secondary" @click="openCreateFolder">
+        <ElButton v-if="canEdit" class="workspace-action--secondary" @click="openCreateFolder()">
           <ElIcon><Plus /></ElIcon>新建文件夹
         </ElButton>
         <ElButton v-if="canEdit" type="primary" @click="openDocument(null)">
@@ -519,7 +890,11 @@ onMounted(() => void load().then(runQuickAction));
       <p>{{ canEdit ? "创建一个文件夹或空白文档开始整理。" : "等待编辑者创建文档。" }}</p>
     </div>
     <div v-else class="library-layout">
-      <aside class="library-sidebar" aria-labelledby="library-folders-heading">
+      <aside
+        class="library-sidebar"
+        :class="{ 'library-sidebar--menu-open': moreMenuFolderId !== null }"
+        aria-labelledby="library-folders-heading"
+      >
         <header class="library-sidebar__header">
           <h2 id="library-folders-heading"><FolderOpened aria-hidden="true" />用例库</h2>
           <button
@@ -527,7 +902,7 @@ onMounted(() => void load().then(runQuickAction));
             class="library-sidebar__add"
             type="button"
             aria-label="在一级文件夹中新建"
-            @click="openCreateFolder"
+            @click="openCreateFolder()"
           >
             <Plus aria-hidden="true" />
           </button>
@@ -543,7 +918,7 @@ onMounted(() => void load().then(runQuickAction));
           </ElInput>
         </div>
         <ul class="library-tree">
-          <li>
+          <li @dragover.prevent @drop.prevent="folderDropOnRoot">
             <button
               class="library-tree__item"
               :class="{ 'library-tree__item--active': selectedFolderId === 'all' }"
@@ -567,50 +942,98 @@ onMounted(() => void load().then(runQuickAction));
               <span class="library-tree__count">{{ unassignedCount }}</span>
             </button>
           </li>
-          <li v-for="folder in visibleFolders" :key="folder.id" class="library-tree__folder">
+          <li
+            v-for="row in folderTreeRows"
+            :key="row.folder.id"
+            class="library-tree__folder"
+            :class="{ 'library-tree__folder--dragging': draggingFolderId === row.folder.id }"
+            :draggable="canReorderFolders"
+            @dragstart="folderDragStart($event, row.folder.id)"
+            @dragover.prevent="folderDragOver($event, row.folder.id)"
+            @dragleave="folderDragLeave(row.folder.id)"
+            @drop.prevent="folderDrop($event, row.folder.id)"
+            @dragend="resetFolderDragState"
+          >
             <div
               class="library-tree__row"
-              :class="{ 'library-tree__row--active': selectedFolderId === folder.id }"
+              :style="{ paddingLeft: `${row.depth * 18}px` }"
+              :class="{
+                'library-tree__row--active': selectedFolderId === row.folder.id,
+                'library-tree__row--drop-before':
+                  dragOverFolderId === row.folder.id && folderDropMode === 'before',
+                'library-tree__row--drop-after':
+                  dragOverFolderId === row.folder.id && folderDropMode === 'after',
+                'library-tree__row--drop-inside':
+                  dragOverFolderId === row.folder.id && folderDropMode === 'inside',
+              }"
             >
+              <button
+                v-if="row.hasChildren"
+                class="library-tree__toggle"
+                type="button"
+                :aria-label="`${expandedFolderIds.has(row.folder.id) ? '收起' : '展开'} ${row.folder.name}`"
+                :aria-expanded="expandedFolderIds.has(row.folder.id)"
+                @click="toggleFolderExpanded(row.folder.id)"
+              >
+                <ElIcon>
+                  <ArrowDown v-if="expandedFolderIds.has(row.folder.id)" />
+                  <ArrowRight v-else />
+                </ElIcon>
+              </button>
               <button
                 class="library-tree__item"
                 type="button"
-                @click="selectFolder(folder.id)"
+                @click="selectFolder(row.folder.id)"
               >
                 <Folder aria-hidden="true" />
-                <span class="library-tree__name">{{ folder.name }}</span>
-                <span class="library-tree__count" :title="`已加载 ${folderCount(folder.id)} 篇`">{{
-                  folderCount(folder.id)
-                }}</span>
+                <span class="library-tree__name" :title="row.folder.name">{{ row.folder.name }}</span>
+                <span
+                  class="library-tree__count"
+                  :title="`已加载 ${folderCount(row.folder.id)} 篇`"
+                  >{{ folderCount(row.folder.id) }}</span
+                >
               </button>
               <button
                 v-if="canEdit"
-                class="library-tree__rename"
+                class="library-tree__more"
                 type="button"
-                :aria-label="`重命名 ${folder.name}`"
-                @click="openRenameFolder(folder.id, folder.name)"
+                :aria-label="`更多操作 ${row.folder.name}`"
+                :aria-expanded="moreMenuFolderId === row.folder.id"
+                @click.stop="toggleFolderMenu(row.folder.id)"
               >
-                重命名
+                <MoreFilled />
               </button>
-              <button
-                v-if="canEdit"
-                class="library-tree__rename library-tree__delete"
-                type="button"
-                :aria-label="`删除 ${folder.name}`"
-                @click="deleteFolder(folder.id, folder.name)"
+              <div
+                v-if="canEdit && moreMenuFolderId === row.folder.id"
+                class="popover-menu popover-menu--right library-tree__menu"
               >
-                删除
-              </button>
+                <button type="button" @click="createSubfolder(row.folder.id)">
+                  新建子文件夹
+                </button>
+                <button
+                  type="button"
+                  @click="renameFolderFromMenu(row.folder.id, row.folder.name)"
+                >
+                  重命名
+                </button>
+                <button
+                  type="button"
+                  class="library-tree__menu-delete"
+                  @click="deleteFolderFromMenu(row.folder.id, row.folder.name)"
+                >
+                  删除
+                </button>
+              </div>
             </div>
           </li>
         </ul>
         <div v-if="workspace.folders.length === 0" class="library-sidebar__empty">
           <p>暂无文件夹</p>
-          <ElButton v-if="canEdit" size="small" @click="openCreateFolder">
+          <ElButton v-if="canEdit" size="small" @click="openCreateFolder()">
             <Plus aria-hidden="true" />新建文件夹
           </ElButton>
         </div>
-        <p v-else-if="visibleFolders.length === 0" class="library-sidebar__empty">
+        <p v-else-if="folderTreeRows.length === 0" class="library-sidebar__empty">
           没有匹配的文件夹
         </p>
         <p class="library-sidebar__hint">文件夹数量基于已加载的文档统计。</p>
@@ -915,10 +1338,21 @@ onMounted(() => void load().then(runQuickAction));
           <div v-for="(row, index) in importRows" :key="row.id" class="import-list__row">
             <span class="import-list__file">{{ row.path }}</span>
             <ElInput v-model="row.name" maxlength="100" aria-label="目标文档名" />
-            <select v-model="row.folderId" aria-label="目标文件夹">
+            <select v-model="row.folderValue" aria-label="目标文件夹">
               <option value="">未归档</option>
-              <option v-for="folder in workspace.folders" :key="folder.id" :value="folder.id">
-                {{ folder.name }}
+              <option
+                v-for="option in folderSelectOptions"
+                :key="option.id"
+                :value="`id:${option.id}`"
+              >
+                {{ option.path }}
+              </option>
+              <option
+                v-for="path in pendingImportFolderPaths"
+                :key="`new:${path}`"
+                :value="`path:${path}`"
+              >
+                新建：{{ path }}
               </option>
             </select>
             <button
@@ -996,11 +1430,11 @@ onMounted(() => void load().then(runQuickAction));
           ><ElInput id="workspace-item-name" v-model="form.name" maxlength="100" show-word-limit />
         </div>
         <div v-if="dialogKind === 'document'" class="field-group">
-          <label for="workspace-document-folder">一级文件夹</label>
+          <label for="workspace-document-folder">文件夹</label>
           <select id="workspace-document-folder" v-model="form.folderId">
             <option value="">未归档</option>
-            <option v-for="folder in workspace.folders" :key="folder.id" :value="folder.id">
-              {{ folder.name }}
+            <option v-for="option in folderSelectOptions" :key="option.id" :value="option.id">
+              {{ option.path }}
             </option>
           </select>
         </div>
