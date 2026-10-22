@@ -152,6 +152,85 @@ describe("folder and document repositories", () => {
     expect(await documents.findDetail(runtime.db, workspaceId, documentId)).toBeNull();
   });
 
+  it("hard deletes a folder and its documents and allows recreating the name", async () => {
+    const folderId = await createFolder("Archive");
+    const first = await createDocument("First", folderId);
+    const second = await createDocument("Second", folderId);
+    const detached = await createDocument("Detached");
+
+    const result = await runtime.db.transaction((transaction) =>
+      folders.deleteWithDocuments(transaction, {
+        workspaceId,
+        folderId,
+        expectedDocumentCount: 2,
+      }),
+    );
+    expect(result.documentCount).toBe(2);
+    expect(result.documentIds.sort()).toEqual([first, second].sort());
+    expect(await folders.list(runtime.db, workspaceId)).toHaveLength(0);
+    expect(await documents.findDetail(runtime.db, workspaceId, first)).toBeNull();
+    expect(await documents.findDetail(runtime.db, workspaceId, second)).toBeNull();
+    expect(await documents.findDetail(runtime.db, workspaceId, detached)).not.toBeNull();
+
+    const recreated = await createFolder("Archive");
+    expect(recreated).not.toBe(folderId);
+  });
+
+  it("blocks deletion during active imports and rejects stale document counts", async () => {
+    const folderId = await createFolder("Imports");
+    await createDocument("Inside", folderId);
+
+    await expect(
+      runtime.db.transaction((transaction) =>
+        folders.deleteWithDocuments(transaction, {
+          workspaceId,
+          folderId,
+          expectedDocumentCount: 0,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "FOLDER_DELETE_CONFLICT" });
+
+    const batchId = uuidv7();
+    await runtime.db.$client.query(
+      `INSERT INTO import_batches (id, workspace_id, requested_by, total_jobs)
+       VALUES ($1, $2, $3, 1)`,
+      [batchId, workspaceId, userId],
+    );
+    await runtime.db.$client.query(
+      `INSERT INTO import_jobs
+         (id, batch_id, workspace_id, requested_by, target_folder_id,
+          client_file_name, target_name, target_name_normalized, phase)
+       VALUES ($1, $2, $3, $4, $5, 'inside.xmind', 'Inside', 'inside', 'parsing')`,
+      [uuidv7(), batchId, workspaceId, userId, folderId],
+    );
+
+    await expect(
+      runtime.db.transaction((transaction) =>
+        folders.deleteWithDocuments(transaction, {
+          workspaceId,
+          folderId,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "FOLDER_DELETE_BLOCKED" });
+
+    await runtime.db.$client.query(
+      `UPDATE import_jobs SET phase = 'succeeded' WHERE batch_id = $1`,
+      [batchId],
+    );
+    const result = await runtime.db.transaction((transaction) =>
+      folders.deleteWithDocuments(transaction, {
+        workspaceId,
+        folderId,
+      }),
+    );
+    expect(result.documentCount).toBe(1);
+    const job = await runtime.db.$client.query<{ target_folder_id: string | null }>(
+      `SELECT target_folder_id FROM import_jobs WHERE batch_id = $1`,
+      [batchId],
+    );
+    expect(job.rows[0]?.target_folder_id).toBeNull();
+  });
+
   it("rejects cross-workspace folders and enforces folder limits", async () => {
     const foreignFolderId = await createFolder("Foreign", otherWorkspaceId);
     await expect(

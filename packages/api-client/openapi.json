@@ -3269,6 +3269,54 @@
       }
     },
     "/api/v1/workspaces/{workspaceId}/folders/{folderId}": {
+      "delete": {
+        "operationId": "deleteFolder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "folderId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expectedDocumentCount",
+            "required": false,
+            "schema": {
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "folders"
+        ]
+      },
       "patch": {
         "operationId": "renameFolder",
         "parameters": [

@@ -31,6 +31,8 @@ export const errorCatalog = {
   FOLDER_DOCUMENT_LIMIT_REACHED: { status: 409, message: "文件夹文档数量已达上限。" },
   WORKSPACE_DOCUMENT_LIMIT_REACHED: { status: 409, message: "工作空间文档数量已达上限。" },
   FOLDER_NOT_EMPTY: { status: 409, message: "文件夹不为空，当前阶段不能删除。" },
+  FOLDER_DELETE_BLOCKED: { status: 409, message: "文件夹内有正在进行的导入任务，暂时不能删除。" },
+  FOLDER_DELETE_CONFLICT: { status: 409, message: "文件夹内容已变化，请重新确认后再删除。" },
   DOCUMENT_FOLDER_INVALID: { status: 400, message: "目标文件夹无效。" },
   EDIT_REQUEST_PENDING: { status: 409, message: "已有待审批的编辑权限申请。" },
   EDIT_REQUEST_TERMINAL: { status: 409, message: "编辑权限申请已经处理。" },

@@ -1264,6 +1264,30 @@ export type CreateFolderResponses = {
 
 export type CreateFolderResponse = CreateFolderResponses[keyof CreateFolderResponses];
 
+export type DeleteFolderData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+        folderId: string;
+    };
+    query?: {
+        expectedDocumentCount?: number;
+    };
+    url: '/api/v1/workspaces/{workspaceId}/folders/{folderId}';
+};
+
+export type DeleteFolderResponses = {
+    204: void;
+};
+
+export type DeleteFolderResponse = DeleteFolderResponses[keyof DeleteFolderResponses];
+
 export type RenameFolderData = {
     body: FolderNameDto;
     headers?: {

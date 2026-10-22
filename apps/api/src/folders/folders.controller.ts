@@ -1,11 +1,14 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -18,7 +21,7 @@ import { PasswordChangeGuard } from "../common/guards/password-change.guard.js";
 import { RolesGuard } from "../common/guards/roles.guard.js";
 import { SessionGuard } from "../common/guards/session.guard.js";
 import { getRequestId } from "../platform/http/request-id.middleware.js";
-import { FolderNameDto } from "./dto/folder-input.dto.js";
+import { DeleteFolderQueryDto, FolderNameDto } from "./dto/folder-input.dto.js";
 import {
   FolderDeleteCheckResponseDto,
   FolderListResponseDto,
@@ -73,6 +76,27 @@ export class FoldersController {
       workspaceId,
       folderId,
       input,
+      getRequestId(request),
+    );
+  }
+
+  @Delete(":folderId")
+  @HttpCode(204)
+  @Roles("editor")
+  @ApiSecurity({ sessionCookie: [], csrfToken: [] })
+  @ApiOperation({ operationId: "deleteFolder" })
+  @ApiResponse({ status: 204 })
+  public delete(
+    @Param("workspaceId", new ParseUUIDPipe({ version: "7" })) workspaceId: string,
+    @Param("folderId", new ParseUUIDPipe({ version: "7" })) folderId: string,
+    @Query() query: DeleteFolderQueryDto,
+    @Req() request: Request,
+  ): Promise<void> {
+    return this.folders.delete(
+      getAuthContext(request),
+      workspaceId,
+      folderId,
+      query.expectedDocumentCount,
       getRequestId(request),
     );
   }

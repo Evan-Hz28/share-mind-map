@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "../client.js";
 import { newId } from "../id.js";
+import { permanentlyDeleteDocuments } from "./document.repository.js";
 import type { DatabaseTransaction } from "./member.repository.js";
 import { Phase2RepositoryError } from "./phase2.types.js";
 
@@ -151,5 +152,87 @@ export class FolderRepository {
     `);
     const documentCount = count.rows[0]?.count ?? 0;
     return { folder: toFolderRecord(row), documentCount, canDelete: documentCount === 0 };
+  }
+
+  /**
+   * 永久删除文件夹及其全部文档。文件夹行本身也硬删:
+   * 导入任务保留,只把 target_folder_id 置空,避免外键阻塞且不残留垃圾行。
+   */
+  public async deleteWithDocuments(
+    transaction: DatabaseTransaction,
+    input: {
+      workspaceId: string;
+      folderId: string;
+      expectedDocumentCount?: number;
+    },
+  ): Promise<{
+    folder: FolderRecord;
+    documentIds: string[];
+    documentCount: number;
+    objectKeys: string[];
+  }> {
+    await lockWorkspace(transaction, input.workspaceId);
+    const folder = await transaction.execute<FolderRow>(sql`
+      SELECT id, workspace_id, name, name_normalized, sort_key, created_by, updated_by,
+             created_at, updated_at
+      FROM folders
+      WHERE id = ${input.folderId} AND workspace_id = ${input.workspaceId} AND trashed_at IS NULL
+      FOR UPDATE
+    `);
+    const folderRow = folder.rows[0];
+    if (folderRow === undefined) {
+      throw new Phase2RepositoryError("FOLDER_NOT_FOUND", "Folder does not exist.");
+    }
+
+    const activeImports = await transaction.execute<{ id: string }>(sql`
+      SELECT id
+      FROM import_jobs
+      WHERE workspace_id = ${input.workspaceId}
+        AND target_folder_id = ${input.folderId}
+        AND phase IN ('waiting', 'uploading', 'parsing', 'persisting')
+      LIMIT 1
+    `);
+    if (activeImports.rows[0] !== undefined) {
+      throw new Phase2RepositoryError("FOLDER_DELETE_BLOCKED", "Folder has active import jobs.");
+    }
+
+    const documents = await transaction.execute<{ id: string }>(sql`
+      SELECT id
+      FROM documents
+      WHERE folder_id = ${input.folderId} AND workspace_id = ${input.workspaceId}
+    `);
+    const documentIds = documents.rows.map((document) => document.id);
+    if (
+      input.expectedDocumentCount !== undefined &&
+      input.expectedDocumentCount !== documentIds.length
+    ) {
+      throw new Phase2RepositoryError(
+        "FOLDER_DELETE_CONFLICT",
+        "Folder contents changed since the delete check.",
+      );
+    }
+
+    const deletion = await permanentlyDeleteDocuments(transaction, {
+      workspaceId: input.workspaceId,
+      documentIds,
+      includeTrashed: true,
+    });
+
+    await transaction.execute(sql`
+      UPDATE import_jobs
+      SET target_folder_id = NULL, updated_at = now()
+      WHERE workspace_id = ${input.workspaceId} AND target_folder_id = ${input.folderId}
+    `);
+    await transaction.execute(sql`
+      DELETE FROM folders
+      WHERE id = ${input.folderId} AND workspace_id = ${input.workspaceId}
+    `);
+
+    return {
+      folder: toFolderRecord(folderRow),
+      documentIds,
+      documentCount: documentIds.length,
+      objectKeys: deletion.objectKeys,
+    };
   }
 }

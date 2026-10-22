@@ -415,6 +415,19 @@ async function deleteDocument(documentId: string, name: string): Promise<void> {
   if (await workspace.deleteDocument(documentId)) moreMenuDocumentId.value = null;
 }
 
+async function deleteFolder(folderId: string, name: string): Promise<void> {
+  const documentCount = await workspace.checkFolderDelete(folderId);
+  if (documentCount === null) return;
+  const message =
+    documentCount === 0
+      ? `确定删除空文件夹「${name}」吗？`
+      : `删除后不可恢复，将同时永久删除文件夹内 ${String(documentCount)} 篇文档。确定删除「${name}」吗？`;
+  if (!globalThis.confirm(message)) return;
+  if (await workspace.deleteFolder(folderId, documentCount)) {
+    if (selectedFolderId.value === folderId) selectedFolderId.value = "all";
+  }
+}
+
 async function submitDialog(): Promise<void> {
   const name = form.name.trim();
   if (name === "") return;
@@ -578,6 +591,15 @@ onMounted(() => void load().then(runQuickAction));
                 @click="openRenameFolder(folder.id, folder.name)"
               >
                 重命名
+              </button>
+              <button
+                v-if="canEdit"
+                class="library-tree__rename library-tree__delete"
+                type="button"
+                :aria-label="`删除 ${folder.name}`"
+                @click="deleteFolder(folder.id, folder.name)"
+              >
+                删除
               </button>
             </div>
           </li>

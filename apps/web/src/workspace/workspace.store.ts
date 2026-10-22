@@ -5,11 +5,13 @@ import {
   adminReadStorageUsage,
   approveEditPermissionRequest,
   cancelImportJob,
+  checkFolderDelete,
   createBlankDocument,
   createEditPermissionRequest,
   createFolder,
   createImportBatch,
   deleteDocument as deleteWorkspaceDocument,
+  deleteFolder as deleteWorkspaceFolder,
   getImportBatch,
   listDocuments,
   listFolders,
@@ -202,6 +204,42 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
         }
         const index = this.folders.findIndex((folder) => folder.id === folderId);
         if (index >= 0) this.folders[index] = result.data.folder;
+        return true;
+      } finally {
+        this.mutating = false;
+      }
+    },
+
+    async checkFolderDelete(folderId: string): Promise<number | null> {
+      if (this.workspaceId === null) return null;
+      this.error = null;
+      const result = await checkFolderDelete({
+        client: apiClient,
+        path: { workspaceId: this.workspaceId, folderId },
+      });
+      if (result.data === undefined) {
+        this.error = toApiFailure(result.error);
+        return null;
+      }
+      return result.data.documentCount;
+    },
+
+    async deleteFolder(folderId: string, expectedDocumentCount: number): Promise<boolean> {
+      if (this.workspaceId === null) return false;
+      this.mutating = true;
+      this.error = null;
+      try {
+        const result = await deleteWorkspaceFolder({
+          client: apiClient,
+          path: { workspaceId: this.workspaceId, folderId },
+          query: { expectedDocumentCount },
+        });
+        if (result.error !== undefined) {
+          this.error = toApiFailure(result.error);
+          return false;
+        }
+        this.folders = this.folders.filter((folder) => folder.id !== folderId);
+        this.documents = this.documents.filter((document) => document.folderId !== folderId);
         return true;
       } finally {
         this.mutating = false;

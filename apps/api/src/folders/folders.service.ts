@@ -7,13 +7,17 @@ import {
   type Database,
   type FolderRecord,
 } from "@share-mind-map/database";
-import { Inject, Injectable } from "@nestjs/common";
+import { MinioObjectStorage, type ObjectStorage } from "@share-mind-map/storage";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { sql } from "drizzle-orm";
 
 import type { AuthContext } from "../auth/auth-context.js";
 import { AUTH_DATABASE } from "../auth/auth.tokens.js";
 import { sessionReference } from "../common/audit/session-reference.js";
+import { LockService } from "../locks/lock.service.js";
 import { ApiError } from "../platform/errors/api-error.js";
+import type { AppConfig } from "../platform/config/app-config.js";
+import { APP_CONFIG } from "../platform/config/config.module.js";
 import type { FolderNameDto } from "./dto/folder-input.dto.js";
 import type {
   FolderDeleteCheckResponseDto,
@@ -48,6 +52,10 @@ function mapRepositoryError(error: unknown): never {
         throw new ApiError("FOLDER_NOT_FOUND");
       case "FOLDER_LIMIT_REACHED":
         throw new ApiError("FOLDER_LIMIT_REACHED");
+      case "FOLDER_DELETE_BLOCKED":
+        throw new ApiError("FOLDER_DELETE_BLOCKED");
+      case "FOLDER_DELETE_CONFLICT":
+        throw new ApiError("FOLDER_DELETE_CONFLICT");
       default:
         throw new ApiError("INTERNAL_ERROR");
     }
@@ -65,9 +73,16 @@ function mapRepositoryError(error: unknown): never {
 export class FoldersService {
   private readonly folders: FolderRepository;
   private readonly audits = new AuditRepository();
+  private readonly storage: ObjectStorage;
+  private readonly logger = new Logger(FoldersService.name);
 
-  public constructor(@Inject(AUTH_DATABASE) private readonly database: Database) {
+  public constructor(
+    @Inject(AUTH_DATABASE) private readonly database: Database,
+    @Inject(APP_CONFIG) config: AppConfig,
+    private readonly locks: LockService,
+  ) {
     this.folders = new FolderRepository();
+    this.storage = new MinioObjectStorage(config.minio);
   }
 
   private assertWorkspace(auth: AuthContext, workspaceId: string): void {
@@ -204,6 +219,66 @@ export class FoldersService {
         documentCount: checked.documentCount,
         canDelete: checked.canDelete,
       };
+    } catch (error) {
+      return mapRepositoryError(error);
+    }
+  }
+
+  public async delete(
+    auth: AuthContext,
+    workspaceId: string,
+    folderId: string,
+    expectedDocumentCount: number | undefined,
+    requestId: string,
+  ): Promise<void> {
+    this.assertWorkspace(auth, workspaceId);
+    try {
+      const deleted = await this.database.transaction(async (transaction) => {
+        const organizationId = await this.organizationForWorkspace(transaction, workspaceId);
+        const result = await this.folders.deleteWithDocuments(transaction, {
+          workspaceId,
+          folderId,
+          ...(expectedDocumentCount === undefined ? {} : { expectedDocumentCount }),
+        });
+        await this.audits.append(transaction, {
+          organizationId,
+          workspaceId,
+          actorUserId: auth.session.userId,
+          actorSessionId: sessionReference(auth.sessionToken),
+          action: "folder.deleted",
+          targetType: "folder",
+          targetId: folderId,
+          result: "success",
+          requestId,
+          fromVersion: null,
+          toVersion: null,
+          metadata: {
+            name: result.folder.name,
+            documentCount: result.documentCount,
+            deletedObjectCount: result.objectKeys.length,
+          },
+        });
+        return result;
+      });
+      for (const documentId of deleted.documentIds) {
+        try {
+          await this.locks.discardDocumentLock(workspaceId, documentId);
+        } catch (error) {
+          this.logger.warn(
+            `Unable to release deleted document lock ${documentId}: ${String(error)}`,
+          );
+        }
+      }
+      const removals = await Promise.allSettled(
+        deleted.objectKeys.map((objectKey) => this.storage.remove(objectKey)),
+      );
+      for (const [index, removal] of removals.entries()) {
+        if (removal.status === "rejected") {
+          this.logger.warn(
+            `Unable to remove deleted folder object ${deleted.objectKeys[index] ?? "unknown"}: ${String(removal.reason)}`,
+          );
+        }
+      }
     } catch (error) {
       return mapRepositoryError(error);
     }

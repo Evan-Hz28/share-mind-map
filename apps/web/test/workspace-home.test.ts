@@ -56,6 +56,7 @@ function installWorkspaceApi(
     pending?: boolean;
     storageThreshold?: "normal" | "warning" | "critical" | "exceeded";
     importFailureCode?: string;
+    folderDeleteDocumentCount?: number;
   } = {},
 ): void {
   vi.stubGlobal(
@@ -66,6 +67,18 @@ function installWorkspaceApi(
       const url = new URL(requestUrl, location.origin);
       const method = init?.method ?? (input instanceof Request ? input.method : "GET");
       if (options.pending) return new Promise<Response>(() => undefined);
+      if (url.pathname.endsWith(`/folders/${folder.id}/delete-check`) && method === "POST") {
+        return Promise.resolve(
+          jsonResponse({
+            folder,
+            documentCount: options.folderDeleteDocumentCount ?? 0,
+            canDelete: (options.folderDeleteDocumentCount ?? 0) === 0,
+          }),
+        );
+      }
+      if (url.pathname.endsWith(`/folders/${folder.id}`) && method === "DELETE") {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
       if (url.pathname.endsWith(`/workspaces/${workspaceId}/folders`)) {
         return Promise.resolve(
           options.failure
@@ -296,6 +309,37 @@ describe("workspace home", () => {
             request instanceof Request &&
             request.method === "DELETE" &&
             request.url.endsWith(`/workspaces/${workspaceId}/documents/${documentId}`),
+        ),
+    ).toBe(true);
+  });
+
+  it("checks the document count and permanently deletes a folder after confirmation", async () => {
+    installWorkspaceApi({ folderDeleteDocumentCount: 2 });
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirm);
+    const user = userEvent.setup();
+    await renderWorkspace();
+
+    await user.click(await screen.findByRole("button", { name: "删除 测试文件夹" }));
+
+    await waitFor(() => {
+      expect(confirm).toHaveBeenCalledWith(
+        "删除后不可恢复，将同时永久删除文件夹内 2 篇文档。确定删除「测试文件夹」吗？",
+      );
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "重命名 测试文件夹" })).not.toBeInTheDocument();
+    });
+    expect(
+      vi
+        .mocked(globalThis.fetch)
+        .mock.calls.some(
+          ([request]) =>
+            request instanceof Request &&
+            request.method === "DELETE" &&
+            request.url.endsWith(
+              `/workspaces/${workspaceId}/folders/${folder.id}?expectedDocumentCount=2`,
+            ),
         ),
     ).toBe(true);
   });

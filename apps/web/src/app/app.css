@@ -1023,6 +1023,10 @@ input:focus-visible {
   color: var(--accent-strong);
   background: var(--color-control-hover);
 }
+.library-tree__delete:hover,
+.library-tree__delete:focus-visible {
+  color: var(--danger);
+}
 .library-sidebar__empty {
   margin: 0;
   padding: 8px 16px 14px;

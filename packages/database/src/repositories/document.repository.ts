@@ -42,6 +42,94 @@ export interface DocumentListResult {
 
 export interface DocumentDeletionResult {
   objectKeys: string[];
+  documentCount: number;
+}
+
+/**
+ * 硬删一批文档及其从属数据,调用方负责先持有 workspace 行锁。
+ * 资源文件只在没有批次外文档引用时才纳入返回的 objectKeys。
+ */
+export async function permanentlyDeleteDocuments(
+  transaction: DatabaseTransaction,
+  input: { workspaceId: string; documentIds: readonly string[]; includeTrashed?: boolean },
+): Promise<DocumentDeletionResult> {
+  if (input.documentIds.length === 0) return { objectKeys: [], documentCount: 0 };
+  const documentIds = sql.param([...input.documentIds]);
+  const trashFilter = input.includeTrashed === true ? sql`` : sql`AND trashed_at IS NULL`;
+  const documents = await transaction.execute<{ original_object_key: string | null }>(sql`
+    SELECT original_object_key
+    FROM documents
+    WHERE workspace_id = ${input.workspaceId}
+      AND id = ANY(${documentIds}::uuid[])
+      ${trashFilter}
+    FOR UPDATE
+  `);
+  const assets = await transaction.execute<{ object_key: string }>(sql`
+    SELECT DISTINCT assets.object_key
+    FROM document_assets AS assets
+    WHERE assets.workspace_id = ${input.workspaceId}
+      AND assets.document_id = ANY(${documentIds}::uuid[])
+      AND NOT EXISTS (
+        SELECT 1
+        FROM document_assets AS other_assets
+        WHERE other_assets.workspace_id = assets.workspace_id
+          AND other_assets.object_key = assets.object_key
+          AND other_assets.document_id <> ALL(${documentIds}::uuid[])
+      )
+  `);
+  const snapshots = await transaction.execute<{ snapshot_object_key: string }>(sql`
+    SELECT DISTINCT snapshot_object_key
+    FROM document_snapshots
+    WHERE document_id = ANY(${documentIds}::uuid[])
+      AND snapshot_object_key IS NOT NULL
+  `);
+  const exports = await transaction.execute<{ object_key: string }>(sql`
+    SELECT DISTINCT object_key
+    FROM export_jobs
+    WHERE workspace_id = ${input.workspaceId}
+      AND document_id = ANY(${documentIds}::uuid[])
+      AND object_key IS NOT NULL
+  `);
+
+  await transaction.execute(sql`
+    UPDATE import_jobs
+    SET document_id = NULL, original_object_key = NULL, updated_at = now()
+    WHERE workspace_id = ${input.workspaceId}
+      AND document_id = ANY(${documentIds}::uuid[])
+  `);
+  await transaction.execute(sql`
+    DELETE FROM export_jobs
+    WHERE workspace_id = ${input.workspaceId}
+      AND document_id = ANY(${documentIds}::uuid[])
+  `);
+  await transaction.execute(sql`
+    UPDATE documents
+    SET current_snapshot_id = NULL
+    WHERE workspace_id = ${input.workspaceId}
+      AND id = ANY(${documentIds}::uuid[])
+  `);
+  await transaction.execute(sql`
+    DELETE FROM document_snapshots WHERE document_id = ANY(${documentIds}::uuid[])
+  `);
+  await transaction.execute(sql`
+    DELETE FROM document_assets
+    WHERE workspace_id = ${input.workspaceId}
+      AND document_id = ANY(${documentIds}::uuid[])
+  `);
+  await transaction.execute(sql`
+    DELETE FROM documents
+    WHERE workspace_id = ${input.workspaceId}
+      AND id = ANY(${documentIds}::uuid[])
+  `);
+
+  const objectKeys = new Set<string>();
+  for (const document of documents.rows) {
+    if (document.original_object_key !== null) objectKeys.add(document.original_object_key);
+  }
+  for (const asset of assets.rows) objectKeys.add(asset.object_key);
+  for (const snapshot of snapshots.rows) objectKeys.add(snapshot.snapshot_object_key);
+  for (const exportJob of exports.rows) objectKeys.add(exportJob.object_key);
+  return { objectKeys: [...objectKeys], documentCount: documents.rows.length };
 }
 
 interface DocumentRow extends Record<string, unknown> {
@@ -151,75 +239,14 @@ export class DocumentRepository {
     input: { workspaceId: string; documentId: string },
   ): Promise<DocumentDeletionResult> {
     await lockWorkspace(transaction, input.workspaceId);
-    const document = await transaction.execute<{ original_object_key: string | null }>(sql`
-      SELECT original_object_key
-      FROM documents
-      WHERE id = ${input.documentId} AND workspace_id = ${input.workspaceId} AND trashed_at IS NULL
-      FOR UPDATE
-    `);
-    const documentRow = document.rows[0];
-    if (documentRow === undefined) {
+    const deletion = await permanentlyDeleteDocuments(transaction, {
+      workspaceId: input.workspaceId,
+      documentIds: [input.documentId],
+    });
+    if (deletion.documentCount === 0) {
       throw new Phase2RepositoryError("DOCUMENT_NOT_FOUND", "Document does not exist.");
     }
-
-    const assets = await transaction.execute<{ object_key: string }>(sql`
-      SELECT DISTINCT assets.object_key
-      FROM document_assets AS assets
-      WHERE assets.workspace_id = ${input.workspaceId}
-        AND assets.document_id = ${input.documentId}
-        AND NOT EXISTS (
-          SELECT 1
-          FROM document_assets AS other_assets
-          WHERE other_assets.workspace_id = assets.workspace_id
-            AND other_assets.object_key = assets.object_key
-            AND other_assets.document_id <> assets.document_id
-        )
-    `);
-    const snapshots = await transaction.execute<{ snapshot_object_key: string }>(sql`
-      SELECT DISTINCT snapshot_object_key
-      FROM document_snapshots
-      WHERE document_id = ${input.documentId} AND snapshot_object_key IS NOT NULL
-    `);
-    const exports = await transaction.execute<{ object_key: string }>(sql`
-      SELECT DISTINCT object_key
-      FROM export_jobs
-      WHERE workspace_id = ${input.workspaceId}
-        AND document_id = ${input.documentId}
-        AND object_key IS NOT NULL
-    `);
-
-    await transaction.execute(sql`
-      UPDATE import_jobs
-      SET document_id = NULL, original_object_key = NULL, updated_at = now()
-      WHERE workspace_id = ${input.workspaceId} AND document_id = ${input.documentId}
-    `);
-    await transaction.execute(sql`
-      DELETE FROM export_jobs
-      WHERE workspace_id = ${input.workspaceId} AND document_id = ${input.documentId}
-    `);
-    await transaction.execute(sql`
-      UPDATE documents
-      SET current_snapshot_id = NULL
-      WHERE id = ${input.documentId} AND workspace_id = ${input.workspaceId}
-    `);
-    await transaction.execute(sql`
-      DELETE FROM document_snapshots WHERE document_id = ${input.documentId}
-    `);
-    await transaction.execute(sql`
-      DELETE FROM document_assets
-      WHERE workspace_id = ${input.workspaceId} AND document_id = ${input.documentId}
-    `);
-    await transaction.execute(sql`
-      DELETE FROM documents
-      WHERE id = ${input.documentId} AND workspace_id = ${input.workspaceId}
-    `);
-
-    const objectKeys = new Set<string>();
-    if (documentRow.original_object_key !== null) objectKeys.add(documentRow.original_object_key);
-    for (const asset of assets.rows) objectKeys.add(asset.object_key);
-    for (const snapshot of snapshots.rows) objectKeys.add(snapshot.snapshot_object_key);
-    for (const exportJob of exports.rows) objectKeys.add(exportJob.object_key);
-    return { objectKeys: [...objectKeys] };
+    return deletion;
   }
 
   public async saveSnapshot(
