@@ -217,12 +217,12 @@ describe("workspace home", () => {
     installWorkspaceApi();
     await renderWorkspace();
 
-    expect(await screen.findByRole("heading", { name: "用例库" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "新建文件夹" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "新建文件夹" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "用例库" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "新建文档" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "导入 XMind" })).toBeInTheDocument();
     expect(await screen.findByText("ViewHistory客户端测试用例")).toBeInTheDocument();
-    const compatibilityTag = screen.getByText("兼容性：部分兼容").closest(".compatibility-status");
+    const compatibilityTag = screen.getByText("部分兼容").closest(".compatibility-status");
     expect(compatibilityTag).not.toBeNull();
     if (compatibilityTag === null) throw new Error("Compatibility tag was not rendered.");
     expect(compatibilityTag).toHaveAttribute(
@@ -234,19 +234,18 @@ describe("workspace home", () => {
     expect(screen.getByRole("region", { name: "文档" })).toHaveClass("library-content");
     expect(screen.getByRole("table")).toBeInTheDocument();
     const row = screen.getByRole("row", { name: /ViewHistory客户端测试用例/u });
-    expect(within(row).getByRole("cell", { name: "未归档" })).toBeInTheDocument();
+    expect(within(row).getByText("未归档")).toBeInTheDocument();
     expect(within(row).getByRole("cell", { name: "v28" })).toBeInTheDocument();
     expect(within(row).getByRole("cell", { name: "127" })).toBeInTheDocument();
     expect(within(row).getByRole("link", { name: "ViewHistory客户端测试用例" })).toHaveClass(
       "doc-table__link",
     );
-    expect(screen.getByRole("button", { name: "导出 XMind" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /编辑 ViewHistory客户端测试用例/iu }),
-    ).toBeInTheDocument();
-    expect(
+    await userEvent.click(
       screen.getByRole("button", { name: "更多操作 ViewHistory客户端测试用例" }),
-    ).toBeInTheDocument();
+    );
+    expect(screen.getByRole("button", { name: "导出 XMind" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "编辑元数据" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "删除文档" })).toBeInTheDocument();
   });
 
   it("filters the table by folder and restores it from the breadcrumb", async () => {
@@ -271,6 +270,38 @@ describe("workspace home", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "全部文件" })).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /ViewHistory客户端测试用例/u })).toBeInTheDocument();
+  });
+
+  it("renders the full folder path in the breadcrumb and under document names", async () => {
+    const childFolder = {
+      ...folder,
+      id: "00000000-0000-7000-8000-000000000021",
+      name: "客户端",
+      parentId: folder.id,
+    };
+    const childDocument = {
+      ...documentRecord,
+      id: "00000000-0000-7000-8000-000000000011",
+      folderId: childFolder.id,
+      name: "客户端登录用例",
+    };
+    installWorkspaceApi({ folders: [folder, childFolder], documents: [childDocument] });
+    await renderWorkspace();
+
+    expect(await screen.findByText("一级文件夹")).toBeInTheDocument();
+    const row = await screen.findByRole("row", { name: /客户端登录用例/u });
+    expect(within(row).getByText("测试文件夹 / 客户端")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "展开 测试文件夹" }));
+    await userEvent.click(screen.getByRole("button", { name: /^客户端/u }));
+
+    const breadcrumb = screen.getByRole("navigation", { name: "面包屑" });
+    expect(within(breadcrumb).getByRole("button", { name: "测试文件夹" })).toBeInTheDocument();
+    expect(within(breadcrumb).getByText("客户端")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "客户端" })).toBeInTheDocument();
+
+    await userEvent.click(within(breadcrumb).getByRole("button", { name: "测试文件夹" }));
+    expect(screen.getByRole("heading", { level: 1, name: "测试文件夹" })).toBeInTheDocument();
   });
 
   it("filters folders and documents with the two search boxes", async () => {
@@ -415,9 +446,31 @@ describe("workspace home", () => {
     expect(screen.getByRole("table")).toBeInTheDocument();
   });
 
+  it("paginates the loaded documents twenty at a time", async () => {
+    const documents = Array.from({ length: 25 }, (_, index) => ({
+      ...documentRecord,
+      id: `00000000-0000-7000-8000-${String(100 + index).padStart(12, "0")}`,
+      name: `文档 ${String(index + 1).padStart(2, "0")}`,
+    }));
+    installWorkspaceApi({ documents });
+    await renderWorkspace();
+
+    expect(await screen.findByText("共 25 篇")).toBeInTheDocument();
+    expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(20);
+
+    await userEvent.click(screen.getByRole("button", { name: "第 2 页" }));
+    expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(5);
+
+    await userEvent.click(screen.getByRole("button", { name: "上一页" }));
+    expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(20);
+  });
+
   it("keeps document actions independent from document navigation", async () => {
     installWorkspaceApi();
     const { router } = await renderWorkspace();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "更多操作 ViewHistory客户端测试用例" }),
+    );
     await userEvent.click(await screen.findByRole("button", { name: "导出 XMind" }));
 
     expect(router.currentRoute.value.name).toBe("workspace");
@@ -441,10 +494,12 @@ describe("workspace home", () => {
     expect(screen.queryByRole("button", { name: "新建文件夹" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "新建文档" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "导入 XMind" })).not.toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "更多操作 ViewHistory客户端测试用例" }),
+    );
+    expect(screen.getByRole("button", { name: "导出 XMind" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "编辑元数据" })).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "更多操作 ViewHistory客户端测试用例" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "删除文档" })).not.toBeInTheDocument();
   });
 
   it("confirms and permanently deletes a document from its more-actions menu", async () => {
@@ -623,6 +678,7 @@ describe("workspace home", () => {
   it("opens the notification dialog", async () => {
     installWorkspaceApi();
     await renderWorkspace();
+    await userEvent.click(await screen.findByRole("button", { name: "更多操作" }));
     await userEvent.click(await screen.findByRole("button", { name: "通知" }));
 
     expect(await screen.findByTestId("notification-dialog")).toBeInTheDocument();

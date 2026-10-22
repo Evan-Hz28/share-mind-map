@@ -467,9 +467,10 @@ input:focus-visible {
 }
 .workspace-home {
   position: relative;
-  width: min(1280px, calc(100% - 64px));
+  width: calc(100% - 48px);
+  max-width: none;
   margin: 0 auto;
-  padding: 44px 0 72px;
+  padding: 24px 0 48px;
 }
 .home-view {
   position: relative;
@@ -804,7 +805,7 @@ input:focus-visible {
 .page-heading h1 {
   margin: 3px 0 6px;
   color: var(--ink);
-  font-size: 32px;
+  font-size: 30px;
   line-height: 1.25;
   letter-spacing: 0;
 }
@@ -838,8 +839,8 @@ input:focus-visible {
   justify-content: flex-end;
 }
 .workspace-actions .el-button {
-  min-height: 44px;
-  padding: 0 18px;
+  min-height: 40px;
+  padding: 0 16px;
   border-radius: var(--radius-control);
   font-weight: 600;
 }
@@ -856,6 +857,11 @@ input:focus-visible {
 }
 .library-header {
   margin-bottom: 22px;
+}
+.library-content > .library-header {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 .library-header__intro {
   min-width: 0;
@@ -886,11 +892,51 @@ input:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.library-header__menu-wrap {
+  position: relative;
+  display: flex;
+}
+.library-header__more {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--color-border-subtle);
+  color: var(--muted);
+  background: var(--surface);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+.library-header__more:hover,
+.library-header__more:focus-visible,
+.library-header__more[aria-expanded="true"] {
+  border-color: var(--color-accent-border-strong);
+  color: var(--accent-strong);
+  background: var(--color-control-hover);
+}
+.library-header__more svg {
+  width: 18px;
+}
+.library-header__menu {
+  top: calc(100% + 6px);
+  min-width: 160px;
+}
+.library-header__badge {
+  min-width: 20px;
+  margin-left: auto;
+  padding: 1px 6px;
+  color: var(--color-text-inverse);
+  background: var(--accent);
+  border-radius: 999px;
+  font-size: 11px;
+  text-align: center;
+}
 .library-layout {
   display: grid;
-  grid-template-columns: minmax(220px, 264px) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
   align-items: start;
-  gap: 18px;
+  gap: 16px;
 }
 .library-sidebar {
   overflow: hidden;
@@ -904,7 +950,7 @@ input:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 16px 16px 10px;
+  padding: 14px 14px 8px;
 }
 .library-sidebar__header h2 {
   display: flex;
@@ -912,7 +958,7 @@ input:focus-visible {
   gap: 8px;
   margin: 0;
   color: var(--ink);
-  font-size: 17px;
+  font-size: 16px;
 }
 .library-sidebar__header h2 svg {
   width: 17px;
@@ -950,6 +996,13 @@ input:focus-visible {
   min-width: 0;
   align-items: center;
   border-radius: var(--radius-control);
+}
+.library-tree__group {
+  padding: 10px 10px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 .library-tree__folder--dragging {
   opacity: 0.45;
@@ -989,11 +1042,11 @@ input:focus-visible {
 .library-tree__item {
   display: flex;
   min-width: 0;
-  min-height: 40px;
+  min-height: 34px;
   flex: 1;
   align-items: center;
-  gap: 9px;
-  padding: 8px 10px;
+  gap: 8px;
+  padding: 5px 9px;
   border: 0;
   color: var(--ink);
   background: transparent;
@@ -1043,7 +1096,7 @@ input:focus-visible {
   display: flex;
   width: 28px;
   min-width: 28px;
-  height: 32px;
+  height: 30px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
@@ -1053,6 +1106,14 @@ input:focus-visible {
   background: transparent;
   border-radius: var(--radius-control);
   cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.library-tree__row:hover .library-tree__more,
+.library-tree__row:focus-within .library-tree__more,
+.library-tree__more:focus-visible,
+.library-tree__more[aria-expanded="true"] {
+  opacity: 1;
 }
 .library-tree__more:hover,
 .library-tree__more:focus-visible,
@@ -1063,9 +1124,10 @@ input:focus-visible {
 .library-tree__more svg {
   width: 15px;
 }
-/* 侧边栏是 overflow: hidden,给最后一行打开菜单时留出底部空间。 */
-.library-sidebar--menu-open .library-tree {
-  padding-bottom: 64px;
+@media (hover: none) {
+  .library-tree__more {
+    opacity: 1;
+  }
 }
 .library-tree__menu {
   top: calc(100% + 2px);
@@ -1095,17 +1157,17 @@ input:focus-visible {
 }
 .library-content {
   min-width: 0;
-}
-.library-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-  padding: 10px 12px;
+  padding: 20px;
   border: 1px solid var(--color-border-subtle);
   background: var(--surface);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
+}
+.library-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 .library-toolbar__search {
   min-width: 160px;
@@ -1127,6 +1189,19 @@ input:focus-visible {
   color: var(--ink);
   font: inherit;
   font-size: 13px;
+}
+.sort-direction {
+  display: grid;
+  width: 30px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--color-border-subtle);
+  color: var(--muted);
+  background: var(--surface);
+  border-radius: var(--radius-control);
+}
+.sort-direction svg {
+  width: 15px;
 }
 .view-toggle {
   display: inline-flex;
@@ -1162,25 +1237,19 @@ input:focus-visible {
   overflow-x: auto;
   border: 1px solid var(--color-border-subtle);
   background: var(--surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-}
-/* 行内菜单是绝对定位的,会跟着表格一起被 overflow 容器裁掉;
-   打开时给容器留出底部空间,最后一行也能完整显示。 */
-.doc-table-wrap--menu-open {
-  padding-bottom: 56px;
+  border-radius: 8px;
 }
 .doc-table {
   width: 100%;
-  min-width: 760px;
+  min-width: 680px;
   border-collapse: collapse;
   font-size: 13px;
 }
 .doc-table th {
-  padding: 11px 14px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--color-border-subtle);
   color: var(--muted);
-  background: var(--color-surface-subtle);
+  background: #f5f7fa;
   font-size: 12px;
   font-weight: 600;
   text-align: left;
@@ -1200,14 +1269,23 @@ input:focus-visible {
 }
 .doc-table__name {
   display: flex;
-  min-width: 220px;
+  min-width: 240px;
   align-items: center;
   gap: 10px;
 }
+.doc-table__body {
+  min-width: 0;
+}
+.doc-table__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
 .doc-table__icon {
   display: grid;
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
   place-items: center;
   color: var(--accent);
@@ -1216,7 +1294,7 @@ input:focus-visible {
   border-radius: 9px;
 }
 .doc-table__icon svg {
-  width: 19px;
+  width: 18px;
 }
 .doc-table__link {
   color: var(--ink);
@@ -1232,10 +1310,13 @@ input:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  margin-top: 4px;
 }
-.doc-table__location {
+.doc-table__path {
+  overflow: hidden;
+  margin-top: 2px;
   color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .doc-table__actions-heading {
@@ -1248,40 +1329,24 @@ input:focus-visible {
   justify-content: flex-end;
   gap: 6px;
 }
-.doc-table__action,
 .doc-table__more {
-  min-height: 32px;
-  padding: 4px 10px;
-  border: 1px solid var(--color-border-subtle);
-  color: var(--accent-strong);
-  background: var(--surface);
-  border-radius: var(--radius-control);
-  cursor: pointer;
-  font-size: 12px;
-  white-space: nowrap;
-}
-.doc-table__action:hover,
-.doc-table__action:focus-visible,
-.doc-table__more:hover,
-.doc-table__more:focus-visible {
-  border-color: var(--color-accent-border-strong);
-  background: var(--color-control-hover);
-}
-.doc-table__action--icon {
   display: grid;
   width: 32px;
+  min-height: 32px;
   place-items: center;
   padding: 0;
+  border: 1px solid transparent;
+  color: var(--muted);
+  background: transparent;
+  border-radius: var(--radius-control);
+  cursor: pointer;
 }
-.doc-table__action--icon svg {
-  width: 16px;
-}
-.doc-table__more {
-  display: grid;
-  width: 30px;
-  place-items: center;
-  padding: 0;
-  color: var(--ink);
+.doc-table__more:hover,
+.doc-table__more:focus-visible,
+.doc-table__more[aria-expanded="true"] {
+  border-color: var(--color-border-subtle);
+  color: var(--accent-strong);
+  background: var(--color-control-hover);
 }
 .doc-table__more svg {
   width: 17px;
@@ -1293,6 +1358,9 @@ input:focus-visible {
   top: calc(100% + 4px);
 }
 .doc-table__menu button {
+  color: var(--ink);
+}
+.popover-menu .doc-table__menu-delete {
   color: var(--danger);
 }
 .library-empty {
@@ -1319,11 +1387,65 @@ input:focus-visible {
 }
 .library-footer {
   display: flex;
-  min-height: 46px;
+  min-height: 40px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding-top: 8px;
   color: var(--muted);
+  font-size: 12px;
+}
+.library-footer__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.library-pagination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.library-pagination__arrow,
+.library-pagination__page {
+  display: grid;
+  min-width: 30px;
+  height: 30px;
+  place-items: center;
+  padding: 0 6px;
+  border: 1px solid var(--color-border-subtle);
+  color: var(--muted);
+  background: var(--surface);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  font-size: 12px;
+}
+.library-pagination__arrow svg {
+  width: 14px;
+}
+.library-pagination__arrow:hover:not(:disabled),
+.library-pagination__page:hover {
+  border-color: var(--color-accent-border-strong);
+  color: var(--accent-strong);
+  background: var(--color-control-hover);
+}
+.library-pagination__arrow:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.library-pagination__page--active {
+  border-color: var(--accent);
+  color: var(--color-text-inverse);
+  background: var(--accent);
+}
+.library-pagination select {
+  height: 30px;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--color-border-subtle);
+  color: var(--ink);
+  background: var(--surface);
+  border-radius: var(--radius-control);
+  font: inherit;
   font-size: 12px;
 }
 .workspace-toolbar {
@@ -1669,6 +1791,13 @@ input:focus-visible {
 }
 .workspace-document-card__menu button {
   color: var(--danger);
+}
+/* 行内菜单改成 fixed,坐标由 JS 按按钮位置算,不再被侧栏/表格的 overflow 裁掉。 */
+.library-tree__menu--fixed,
+.doc-table__menu--fixed,
+.workspace-document-card__menu--fixed {
+  position: fixed;
+  z-index: 40;
 }
 .workspace-folder-list .workspace-list__item {
   min-height: 64px;
@@ -2555,7 +2684,7 @@ input:focus-visible {
 @media (max-width: 1024px) {
   .workspace-home,
   .home-view {
-    width: min(calc(100% - 40px), 900px);
+    width: calc(100% - 32px);
   }
   .home-columns {
     grid-template-columns: 1fr;
@@ -2656,10 +2785,18 @@ input:focus-visible {
   .library-layout {
     grid-template-columns: 1fr;
   }
+  .library-content {
+    padding: 14px;
+  }
+  .library-footer {
+    flex-wrap: wrap;
+  }
+  .library-pagination {
+    flex-wrap: wrap;
+  }
   .library-breadcrumb button,
   .library-sidebar__add,
   .library-tree__more,
-  .doc-table__action,
   .doc-table__more {
     min-width: 40px;
     min-height: 40px;
@@ -2679,7 +2816,8 @@ input:focus-visible {
   .library-toolbar__actions {
     flex-wrap: wrap;
   }
-  .view-toggle button {
+  .view-toggle button,
+  .sort-direction {
     width: 40px;
     height: 40px;
   }

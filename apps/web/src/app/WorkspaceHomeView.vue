@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import {
   ArrowDown,
+  ArrowLeft,
   ArrowRight,
-  Bell,
+  ArrowUp,
   Document,
-  Download,
-  Edit,
   Files,
   Folder,
   FolderOpened,
@@ -14,16 +13,15 @@ import {
   MoreFilled,
   Plus,
   Search,
-  Sort,
-  Upload,
 } from "@element-plus/icons-vue";
 import { ElButton, ElDialog, ElIcon, ElInput, ElTag } from "element-plus";
 import type { FolderDto } from "@share-mind-map/api-client";
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
 import { useAuthStore } from "../auth/auth.store.js";
+import LibraryHeader from "./LibraryHeader.vue";
 import { getCompatibilityMeta } from "../documents/compatibility.js";
 import {
   collectDroppedFiles,
@@ -84,11 +82,17 @@ const importSummary = ref<string | null>(null);
 let importDragDepth = 0;
 const moreMenuDocumentId = ref<string | null>(null);
 const moreMenuFolderId = ref<string | null>(null);
+/** 菜单用 fixed 定位,避开侧栏和表格的 overflow 裁剪。 */
+const folderMenuStyle = ref<Record<string, string> | null>(null);
+const documentMenuStyle = ref<Record<string, string> | null>(null);
 /** "all" / "unassigned" / 文件夹 id。A 段先在已加载的文档上做筛选。 */
 const selectedFolderId = ref<string>("all");
 const folderSearch = ref("");
 const documentSearch = ref("");
 const viewMode = ref<"list" | "grid">("list");
+/** 只对已加载的文档分页;游标还有下一页时在页脚额外提供「加载更多」。 */
+const documentPage = ref(1);
+const documentPageSize = ref(20);
 /** 文件夹拖拽排序的临时状态:不依赖 dataTransfer,jsdom 里也能直接派发事件。 */
 const draggingFolderId = ref<string | null>(null);
 const dragOverFolderId = ref<string | null>(null);
@@ -164,6 +168,20 @@ const selectedFolderLabel = computed(() => {
   if (selectedFolderId.value === "all") return "全部文件";
   if (selectedFolderId.value === "unassigned") return "未归档";
   return selectedFolder.value?.name ?? "全部文件";
+});
+/** 面包屑展开完整祖先链,顺序从根到当前文件夹。 */
+const selectedFolderChain = computed<FolderDto[]>(() => {
+  if (selectedFolder.value === null) return [];
+  const byId = new Map(workspace.folders.map((folder) => [folder.id, folder]));
+  const chain: FolderDto[] = [];
+  let cursor: FolderDto | undefined = selectedFolder.value;
+  let guard = 0;
+  while (cursor !== undefined && guard <= 64) {
+    chain.unshift(cursor);
+    guard += 1;
+    cursor = cursor.parentId === null ? undefined : byId.get(cursor.parentId);
+  }
+  return chain;
 });
 const libraryDescription = computed(() => {
   if (selectedFolderId.value === "all") return "浏览工作区内全部文件夹和未归档的文档。";
@@ -341,6 +359,33 @@ const visibleDocuments = computed(() => {
     document.name.toLocaleLowerCase("zh-CN").includes(query),
   );
 });
+const documentPageCount = computed(() =>
+  Math.max(1, Math.ceil(visibleDocuments.value.length / documentPageSize.value)),
+);
+const pagedDocuments = computed(() => {
+  const start = (documentPage.value - 1) * documentPageSize.value;
+  return visibleDocuments.value.slice(start, start + documentPageSize.value);
+});
+const pageNumbers = computed(() =>
+  Array.from({ length: documentPageCount.value }, (_, index) => index + 1),
+);
+watch([selectedFolderId, documentSearch, documentPageSize, () => workspace.sort], () => {
+  documentPage.value = 1;
+});
+watch(documentPageCount, (count) => {
+  if (documentPage.value > count) documentPage.value = count;
+});
+
+function goToDocumentPage(page: number): void {
+  documentPage.value = Math.min(Math.max(1, page), documentPageCount.value);
+}
+
+const showLibraryLayout = computed(
+  () =>
+    !workspace.loading &&
+    workspace.error?.code !== "PERMISSION_DENIED" &&
+    workspace.hasData,
+);
 const documentEmptyMessage = computed(() => {
   if (documentSearch.value.trim() !== "") return "没有匹配的文档。";
   if (selectedFolderId.value !== "all") return "此文件夹还没有文档。";
@@ -640,14 +685,59 @@ function openDocument(documentId: string | null, name = "", folderId: string | n
   dialogOpen.value = true;
 }
 
-function toggleDocumentMenu(documentId: string): void {
-  moreMenuDocumentId.value = moreMenuDocumentId.value === documentId ? null : documentId;
-  if (moreMenuDocumentId.value !== null) moreMenuFolderId.value = null;
+const MENU_GAP = 6;
+const MENU_ITEM_HEIGHT = 40;
+const MENU_CHROME_HEIGHT = 12;
+
+/**
+ * 计算 fixed 菜单坐标。空间不够时向上展开,并夹在视口内。
+ * 宽度用于右对齐,高度用于判断下方空间。
+ */
+function menuPosition(
+  event: MouseEvent,
+  width: number,
+  height: number,
+): Record<string, string> | null {
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLElement)) return null;
+  const rect = target.getBoundingClientRect();
+  const flipUp = rect.bottom + MENU_GAP + height > window.innerHeight && rect.top > height;
+  const top = flipUp ? rect.top - height - MENU_GAP : rect.bottom + MENU_GAP;
+  const maxLeft = Math.max(8, window.innerWidth - width - 8);
+  const left = Math.min(Math.max(8, rect.right - width), maxLeft);
+  return { top: `${String(Math.round(top))}px`, left: `${String(Math.round(left))}px` };
 }
 
-function toggleFolderMenu(folderId: string): void {
-  moreMenuFolderId.value = moreMenuFolderId.value === folderId ? null : folderId;
-  if (moreMenuFolderId.value !== null) moreMenuDocumentId.value = null;
+function closeMenus(): void {
+  moreMenuDocumentId.value = null;
+  moreMenuFolderId.value = null;
+}
+
+function toggleDocumentMenu(documentId: string, event: MouseEvent): void {
+  const opening = moreMenuDocumentId.value !== documentId;
+  moreMenuDocumentId.value = opening ? documentId : null;
+  if (!opening) {
+    documentMenuStyle.value = null;
+    return;
+  }
+  moreMenuFolderId.value = null;
+  const itemCount = canEdit.value ? 3 : 1;
+  documentMenuStyle.value = menuPosition(
+    event,
+    180,
+    itemCount * MENU_ITEM_HEIGHT + MENU_CHROME_HEIGHT,
+  );
+}
+
+function toggleFolderMenu(folderId: string, event: MouseEvent): void {
+  const opening = moreMenuFolderId.value !== folderId;
+  moreMenuFolderId.value = opening ? folderId : null;
+  if (!opening) {
+    folderMenuStyle.value = null;
+    return;
+  }
+  moreMenuDocumentId.value = null;
+  folderMenuStyle.value = menuPosition(event, 150, 3 * MENU_ITEM_HEIGHT + MENU_CHROME_HEIGHT);
 }
 
 function createSubfolder(folderId: string): void {
@@ -663,6 +753,20 @@ function renameFolderFromMenu(folderId: string, name: string): void {
 async function deleteFolderFromMenu(folderId: string, name: string): Promise<void> {
   moreMenuFolderId.value = null;
   await deleteFolder(folderId, name);
+}
+
+function exportDocumentFromMenu(documentId: string): void {
+  moreMenuDocumentId.value = null;
+  void workspace.exportDocument(documentId);
+}
+
+function editDocumentFromMenu(
+  documentId: string,
+  name: string,
+  folderId: string | null | undefined,
+): void {
+  moreMenuDocumentId.value = null;
+  openDocument(documentId, name, folderId ?? null);
 }
 
 async function deleteDocument(documentId: string, name: string): Promise<void> {
@@ -841,36 +945,37 @@ async function runQuickAction(): Promise<void> {
   await router.replace({ name: "workspace" });
 }
 
-onMounted(() => void load().then(runQuickAction));
+onMounted(() => {
+  void load().then(runQuickAction);
+  window.addEventListener("scroll", closeMenus, true);
+  window.addEventListener("resize", closeMenus);
+});
+onUnmounted(() => {
+  window.removeEventListener("scroll", closeMenus, true);
+  window.removeEventListener("resize", closeMenus);
+});
 </script>
 
 <template>
   <section class="workspace-home" aria-labelledby="workspace-title">
-    <header class="library-header page-heading page-heading--with-action">
-      <div class="library-header__intro">
-        <nav class="library-breadcrumb" aria-label="面包屑">
-          <button type="button" @click="selectAllDocuments">用例库</button>
-          <span aria-hidden="true">/</span>
-          <span aria-current="page">{{ selectedFolderLabel }}</span>
-        </nav>
-        <h1 id="workspace-title">{{ selectedFolderLabel }}</h1>
-        <p>{{ libraryDescription }}</p>
-      </div>
-      <div class="workspace-actions">
-        <ElButton v-if="auth.role === 'reader'" @click="workspace.requestEditPermission()">
-          <ElIcon><Edit /></ElIcon>申请编辑权限
-        </ElButton>
-        <ElButton v-if="canEdit" class="workspace-action--secondary" @click="openCreateFolder()">
-          <ElIcon><Plus /></ElIcon>新建文件夹
-        </ElButton>
-        <ElButton v-if="canEdit" type="primary" @click="openDocument(null)">
-          <ElIcon><Document /></ElIcon>新建文档
-        </ElButton>
-        <ElButton v-if="canEdit" class="workspace-action--secondary" @click="openImport">
-          <ElIcon><Upload /></ElIcon>导入 XMind
-        </ElButton>
-      </div>
-    </header>
+    <h1 v-if="workspace.loading" id="workspace-title" class="visually-hidden">用例库</h1>
+    <LibraryHeader
+      v-if="!workspace.loading && !showLibraryLayout"
+      :folder-chain="selectedFolderChain"
+      :label="selectedFolderLabel"
+      :description="libraryDescription"
+      :can-edit="canEdit"
+      :is-reader="auth.role === 'reader'"
+      :unread-count="workspace.unreadCount"
+      @select-all="selectAllDocuments"
+      @select-folder="selectFolder"
+      @create-folder="openCreateFolder()"
+      @create-document="openDocument(null)"
+      @import-xmind="openImport"
+      @request-edit="workspace.requestEditPermission()"
+      @open-notifications="openNotifications"
+      @refresh="load"
+    />
 
     <RequestErrorAlert :error="workspace.error" />
     <div v-if="quotaMessage !== ''" class="quota-banner" role="status">
@@ -890,11 +995,7 @@ onMounted(() => void load().then(runQuickAction));
       <p>{{ canEdit ? "创建一个文件夹或空白文档开始整理。" : "等待编辑者创建文档。" }}</p>
     </div>
     <div v-else class="library-layout">
-      <aside
-        class="library-sidebar"
-        :class="{ 'library-sidebar--menu-open': moreMenuFolderId !== null }"
-        aria-labelledby="library-folders-heading"
-      >
+      <aside class="library-sidebar" aria-labelledby="library-folders-heading">
         <header class="library-sidebar__header">
           <h2 id="library-folders-heading"><FolderOpened aria-hidden="true" />用例库</h2>
           <button
@@ -941,6 +1042,9 @@ onMounted(() => void load().then(runQuickAction));
               <span class="library-tree__name">未归档</span>
               <span class="library-tree__count">{{ unassignedCount }}</span>
             </button>
+          </li>
+          <li v-if="folderTreeRows.some((row) => row.depth === 0)" class="library-tree__group">
+            一级文件夹
           </li>
           <li
             v-for="row in folderTreeRows"
@@ -999,13 +1103,14 @@ onMounted(() => void load().then(runQuickAction));
                 type="button"
                 :aria-label="`更多操作 ${row.folder.name}`"
                 :aria-expanded="moreMenuFolderId === row.folder.id"
-                @click.stop="toggleFolderMenu(row.folder.id)"
+                @click.stop="toggleFolderMenu(row.folder.id, $event)"
               >
                 <MoreFilled />
               </button>
               <div
                 v-if="canEdit && moreMenuFolderId === row.folder.id"
-                class="popover-menu popover-menu--right library-tree__menu"
+                class="popover-menu library-tree__menu library-tree__menu--fixed"
+                :style="folderMenuStyle ?? undefined"
               >
                 <button type="button" @click="createSubfolder(row.folder.id)">
                   新建子文件夹
@@ -1040,6 +1145,22 @@ onMounted(() => void load().then(runQuickAction));
       </aside>
 
       <section class="library-content" aria-labelledby="documents-heading">
+        <LibraryHeader
+          :folder-chain="selectedFolderChain"
+          :label="selectedFolderLabel"
+          :description="libraryDescription"
+          :can-edit="canEdit"
+          :is-reader="auth.role === 'reader'"
+          :unread-count="workspace.unreadCount"
+          @select-all="selectAllDocuments"
+          @select-folder="selectFolder"
+          @create-folder="openCreateFolder()"
+          @create-document="openDocument(null)"
+          @import-xmind="openImport"
+          @request-edit="workspace.requestEditPermission()"
+          @open-notifications="openNotifications"
+          @refresh="load"
+        />
         <h2 id="documents-heading" class="visually-hidden">文档</h2>
         <div class="library-toolbar">
           <ElInput
@@ -1052,7 +1173,6 @@ onMounted(() => void load().then(runQuickAction));
             <template #prefix><ElIcon><Search /></ElIcon></template>
           </ElInput>
           <div class="library-toolbar__actions">
-            <ElIcon aria-hidden="true"><Sort /></ElIcon>
             <label for="document-sort" class="visually-hidden">文档排序</label>
             <select
               id="document-sort"
@@ -1064,6 +1184,14 @@ onMounted(() => void load().then(runQuickAction));
               <option value="updatedAt">更新时间倒序</option>
               <option value="name">名称正序</option>
             </select>
+            <span
+              class="sort-direction"
+              :title="workspace.sort === 'name' ? '名称正序' : '更新时间倒序'"
+              aria-hidden="true"
+            >
+              <ArrowUp v-if="workspace.sort === 'name'" />
+              <ArrowDown v-else />
+            </span>
             <div class="view-toggle" role="group" aria-label="视图切换">
               <button
                 type="button"
@@ -1086,17 +1214,6 @@ onMounted(() => void load().then(runQuickAction));
                 <Grid aria-hidden="true" />
               </button>
             </div>
-            <button
-              class="notification-button"
-              type="button"
-              aria-label="通知"
-              @click="openNotifications"
-            >
-              <Bell aria-hidden="true" />
-              <span v-if="workspace.unreadCount > 0" class="notification-count">{{
-                workspace.unreadCount
-              }}</span>
-            </button>
           </div>
         </div>
 
@@ -1104,16 +1221,11 @@ onMounted(() => void load().then(runQuickAction));
           <Document class="state-icon" aria-hidden="true" />
           <p>{{ documentEmptyMessage }}</p>
         </div>
-        <div
-          v-else-if="viewMode === 'list'"
-          class="doc-table-wrap"
-          :class="{ 'doc-table-wrap--menu-open': moreMenuDocumentId !== null }"
-        >
+        <div v-else-if="viewMode === 'list'" class="doc-table-wrap">
           <table class="doc-table">
             <thead>
               <tr>
                 <th scope="col">名称</th>
-                <th scope="col">位置</th>
                 <th scope="col">版本</th>
                 <th scope="col">节点数</th>
                 <th scope="col">最后更新</th>
@@ -1121,76 +1233,75 @@ onMounted(() => void load().then(runQuickAction));
               </tr>
             </thead>
             <tbody>
-              <tr v-for="document in visibleDocuments" :key="document.id">
+              <tr v-for="document in pagedDocuments" :key="document.id">
                 <td>
                   <div class="doc-table__name">
                     <span class="doc-table__icon" aria-hidden="true"><Document /></span>
-                    <div>
-                      <RouterLink
-                        class="doc-table__link"
-                        :to="{ name: 'document', params: { documentId: document.id } }"
-                      >
-                        {{ document.name }}
-                      </RouterLink>
-                      <div class="doc-table__tags">
-                        <span
-                          class="compatibility-status"
-                          :title="getCompatibilityMeta(document.compatibilityStatus).description"
-                          :aria-label="getCompatibilityMeta(document.compatibilityStatus).description"
-                          tabindex="0"
+                    <div class="doc-table__body">
+                      <div class="doc-table__title-row">
+                        <RouterLink
+                          class="doc-table__link"
+                          :to="{ name: 'document', params: { documentId: document.id } }"
                         >
-                          <ElTag
-                            size="small"
-                            :type="document.compatibilityStatus === 'full' ? 'success' : 'warning'"
+                          {{ document.name }}
+                        </RouterLink>
+                        <div class="doc-table__tags">
+                          <span
+                            class="compatibility-status"
+                            :title="getCompatibilityMeta(document.compatibilityStatus).description"
+                            :aria-label="
+                              getCompatibilityMeta(document.compatibilityStatus).description
+                            "
+                            tabindex="0"
                           >
-                            兼容性：{{ getCompatibilityMeta(document.compatibilityStatus).label }}
-                          </ElTag>
-                        </span>
-                        <ElTag size="small" type="info">只读快照</ElTag>
+                            <ElTag
+                              size="small"
+                              :type="document.compatibilityStatus === 'full' ? 'success' : 'warning'"
+                            >
+                              {{ getCompatibilityMeta(document.compatibilityStatus).label }}
+                            </ElTag>
+                          </span>
+                        </div>
                       </div>
+                      <div class="doc-table__path">{{ folderLabel(document.folderId) }}</div>
                     </div>
                   </div>
                 </td>
-                <td class="doc-table__location">{{ folderLabel(document.folderId) }}</td>
                 <td>v{{ document.currentVersion }}</td>
                 <td>{{ document.nodeCount }}</td>
                 <td class="doc-table__updated">{{ formatDateTime(document.updatedAt) }}</td>
                 <td>
                   <div class="doc-table__actions">
                     <button
-                      class="doc-table__action doc-table__action--icon"
-                      type="button"
-                      aria-label="导出 XMind"
-                      title="导出 XMind"
-                      @click="workspace.exportDocument(document.id)"
-                    >
-                      <Download aria-hidden="true" />
-                    </button>
-                    <button
-                      v-if="canEdit"
-                      class="doc-table__action doc-table__action--icon"
-                      type="button"
-                      :aria-label="`编辑 ${document.name}`"
-                      :title="`编辑 ${document.name}`"
-                      @click="openDocument(document.id, document.name, document.folderId)"
-                    >
-                      <Edit aria-hidden="true" />
-                    </button>
-                    <button
-                      v-if="canEdit"
                       class="doc-table__more"
                       type="button"
                       :aria-label="`更多操作 ${document.name}`"
                       :aria-expanded="moreMenuDocumentId === document.id"
-                      @click="toggleDocumentMenu(document.id)"
+                      @click="toggleDocumentMenu(document.id, $event)"
                     >
                       <MoreFilled />
                     </button>
                     <div
                       v-if="moreMenuDocumentId === document.id"
-                      class="popover-menu popover-menu--right doc-table__menu"
+                      class="popover-menu doc-table__menu doc-table__menu--fixed"
+                      :style="documentMenuStyle ?? undefined"
                     >
-                      <button type="button" @click="deleteDocument(document.id, document.name)">
+                      <button type="button" @click="exportDocumentFromMenu(document.id)">
+                        导出 XMind
+                      </button>
+                      <button
+                        v-if="canEdit"
+                        type="button"
+                        @click="editDocumentFromMenu(document.id, document.name, document.folderId)"
+                      >
+                        编辑元数据
+                      </button>
+                      <button
+                        v-if="canEdit"
+                        type="button"
+                        class="doc-table__menu-delete"
+                        @click="deleteDocument(document.id, document.name)"
+                      >
                         删除文档
                       </button>
                     </div>
@@ -1202,7 +1313,7 @@ onMounted(() => void load().then(runQuickAction));
         </div>
         <div v-else class="workspace-document-grid">
           <article
-            v-for="document in visibleDocuments"
+            v-for="document in pagedDocuments"
             :key="document.id"
             class="workspace-document-card"
           >
@@ -1230,10 +1341,9 @@ onMounted(() => void load().then(runQuickAction));
                   size="small"
                   :type="document.compatibilityStatus === 'full' ? 'success' : 'warning'"
                 >
-                  兼容性：{{ getCompatibilityMeta(document.compatibilityStatus).label }}
+                  {{ getCompatibilityMeta(document.compatibilityStatus).label }}
                 </ElTag>
               </span>
-              <ElTag size="small" type="info">只读快照</ElTag>
             </div>
             <div class="workspace-document-card__actions">
               <button
@@ -1258,13 +1368,14 @@ onMounted(() => void load().then(runQuickAction));
                 type="button"
                 :aria-label="`更多操作 ${document.name}`"
                 :aria-expanded="moreMenuDocumentId === document.id"
-                @click="toggleDocumentMenu(document.id)"
+                @click="toggleDocumentMenu(document.id, $event)"
               >
                 <MoreFilled />
               </button>
               <div
                 v-if="moreMenuDocumentId === document.id"
-                class="popover-menu popover-menu--right workspace-document-card__menu"
+                class="popover-menu workspace-document-card__menu workspace-document-card__menu--fixed"
+                :style="documentMenuStyle ?? undefined"
               >
                 <button type="button" @click="deleteDocument(document.id, document.name)">
                   删除文档
@@ -1275,10 +1386,52 @@ onMounted(() => void load().then(runQuickAction));
         </div>
 
         <footer class="library-footer">
-          <span>共 {{ visibleDocuments.length }} 篇</span>
-          <ElButton v-if="workspace.documentCursor" text @click="workspace.loadMoreDocuments"
-            >加载更多</ElButton
-          >
+          <div class="library-footer__summary">
+            <span
+              >共 {{ visibleDocuments.length
+              }}{{ workspace.documentCursor === null ? "" : "+" }} 篇</span
+            >
+            <ElButton v-if="workspace.documentCursor" text @click="workspace.loadMoreDocuments"
+              >加载更多</ElButton
+            >
+          </div>
+          <div v-if="visibleDocuments.length > 0" class="library-pagination">
+            <button
+              class="library-pagination__arrow"
+              type="button"
+              aria-label="上一页"
+              :disabled="documentPage === 1"
+              @click="goToDocumentPage(documentPage - 1)"
+            >
+              <ArrowLeft aria-hidden="true" />
+            </button>
+            <button
+              v-for="pageNumber in pageNumbers"
+              :key="pageNumber"
+              class="library-pagination__page"
+              :class="{ 'library-pagination__page--active': pageNumber === documentPage }"
+              type="button"
+              :aria-label="`第 ${String(pageNumber)} 页`"
+              :aria-current="pageNumber === documentPage ? 'page' : undefined"
+              @click="goToDocumentPage(pageNumber)"
+            >
+              {{ pageNumber }}
+            </button>
+            <button
+              class="library-pagination__arrow"
+              type="button"
+              aria-label="下一页"
+              :disabled="documentPage === documentPageCount"
+              @click="goToDocumentPage(documentPage + 1)"
+            >
+              <ArrowRight aria-hidden="true" />
+            </button>
+            <select v-model.number="documentPageSize" aria-label="每页条数">
+              <option :value="20">20 条/页</option>
+              <option :value="50">50 条/页</option>
+              <option :value="100">100 条/页</option>
+            </select>
+          </div>
         </footer>
         <p v-if="isAdmin && workspace.permissionRequests.length > 0" class="admin-hint">
           有 {{ workspace.permissionRequests.length }} 条待审批申请，请前往管理面板处理。
