@@ -157,7 +157,7 @@ const saveQueue = new SaveQueue(async (snapshot, kind) => {
   if (draftIsStillCurrent || !editor.dirty) {
     editor.markSaved(result.version);
     if (draftKey.value !== null) drafts.clear(draftKey.value);
-    if (mounted) await adapter?.applySnapshot(saved);
+    if (mounted) adapter?.acceptSavedSnapshot(saved);
   } else {
     editor.currentVersion = result.version;
     editor.setMode("editing-dirty");
@@ -211,7 +211,15 @@ async function mountAdapter(): Promise<void> {
 function handleRealtimeSnapshot(event: {
   version: number;
   snapshot: NonNullable<typeof documents.snapshot>;
+  browserEditSessionId: string | null;
 }): void {
+  // 服务端会把保存广播给房间内所有连接,包括保存者自己。自己的回声不能当成冲突。
+  if (
+    event.browserEditSessionId !== null &&
+    event.browserEditSessionId === editor.lockLease?.browserEditSessionId
+  ) {
+    return;
+  }
   if (editor.dirty || editor.canWrite) {
     editor.markConflict();
     adapter?.setReadOnly(true);

@@ -94,6 +94,36 @@ describe("API request lifecycle", () => {
     expect(response.body as unknown).toMatchObject({ error: { requestId: generatedRequestId } });
   });
 
+  it("accepts snapshot-sized JSON bodies well above the old 100 KB limit", async () => {
+    // 458 节点的真实快照约 176 KB,曾因 body-parser 默认上限直接 413。
+    const name = "x".repeat(200 * 1024);
+    const response = await request(app.getHttpServer() as Server)
+      .post("/api/v1/validated")
+      .send({ name });
+
+    expect(response.status).toBe(201);
+    expect(response.body as unknown).toEqual({ name });
+  });
+
+  it("maps an oversized body to the REQUEST_TOO_LARGE envelope", async () => {
+    const response = await request(app.getHttpServer() as Server)
+      .post("/api/v1/validated")
+      .send({ name: "x".repeat(21 * 1024 * 1024) });
+
+    expect(response.status).toBe(413);
+    expect(response.body as unknown).toMatchObject({
+      error: {
+        code: "REQUEST_TOO_LARGE",
+        message: "提交内容超过大小限制。",
+        details: {},
+      },
+    });
+    expect(response.get("x-request-id")).toMatch(/^[0-9a-f-]{16,64}$/);
+    expect(response.get("x-request-id")).toBe(
+      (response.body as { error: { requestId: string } }).error.requestId,
+    );
+  });
+
   it("rejects unknown DTO properties", async () => {
     const response = await request(app.getHttpServer() as Server)
       .post("/api/v1/validated")

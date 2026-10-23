@@ -29,24 +29,33 @@ describe("DocumentRealtime", () => {
     const onVersionGap = vi.fn();
     const onReconnect = vi.fn();
     const snapshots: number[] = [];
+    const sources: Array<string | null> = [];
     const realtime = new DocumentRealtime({
       baseUrl: "http://localhost:8080",
       socketFactory: () => socket,
       onVersionGap,
       onReconnect,
     });
-    realtime.onSnapshot(({ version }) => snapshots.push(version));
+    realtime.onSnapshot(({ version, browserEditSessionId }) => {
+      snapshots.push(version);
+      sources.push(browserEditSessionId);
+    });
     realtime.connect();
     socket.connected = true;
     socket.fire("connect");
     realtime.join("00000000-0000-7000-8000-000000000003", "00000000-0000-7000-8000-000000000101");
 
     const snapshot = sampleDocument();
-    socket.fire("document:snapshot", { version: 1, snapshot });
+    socket.fire("document:snapshot", {
+      version: 1,
+      snapshot,
+      browserEditSessionId: "browser-one",
+    });
     socket.fire("document:snapshot", { version: 1, snapshot });
     socket.fire("document:snapshot", { version: 3, snapshot: { ...snapshot, version: 3 } });
 
     expect(snapshots).toEqual([1]);
+    expect(sources).toEqual(["browser-one"]);
     expect(onVersionGap).toHaveBeenCalledWith(2, 3);
     expect(socket.emit).toHaveBeenCalledWith("document:join", {
       workspaceId: "00000000-0000-7000-8000-000000000003",

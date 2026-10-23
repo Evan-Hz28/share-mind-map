@@ -78,6 +78,8 @@ const importFileInput = ref<HTMLInputElement | null>(null);
 const importFolderInput = ref<HTMLInputElement | null>(null);
 const importDragOver = ref(false);
 const importSummary = ref<string | null>(null);
+/** 服务端 409 返回的具体冲突名,用来把错误标到对应行。 */
+const serverConflictNames = ref<string[]>([]);
 /** dragenter/dragleave 会在子元素之间反复冒泡,用计数抵消,免得高亮闪烁。 */
 let importDragDepth = 0;
 const moreMenuDocumentId = ref<string | null>(null);
@@ -115,6 +117,20 @@ const quotaMessage = computed(() => {
   if (threshold === "warning") return "存储配额已使用 80% 以上。";
   return "";
 });
+/** 工作区里已占用的文档名(只含已加载的),以及服务端刚返回的冲突名。 */
+const existingImportNames = computed(() => {
+  const names = new Set<string>();
+  for (const document of workspace.documents) {
+    const normalized = normalizeImportName(document.name);
+    if (normalized !== null) names.add(normalized);
+  }
+  for (const value of serverConflictNames.value) {
+    const normalized = normalizeImportName(value);
+    if (normalized !== null) names.add(normalized);
+  }
+  return names;
+});
+
 /**
  * 与 importRows 按下标一一对应的逐行问题。
  * 一定要按下标对齐:workspace.store 是拿数组下标把 batch.jobs[index] 对回 files[index] 的,
@@ -129,7 +145,10 @@ const importRowIssues = computed<Array<string | null>>(() => {
     return (
       validateImportFile(row.file) ??
       validateImportName(row.name) ??
-      (duplicated ? "与前面某一行的目标文档名重复。" : null)
+      (duplicated ? "与前面某一行的目标文档名重复。" : null) ??
+      (normalized !== null && existingImportNames.value.has(normalized)
+        ? "工作区已存在同名文档，请改名。"
+        : null)
     );
   });
 });
@@ -186,7 +205,7 @@ const selectedFolderChain = computed<FolderDto[]>(() => {
 const libraryDescription = computed(() => {
   if (selectedFolderId.value === "all") return "浏览工作区内全部文件夹和未归档的文档。";
   if (selectedFolderId.value === "unassigned") return "查看尚未归入任何文件夹的文档。";
-  return "查看该文件夹下的文档。";
+  return "查看该文件夹下的子文件夹和文档。";
 });
 const normalizedFolderQuery = computed(() => folderSearch.value.trim().toLocaleLowerCase("zh-CN"));
 
@@ -298,7 +317,7 @@ const documentCounts = computed(() => {
   }
   return counts;
 });
-/** 文件夹计数按整棵子树聚合,选中父文件夹时看到的数量才对得上。 */
+/** 文件夹计数按整棵子树聚合,侧栏能看出文件夹总共装了多少文档。 */
 const folderSubtreeCounts = computed(() => {
   const counts = new Map<string, number>();
   const sum = (folderId: string, guard: number): number => {
@@ -314,18 +333,10 @@ const folderSubtreeCounts = computed(() => {
   for (const root of folderChildren.value.get("") ?? []) sum(root.id, 0);
   return counts;
 });
-/** 选中文件夹及其所有后代 id;选中的不是文件夹时返回 null。 */
-const selectedSubtreeIds = computed<Set<string> | null>(() => {
-  const selected = selectedFolderId.value;
-  if (selected === "all" || selected === "unassigned") return null;
-  const ids = new Set<string>();
-  const walk = (folderId: string, guard: number): void => {
-    if (ids.has(folderId) || guard > 64) return;
-    ids.add(folderId);
-    for (const child of folderChildren.value.get(folderId) ?? []) walk(child.id, guard + 1);
-  };
-  walk(selected, 0);
-  return ids;
+/** 右侧内容区展示当前文件夹的直接子文件夹,点击继续下钻。 */
+const directChildFolders = computed<FolderDto[]>(() => {
+  if (selectedFolder.value === null) return [];
+  return folderChildren.value.get(selectedFolder.value.id) ?? [];
 });
 const unassignedCount = computed(
   () =>
@@ -344,13 +355,8 @@ const scopedDocuments = computed(() => {
       (document) => document.folderId === null || document.folderId === undefined,
     );
   }
-  const subtree = selectedSubtreeIds.value;
-  return workspace.documents.filter(
-    (document) =>
-      document.folderId !== null &&
-      document.folderId !== undefined &&
-      (subtree?.has(document.folderId) ?? false),
-  );
+  // 选中文件夹只看直接属于它的文档;子文件夹在内容区单独列出,点击再下钻。
+  return workspace.documents.filter((document) => document.folderId === selectedFolderId.value);
 });
 const visibleDocuments = computed(() => {
   const query = documentSearch.value.trim().toLocaleLowerCase("zh-CN");
@@ -391,6 +397,9 @@ const documentEmptyMessage = computed(() => {
   if (selectedFolderId.value !== "all") return "此文件夹还没有文档。";
   return "暂无文档。";
 });
+const hasDocumentResults = computed(
+  () => visibleDocuments.value.length > 0 || directChildFolders.value.length > 0,
+);
 
 function folderLabel(folderId: string | null | undefined): string {
   if (folderId === null || folderId === undefined) return "未归档";
@@ -425,6 +434,17 @@ function selectUnassigned(): void {
 function selectFolder(folderId: string): void {
   selectedFolderId.value = folderId;
   documentSearch.value = "";
+  // 从内容区的子文件夹卡片进入时,顺便在侧栏展开祖先,保持两边状态一致。
+  const byId = new Map(workspace.folders.map((folder) => [folder.id, folder]));
+  const next = new Set(expandedFolderIds.value);
+  let cursor: FolderDto | undefined = byId.get(folderId);
+  let guard = 0;
+  while (cursor?.parentId != null && guard <= 64) {
+    next.add(cursor.parentId);
+    cursor = byId.get(cursor.parentId);
+    guard += 1;
+  }
+  expandedFolderIds.value = next;
 }
 
 function openCreateFolder(parentId: string | null = null): void {
@@ -482,9 +502,21 @@ function resetImportDragState(): void {
   importDragOver.value = false;
 }
 
+function conflictNamesFromError(): string[] {
+  const value = workspace.error?.details.conflictingNames;
+  if (!Array.isArray(value)) return [];
+  return value.filter((name): name is string => typeof name === "string");
+}
+
+/** 改名后先把旧的 409 横幅收掉;行级冲突提示仍保留到对应名称被改掉。 */
+function clearImportNameError(): void {
+  if (workspace.error?.code === "DOCUMENT_NAME_CONFLICT") workspace.error = null;
+}
+
 function openImport(): void {
   importRows.value = [];
   importSummary.value = null;
+  serverConflictNames.value = [];
   resetImportDragState();
   workspace.importProgress = null;
   workspace.importBatchId = null;
@@ -642,6 +674,7 @@ async function prepareImportFolders(): Promise<void> {
 
 async function submitImport(): Promise<void> {
   if (!canSubmitImport.value) return;
+  serverConflictNames.value = [];
   await prepareImportFolders();
   const ok = await workspace.importFiles(
     importRows.value.map((row) => ({
@@ -651,6 +684,7 @@ async function submitImport(): Promise<void> {
     })),
   );
   if (ok) closeImportDialog();
+  else serverConflictNames.value = conflictNamesFromError();
 }
 
 async function cancelImport(jobId: string): Promise<void> {
@@ -1084,6 +1118,7 @@ onUnmounted(() => {
                   <ArrowRight v-else />
                 </ElIcon>
               </button>
+              <span v-else class="library-tree__spacer" aria-hidden="true" />
               <button
                 class="library-tree__item"
                 type="button"
@@ -1217,10 +1252,35 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div v-if="visibleDocuments.length === 0" class="content-state library-empty">
+        <section
+          v-if="directChildFolders.length > 0"
+          class="library-subfolders"
+          aria-label="子文件夹"
+        >
+          <button
+            v-for="child in directChildFolders"
+            :key="child.id"
+            class="library-subfolder"
+            type="button"
+            @click="selectFolder(child.id)"
+          >
+            <Folder aria-hidden="true" />
+            <span class="library-subfolder__name">{{ child.name }}</span>
+            <span class="library-subfolder__count">{{ folderCount(child.id) }} 篇</span>
+          </button>
+        </section>
+
+        <div v-if="!hasDocumentResults" class="content-state library-empty">
           <Document class="state-icon" aria-hidden="true" />
           <p>{{ documentEmptyMessage }}</p>
         </div>
+        <p
+          v-else-if="visibleDocuments.length === 0"
+          class="library-inline-empty"
+          role="status"
+        >
+          {{ documentEmptyMessage }}
+        </p>
         <div v-else-if="viewMode === 'list'" class="doc-table-wrap">
           <table class="doc-table">
             <thead>
@@ -1490,7 +1550,12 @@ onUnmounted(() => {
         <div v-if="importRows.length > 0" class="import-list">
           <div v-for="(row, index) in importRows" :key="row.id" class="import-list__row">
             <span class="import-list__file">{{ row.path }}</span>
-            <ElInput v-model="row.name" maxlength="100" aria-label="目标文档名" />
+            <ElInput
+              v-model="row.name"
+              maxlength="100"
+              aria-label="目标文档名"
+              @input="clearImportNameError"
+            />
             <select v-model="row.folderValue" aria-label="目标文件夹">
               <option value="">未归档</option>
               <option

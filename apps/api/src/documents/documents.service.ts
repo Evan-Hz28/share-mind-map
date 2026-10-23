@@ -227,6 +227,7 @@ export class DocumentsService {
           documentId,
           snapshot,
           version: result.snapshot.version,
+          browserEditSessionId: input.browserEditSessionId,
         });
       } catch {
         // The database commit remains authoritative; clients recover through REST.

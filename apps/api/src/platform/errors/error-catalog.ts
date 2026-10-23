@@ -1,5 +1,6 @@
 export const errorCatalog = {
   INVALID_INPUT: { status: 400, message: "请求参数无效。" },
+  REQUEST_TOO_LARGE: { status: 413, message: "提交内容超过大小限制。" },
   AUTH_REQUIRED: { status: 401, message: "请先登录。" },
   AUTH_SESSION_EXPIRED: { status: 401, message: "登录已过期，请重新登录。" },
   AUTH_INVALID_CREDENTIALS: { status: 401, message: "账号或密码错误。" },

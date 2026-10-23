@@ -319,7 +319,7 @@ describe("workspace home", () => {
     expect(screen.getByRole("row", { name: /ViewHistory客户端测试用例/u })).toBeInTheDocument();
   });
 
-  it("renders nested folders, expands them and filters documents by subtree", async () => {
+  it("renders nested folders and drills into subfolders one level at a time", async () => {
     const sibling = {
       id: "00000000-0000-7000-8000-000000000021",
       workspaceId,
@@ -382,11 +382,33 @@ describe("workspace home", () => {
     await userEvent.click(screen.getByRole("button", { name: /^测试文件夹/u }));
 
     expect(screen.getByRole("heading", { level: 1, name: "测试文件夹" })).toBeInTheDocument();
-    expect(screen.getByRole("row", { name: /子目录用例/u })).toBeInTheDocument();
-    expect(screen.getByRole("row", { name: /深层用例/u })).toBeInTheDocument();
+    // 选中父文件夹只看直接文档;子文件夹作为卡片列出,不再把整棵子树的文档铺平。
+    expect(screen.queryByRole("row", { name: /子目录用例/u })).not.toBeInTheDocument();
+    expect(screen.queryByRole("row", { name: /深层用例/u })).not.toBeInTheDocument();
     expect(
       screen.queryByRole("row", { name: /ViewHistory客户端测试用例/u }),
     ).not.toBeInTheDocument();
+    const subfolders = screen.getByRole("region", { name: "子文件夹" });
+    expect(within(subfolders).getByRole("button", { name: /^子目录/u })).toBeInTheDocument();
+    expect(within(subfolders).queryByRole("button", { name: /^深层目录/u })).not.toBeInTheDocument();
+
+    await userEvent.click(within(subfolders).getByRole("button", { name: /^子目录/u }));
+    expect(screen.getByRole("heading", { level: 1, name: "子目录" })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /子目录用例/u })).toBeInTheDocument();
+    expect(screen.queryByRole("row", { name: /深层用例/u })).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "子文件夹" })).getByRole("button", {
+        name: /^深层目录/u,
+      }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(
+      within(screen.getByRole("region", { name: "子文件夹" })).getByRole("button", {
+        name: /^深层目录/u,
+      }),
+    );
+    expect(screen.getByRole("heading", { level: 1, name: "深层目录" })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /深层用例/u })).toBeInTheDocument();
   });
 
   it("moves a folder into another folder when dropped on the middle of its row", async () => {

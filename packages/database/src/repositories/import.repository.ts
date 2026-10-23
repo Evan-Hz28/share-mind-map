@@ -259,8 +259,7 @@ export class ImportRepository {
       );
     }
     // 下面是三个集合查询,不是每个 job 一组:整段跑在 workspaces 的 FOR UPDATE 锁里,
-    // 100 个 job 逐个查会把锁持有多出两三百次往返。三道校验抛的都是
-    // IMPORT_TARGET_CONFLICT(API 侧统一映射成 DOCUMENT_NAME_CONFLICT),所以合并顺序不影响语义。
+    // 100 个 job 逐个查会把锁持有多出两三百次往返。
     //
     // 数组参数必须包一层 sql.param:sql 模板遇到 JS 数组会展开成元组 ($1, $2),
     // 直接写 ANY(${ids}::uuid[]) 会被 Postgres 当成「record 转 uuid[]」报 42846。
@@ -280,7 +279,7 @@ export class ImportRepository {
       const ownedIds = new Set(owned.rows.map((row) => row.id));
       if (folderIds.some((folderId) => !ownedIds.has(folderId))) {
         throw new ImportRepositoryError(
-          "IMPORT_TARGET_CONFLICT",
+          "IMPORT_TARGET_FOLDER_INVALID",
           "Target folder is not in workspace.",
         );
       }
@@ -294,26 +293,30 @@ export class ImportRepository {
       const used = new Map(counts.rows.map((row) => [row.folder_id, row.count]));
       if (folderIds.some((folderId) => (used.get(folderId) ?? 0) >= 1000)) {
         throw new ImportRepositoryError(
-          "IMPORT_TARGET_CONFLICT",
+          "IMPORT_TARGET_FOLDER_FULL",
           "Target folder document limit reached.",
         );
       }
     }
     const targetNames = [...new Set(input.jobs.map((job) => job.targetNameNormalized))];
-    const conflict = await transaction.execute<{ name: string }>(sql`
-      SELECT name_normalized AS name FROM documents
+    const conflict = await transaction.execute<{ name: string; normalized: string }>(sql`
+      SELECT name_normalized AS normalized, name FROM documents
       WHERE workspace_id = ${input.workspaceId} AND name_normalized = ANY(${sql.param(targetNames)}::text[])
         AND trashed_at IS NULL
       UNION
-      SELECT target_name_normalized AS name FROM import_jobs
+      SELECT target_name_normalized AS normalized, target_name AS name FROM import_jobs
       WHERE workspace_id = ${input.workspaceId}
         AND target_name_normalized = ANY(${sql.param(targetNames)}::text[])
-        AND phase IN ('waiting', 'uploading', 'parsing', 'persisting', 'succeeded')
+        AND phase IN ('waiting', 'uploading', 'parsing', 'persisting')
     `);
     if (conflict.rows[0] !== undefined) {
+      const names = [
+        ...new Map(conflict.rows.map((row) => [row.normalized, row.name])).values(),
+      ];
       throw new ImportRepositoryError(
-        "IMPORT_TARGET_CONFLICT",
+        "IMPORT_NAME_CONFLICT",
         "Target document name already exists.",
+        names,
       );
     }
     await transaction.execute(sql`

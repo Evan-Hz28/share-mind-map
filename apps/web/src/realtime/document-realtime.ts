@@ -7,6 +7,8 @@ import { io } from "socket.io-client";
 export interface DocumentRealtimeSnapshot {
   version: number;
   snapshot: CloudDocumentV1;
+  /** 服务端回传的保存来源;与本标签页的编辑会话一致时应忽略。 */
+  browserEditSessionId: string | null;
 }
 
 export interface DocumentRealtimeLock {
@@ -107,7 +109,11 @@ export class DocumentRealtime {
 
   private acceptSnapshot(payload: unknown): void {
     if (payload === null || typeof payload !== "object") return;
-    const value = payload as { version?: unknown; snapshot?: unknown };
+    const value = payload as {
+      version?: unknown;
+      snapshot?: unknown;
+      browserEditSessionId?: unknown;
+    };
     if (typeof value.version !== "number" || value.snapshot === undefined) return;
     let snapshot: CloudDocumentV1;
     try {
@@ -122,7 +128,10 @@ export class DocumentRealtime {
       return;
     }
     this.lastAcceptedVersion = value.version;
-    for (const listener of this.snapshots) listener({ version: value.version, snapshot });
+    const browserEditSessionId =
+      typeof value.browserEditSessionId === "string" ? value.browserEditSessionId : null;
+    for (const listener of this.snapshots)
+      listener({ version: value.version, snapshot, browserEditSessionId });
   }
 
   private acceptLock(payload: unknown): void {

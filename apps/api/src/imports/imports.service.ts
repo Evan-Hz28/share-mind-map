@@ -95,7 +95,11 @@ export class ImportsService implements OnApplicationShutdown {
         throw new ApiError("IMPORT_FILE_INVALID");
       }
       const name = normalizeEntityName(file.targetName, 100);
-      if (seenNames.has(name.normalizedName)) throw new ApiError("DOCUMENT_NAME_CONFLICT");
+      if (seenNames.has(name.normalizedName)) {
+        throw new ApiError("DOCUMENT_NAME_CONFLICT", {
+          conflictingNames: [name.displayName],
+        });
+      }
       seenNames.add(name.normalizedName);
       return {
         id: newId(),
@@ -120,7 +124,15 @@ export class ImportsService implements OnApplicationShutdown {
         if (error.code === "IMPORT_QUEUE_LIMIT_REACHED")
           throw new ApiError("IMPORT_QUEUE_LIMIT_REACHED");
         if (error.code === "IMPORT_STORAGE_QUOTA_EXCEEDED") throw new ApiError("QUOTA_EXCEEDED");
-        if (error.code === "IMPORT_TARGET_CONFLICT") throw new ApiError("DOCUMENT_NAME_CONFLICT");
+        if (error.code === "IMPORT_TARGET_FOLDER_INVALID")
+          throw new ApiError("DOCUMENT_FOLDER_INVALID");
+        if (error.code === "IMPORT_TARGET_FOLDER_FULL")
+          throw new ApiError("FOLDER_DOCUMENT_LIMIT_REACHED");
+        if (error.code === "IMPORT_NAME_CONFLICT") {
+          throw new ApiError("DOCUMENT_NAME_CONFLICT", {
+            conflictingNames: [...error.conflictNames],
+          });
+        }
       }
       const constraint = (error as { constraint?: string }).constraint;
       if (constraint === "import_jobs_workspace_target_name_active_uq") {

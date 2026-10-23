@@ -18,6 +18,8 @@ export interface DocumentSnapshotBroadcast {
   documentId: string;
   snapshot: CloudDocumentV1;
   version: number;
+  /** 触发保存的浏览器编辑会话,用于让保存者忽略自己的广播回声。 */
+  browserEditSessionId: string | null;
 }
 
 export interface DocumentLockBroadcast {
@@ -98,7 +100,11 @@ export class DocumentRoomService {
   public broadcastSnapshot(event: DocumentSnapshotBroadcast): void {
     const roomMembers = this.members.get(documentRoomName(event.workspaceId, event.documentId));
     if (roomMembers === undefined) return;
-    const payload = { version: event.version, snapshot: event.snapshot };
+    const payload = {
+      version: event.version,
+      snapshot: event.snapshot,
+      browserEditSessionId: event.browserEditSessionId,
+    };
     for (const member of roomMembers.values()) member.emit("document:snapshot", payload);
   }
 

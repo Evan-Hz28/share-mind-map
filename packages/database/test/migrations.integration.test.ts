@@ -43,6 +43,7 @@ describe("database migrations", () => {
       "0002_phase3_import_export",
       "0003_phase4_editing",
       "0004_phase5_folder_tree",
+      "0005_phase3_release_completed_import_names",
     ]);
   });
 
@@ -76,6 +77,7 @@ describe("database migrations", () => {
       "0002_phase3_import_export",
       "0003_phase4_editing",
       "0004_phase5_folder_tree",
+      "0005_phase3_release_completed_import_names",
     ]);
   });
 

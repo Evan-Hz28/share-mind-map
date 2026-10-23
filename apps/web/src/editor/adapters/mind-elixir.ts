@@ -301,6 +301,11 @@ export class MindElixirAdapter implements MindMapAdapter {
     await this.applyViewState();
   }
 
+  public acceptSavedSnapshot(document: CloudDocumentV1): void {
+    // 画布内容已经就是这份快照,refresh 只会重建 DOM 并打断正在进行的拖拽。
+    this.snapshot = validateCloudDocumentSnapshot(document);
+  }
+
   public exportSnapshot(): CloudDocumentV1 {
     if (this.snapshot === null) throw new Error("The adapter is not mounted.");
     return this.snapshotFromVendor();

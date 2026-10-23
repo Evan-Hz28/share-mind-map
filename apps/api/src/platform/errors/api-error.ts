@@ -1,6 +1,6 @@
 import { errorCatalog, type ApiErrorCode } from "./error-catalog.js";
 
-export type ErrorDetails = Record<string, boolean | number | string | null>;
+export type ErrorDetails = Record<string, boolean | number | string | null | string[]>;
 
 export class ApiError extends Error {
   public readonly status: number;

@@ -254,6 +254,93 @@ describe("phase 3 import caps", () => {
     });
   });
 
+  it("frees a target name after the import job succeeds", async () => {
+    const scope = await createScope();
+    const target = `released-${uuidv7().slice(-8)}`;
+    const firstJobId = uuidv7();
+    await runtime.db.transaction((transaction) =>
+      repository.createBatch(transaction, {
+        batchId: uuidv7(),
+        workspaceId: scope.workspaceId,
+        requestedBy: scope.userId,
+        jobs: [
+          {
+            id: firstJobId,
+            clientFileName: "first.xmind",
+            targetName: target,
+            targetNameNormalized: target,
+            expectedBytes: 1,
+          },
+        ],
+      }),
+    );
+    await runtime.db.$client.query("UPDATE import_jobs SET phase = 'succeeded' WHERE id = $1", [
+      firstJobId,
+    ]);
+
+    await expect(
+      runtime.db.transaction((transaction) =>
+        repository.createBatch(transaction, {
+          batchId: uuidv7(),
+          workspaceId: scope.workspaceId,
+          requestedBy: scope.userId,
+          jobs: [
+            {
+              id: uuidv7(),
+              clientFileName: "again.xmind",
+              targetName: target,
+              targetNameNormalized: target,
+              expectedBytes: 1,
+            },
+          ],
+        }),
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("still blocks a target name while another import job is active", async () => {
+    const scope = await createScope();
+    const target = `active-${uuidv7().slice(-8)}`;
+    await runtime.db.transaction((transaction) =>
+      repository.createBatch(transaction, {
+        batchId: uuidv7(),
+        workspaceId: scope.workspaceId,
+        requestedBy: scope.userId,
+        jobs: [
+          {
+            id: uuidv7(),
+            clientFileName: "first.xmind",
+            targetName: target,
+            targetNameNormalized: target,
+            expectedBytes: 1,
+          },
+        ],
+      }),
+    );
+
+    await expect(
+      runtime.db.transaction((transaction) =>
+        repository.createBatch(transaction, {
+          batchId: uuidv7(),
+          workspaceId: scope.workspaceId,
+          requestedBy: scope.userId,
+          jobs: [
+            {
+              id: uuidv7(),
+              clientFileName: "second.xmind",
+              targetName: target,
+              targetNameNormalized: target,
+              expectedBytes: 1,
+            },
+          ],
+        }),
+      ),
+    ).rejects.toMatchObject({
+      code: "IMPORT_NAME_CONFLICT",
+      conflictNames: [target],
+    });
+  });
+
   it("stops at three hundred waiting jobs in one workspace, even across users", async () => {
     const scope = await createScope();
     const otherUsers: string[] = [];

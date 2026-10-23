@@ -35,6 +35,20 @@ describe("formal MindElixir adapter", () => {
     adapter.destroy();
   });
 
+  it("adopts a saved snapshot without rebuilding the canvas", async () => {
+    const host = createCanvasHost();
+    const adapter = new MindElixirAdapter(host);
+
+    await adapter.mount(sampleDocument(31));
+    const rootBefore = host.querySelector(".me-root");
+
+    adapter.acceptSavedSnapshot({ ...sampleDocument(31), version: 9 });
+
+    expect(host.querySelector(".me-root")).toBe(rootBefore);
+    expect(adapter.exportSnapshot().version).toBe(9);
+    adapter.destroy();
+  });
+
   it("tracks a child expansion from the MindElixir control", async () => {
     const host = createCanvasHost();
     const input = sampleDocument(31);

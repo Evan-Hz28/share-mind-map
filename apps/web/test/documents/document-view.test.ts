@@ -11,6 +11,13 @@ let realtimeLockListener:
     }) => void)
   | undefined;
 let realtimeReconnect: (() => void) | undefined;
+let realtimeSnapshotListener:
+  | ((event: {
+      version: number;
+      snapshot: CloudDocumentV1;
+      browserEditSessionId: string | null;
+    }) => void)
+  | undefined;
 
 const adapterCommands = vi.hoisted(() => ({
   addChild: vi.fn(),
@@ -29,6 +36,7 @@ vi.mock("../../src/editor/adapters/mind-elixir.js", () => ({
   MindElixirAdapter: class {
     async mount(): Promise<void> {}
     async applySnapshot(): Promise<void> {}
+    acceptSavedSnapshot(): void {}
     addChild(): Promise<void> {
       adapterCommands.addChild();
       return Promise.resolve();
@@ -81,7 +89,8 @@ vi.mock("../../src/realtime/document-realtime.js", () => ({
     connect(): void {}
     join(): void {}
     disconnect(): void {}
-    onSnapshot(): () => void {
+    onSnapshot(listener: typeof realtimeSnapshotListener): () => void {
+      realtimeSnapshotListener = listener;
       return () => undefined;
     }
     onLock(listener: typeof realtimeLockListener): () => void {
@@ -134,6 +143,7 @@ const snapshot = {
 beforeEach(() => {
   realtimeLockListener = undefined;
   realtimeReconnect = undefined;
+  realtimeSnapshotListener = undefined;
   localStorage.clear();
   sessionStorage.clear();
   for (const command of Object.values(adapterCommands)) command.mockReset();
@@ -581,6 +591,83 @@ describe("DocumentView", () => {
     await waitFor(() => expect(screen.getByText("检测到本机草稿。")).toBeInTheDocument());
     await fireEvent.click(screen.getByRole("button", { name: "丢弃草稿" }));
     await waitFor(() => expect(screen.queryByText("检测到本机草稿。")).not.toBeInTheDocument());
+  });
+
+  it("ignores the realtime echo of its own save instead of entering conflict", async () => {
+    useAuthStore().$patch({ session: sessionResponse("admin") });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            document: {
+              id: documentId,
+              workspaceId,
+              folderId: null,
+              name: "回声文档",
+              currentVersion: 1,
+              schemaVersion: 1,
+              compatibilityStatus: "full",
+              nodeCount: 1,
+              imageBytes: 0,
+              createdAt: "2026-09-20T00:00:00.000Z",
+              updatedAt: "2026-09-20T00:00:00.000Z",
+              snapshot,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            lock: { occupied: false, generation: 0, ttlSeconds: 900, expiresAt: "" },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            lock: {
+              occupied: true,
+              generation: 1,
+              ttlSeconds: 900,
+              expiresAt: "2026-09-20T00:15:00.000Z",
+              token: "opaque-token",
+            },
+          }),
+          { status: 201, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(DocumentView, { props: { workspaceId, documentId } });
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "回声文档" })).toBeInTheDocument(),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "开始编辑" }));
+    await waitFor(() => {
+      expect(useEditorStore().canWrite).toBe(true);
+    });
+
+    const lease = useEditorStore().lockLease;
+    if (lease === null) throw new Error("Expected an edit lease.");
+    realtimeSnapshotListener?.({
+      version: 2,
+      snapshot: { ...snapshot, version: 2 } as CloudDocumentV1,
+      browserEditSessionId: lease.browserEditSessionId,
+    });
+    expect(useEditorStore().mode).toBe("editing-clean");
+    expect(useEditorStore().canWrite).toBe(true);
+
+    realtimeSnapshotListener?.({
+      version: 3,
+      snapshot: { ...snapshot, version: 3 } as CloudDocumentV1,
+      browserEditSessionId: "another-browser",
+    });
+    expect(useEditorStore().mode).toBe("conflict");
+    expect(useEditorStore().canWrite).toBe(false);
   });
 
   it("saves a dirty desktop draft after acquiring the edit lock", async () => {

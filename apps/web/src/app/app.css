@@ -1039,6 +1039,12 @@ input:focus-visible {
 .library-tree__toggle svg {
   width: 14px;
 }
+/* 叶子节点没有展开箭头,用同宽占位符保证同级文件名左对齐。 */
+.library-tree__spacer {
+  width: 22px;
+  min-width: 22px;
+  flex: 0 0 auto;
+}
 .library-tree__item {
   display: flex;
   min-width: 0;
@@ -1362,6 +1368,53 @@ input:focus-visible {
 }
 .popover-menu .doc-table__menu-delete {
   color: var(--danger);
+}
+.library-subfolders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.library-subfolder {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border-subtle);
+  color: var(--ink);
+  background: var(--surface);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+.library-subfolder:hover,
+.library-subfolder:focus-visible {
+  border-color: var(--color-accent-border);
+  background: var(--color-control-hover);
+}
+.library-subfolder > svg {
+  width: 16px;
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+.library-subfolder__name {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.library-subfolder__count {
+  color: var(--muted);
+  font-size: 11px;
+}
+.library-inline-empty {
+  margin: 0;
+  padding: 28px 8px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
 }
 .library-empty {
   min-height: 240px;

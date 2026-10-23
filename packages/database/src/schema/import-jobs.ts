@@ -96,11 +96,11 @@ export const importJobs = pgTable(
     ),
     uniqueIndex("import_jobs_workspace_target_name_active_uq")
       .on(table.workspaceId, table.targetNameNormalized)
-      .where(sql`${table.phase} IN ('waiting', 'uploading', 'parsing', 'persisting', 'succeeded')`),
+      .where(sql`${table.phase} IN ('waiting', 'uploading', 'parsing', 'persisting')`),
     uniqueIndex("import_jobs_workspace_sha256_active_uq")
       .on(table.workspaceId, table.sha256)
       .where(
-        sql`${table.sha256} IS NOT NULL AND ${table.phase} IN ('waiting', 'uploading', 'parsing', 'persisting', 'succeeded')`,
+        sql`${table.sha256} IS NOT NULL AND ${table.phase} IN ('waiting', 'uploading', 'parsing', 'persisting')`,
       ),
   ],
 );

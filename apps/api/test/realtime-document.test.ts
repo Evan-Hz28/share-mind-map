@@ -71,13 +71,20 @@ describe("document realtime rooms", () => {
       sheets: [],
       extensions: {},
     } as never;
-    rooms.broadcastSnapshot({ workspaceId, documentId, snapshot, version: 5 });
+    rooms.broadcastSnapshot({
+      workspaceId,
+      documentId,
+      snapshot,
+      version: 5,
+      browserEditSessionId: "browser-two",
+    });
     const secondMember = members[1];
     if (secondMember === undefined) throw new Error("Second room member is missing");
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(vi.mocked(secondMember["emit"])).toHaveBeenCalledWith("document:snapshot", {
       version: 5,
       snapshot,
+      browserEditSessionId: "browser-two",
     });
   });
 

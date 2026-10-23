@@ -1,9 +1,27 @@
 <script setup lang="ts">
 import { WarningFilled } from "@element-plus/icons-vue";
+import { computed } from "vue";
 
 import type { RequestFailure } from "../api.js";
 
 const props = defineProps<{ error: RequestFailure | null }>();
+
+const conflictNames = computed<string[]>(() => {
+  const value = props.error?.details.conflictingNames;
+  if (!Array.isArray(value)) return [];
+  return value.filter((name): name is string => typeof name === "string" && name !== "");
+});
+
+const message = computed<string>(() => {
+  if (props.error === null) return "";
+  if (props.error.code === "DOCUMENT_NAME_CONFLICT" && conflictNames.value.length > 0) {
+    const shown = conflictNames.value.slice(0, 5).join("、");
+    const more =
+      conflictNames.value.length > 5 ? ` 等 ${String(conflictNames.value.length)} 个` : "";
+    return `工作区已存在同名文档：${shown}${more}。请修改目标文档名后再导入。`;
+  }
+  return safeMessages[props.error.code] ?? "操作未完成，请稍后重试。";
+});
 
 const safeMessages: Record<string, string> = {
   AUTH_INVALID_CREDENTIALS: "账号或密码错误。",
@@ -34,6 +52,7 @@ const safeMessages: Record<string, string> = {
   NETWORK_ERROR: "无法连接服务，请检查网络后重试。",
   PERMISSION_DENIED: "没有执行此操作的权限。",
   QUOTA_EXCEEDED: "存储配额不足。",
+  REQUEST_TOO_LARGE: "提交的内容过大，请减少节点或图片后重试。",
   RATE_LIMITED: "登录尝试过于频繁，请稍后再试。",
   WORKSPACE_DOCUMENT_LIMIT_REACHED: "工作区文档数量已达上限。",
 };
@@ -43,7 +62,7 @@ const safeMessages: Record<string, string> = {
   <div v-if="props.error" class="request-error" role="alert">
     <WarningFilled aria-hidden="true" />
     <div>
-      <strong>{{ safeMessages[props.error.code] ?? "操作未完成，请稍后重试。" }}</strong>
+      <strong>{{ message }}</strong>
       <small v-if="props.error.requestId">请求编号：{{ props.error.requestId }}</small>
     </div>
   </div>
