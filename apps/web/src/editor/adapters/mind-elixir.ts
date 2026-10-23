@@ -365,7 +365,7 @@ export class MindElixirAdapter implements MindMapAdapter {
   public fitToView(): void {
     const instance = this.requireInstance();
     instance.scaleFit();
-    this.viewState.viewport.zoom = instance.scaleVal;
+    if (Number.isFinite(instance.scaleVal)) this.viewState.viewport.zoom = instance.scaleVal;
   }
 
   public zoomIn(): void {
@@ -405,6 +405,7 @@ export class MindElixirAdapter implements MindMapAdapter {
           .map((node) => node.id)
       : [];
     this.requireInstance().refresh(this.vendorData());
+    this.fitToView();
     await this.applyViewState();
   }
 

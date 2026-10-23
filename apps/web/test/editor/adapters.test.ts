@@ -253,6 +253,10 @@ describe("formal MindElixir adapter", () => {
 
     await adapter.mount(input);
     const unsubscribe = adapter.onChange((document) => changes.push(document));
+    const internals = adapter as unknown as {
+      instance: { scaleFit: () => void };
+    };
+    const fit = vi.spyOn(internals.instance, "scaleFit");
     const expectedExpandedIds = Object.values(input.sheets[0]!.nodes)
       .filter((node) => node.childIds.length > 0)
       .map((node) => node.id);
@@ -266,6 +270,7 @@ describe("formal MindElixir adapter", () => {
 
     expect(adapter.getViewState().expandedNodeIds).toEqual([]);
     expect(changes).toHaveLength(0);
+    expect(fit).toHaveBeenCalledTimes(2);
 
     unsubscribe();
     adapter.destroy();
