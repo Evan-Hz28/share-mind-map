@@ -2383,6 +2383,39 @@ input:focus-visible {
 .document-canvas--readonly {
   cursor: not-allowed;
 }
+/* 画布文字统一成接近 XMind 的字号与字重；导入数据里的内联样式仍可覆盖。 */
+.map-container {
+  font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", "Source Han Sans SC", sans-serif;
+  font-size: 16px;
+}
+.map-container .me-parent .me-tpc,
+.map-container .me-main > .me-wrapper > .me-parent > .me-tpc {
+  color: #333333;
+}
+/* 优先级标记由 adapter 注入到节点标题前，P0/P1/P2 依次显示为 ①②③。 */
+.map-container .priority-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  margin-right: 6px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  vertical-align: 0;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+}
+.map-container .priority-badge--p0 {
+  color: var(--danger);
+}
+.map-container .priority-badge--p1 {
+  color: #f76808;
+}
+.map-container .priority-badge--p2 {
+  color: var(--muted);
+}
 .document-notes {
   margin-top: 18px;
   padding: 18px;

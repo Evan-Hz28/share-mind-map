@@ -14,6 +14,19 @@ describe("formal MindElixir adapter", () => {
   it("uses a centered two-sided layout without the native toolbar", async () => {
     const host = createCanvasHost();
     const adapter = new MindElixirAdapter(host);
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string): MediaQueryList => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        dispatchEvent: () => true,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+      }),
+    });
 
     await adapter.mount(sampleDocument(31));
 
@@ -23,6 +36,7 @@ describe("formal MindElixir adapter", () => {
         direction: number;
         keypress: boolean;
         overflowHidden: boolean;
+        theme: { name: string; type?: "light" | "dark" };
         toolBar: boolean;
       };
     };
@@ -31,6 +45,7 @@ describe("formal MindElixir adapter", () => {
     expect(internals.instance.keypress).toBe(true);
     expect(internals.instance.overflowHidden).toBe(false);
     expect(internals.instance.toolBar).toBe(false);
+    expect(internals.instance.theme.type).toBe("light");
 
     adapter.destroy();
   });
@@ -273,6 +288,44 @@ describe("formal MindElixir adapter", () => {
     expect(fit).toHaveBeenCalledTimes(2);
 
     unsubscribe();
+    adapter.destroy();
+  });
+
+  it("renders node priority as a badge without changing the document", async () => {
+    const host = createCanvasHost();
+    const input = sampleDocument(31);
+    const adapter = new MindElixirAdapter(host);
+
+    await adapter.mount(input);
+    await adapter.setAllExpanded(true);
+
+    const badges = host.querySelectorAll<HTMLElement>(".priority-badge");
+    expect(badges).toHaveLength(1);
+    expect(badges[0]?.className).toBe("priority-badge priority-badge--p1");
+    expect(badges[0]?.textContent).toBe("2");
+    expect(badges[0]?.nextElementSibling?.className).toBe("text");
+
+    const sheet = adapter.exportSnapshot().sheets[0]!;
+    expect(sheet.nodes[sheet.rootNodeId]!.priority).toBeNull();
+    expect(Object.values(sheet.nodes).filter((node) => node.priority === "P1")).toHaveLength(1);
+
+    adapter.destroy();
+  });
+
+  it("renders model font sizes as pixel values", async () => {
+    const host = createCanvasHost();
+    const input = sampleDocument(31);
+    const sheet = input.sheets[0]!;
+    const target = Object.values(sheet.nodes).find((node) => node.title === "Synthetic node 19")!;
+    target.style.fontSize = 18;
+    const adapter = new MindElixirAdapter(host);
+
+    await adapter.mount(input);
+    await adapter.setAllExpanded(true);
+
+    const topic = host.querySelector<HTMLElement>(`[data-nodeid="me${target.id}"]`);
+    expect(topic?.style.fontSize).toBe("18px");
+
     adapter.destroy();
   });
 

@@ -78,6 +78,14 @@ type MindElixirBus = {
   removeListener(name: string, listener: (payload: unknown) => void): void;
 };
 
+type PriorityMetadata = { priority: NonNullable<CloudNodeV1["priority"]> };
+
+const PRIORITY_BADGE_LABELS: Record<PriorityMetadata["priority"], string> = {
+  P0: "1",
+  P1: "2",
+  P2: "3",
+};
+
 type MapTranslation = { x: number; y: number };
 
 function readMapTranslation(transform: string): MapTranslation {
@@ -107,6 +115,33 @@ function installUnboundedPan(instance: MindElixir): void {
   };
 }
 
+function applyPriorityBadge(topic: HTMLElement, nodeObj: NodeObj<PriorityMetadata>): void {
+  const priority = nodeObj.metadata?.priority;
+  if (priority === undefined) return;
+  if (topic.firstElementChild?.classList.contains("priority-badge") === true) return;
+  const badge = topic.ownerDocument.createElement("span");
+  badge.className = `priority-badge priority-badge--${priority.toLowerCase()}`;
+  badge.textContent = PRIORITY_BADGE_LABELS[priority];
+  topic.prepend(badge);
+}
+
+function installPriorityBadges(instance: MindElixir): void {
+  const createWrapper = instance.createWrapper.bind(instance);
+  instance.createWrapper = (nodeObj, omitChildren) => {
+    const wrapper = createWrapper(nodeObj, omitChildren);
+    applyPriorityBadge(wrapper.tpc, nodeObj as NodeObj<PriorityMetadata>);
+    return wrapper;
+  };
+  const layout = instance.layout.bind(instance);
+  instance.layout = () => {
+    layout();
+    const rootTopic = instance.el.querySelector<HTMLElement>(".me-root > .me-tpc");
+    if (rootTopic !== null) {
+      applyPriorityBadge(rootTopic, instance.nodeData as NodeObj<PriorityMetadata>);
+    }
+  };
+}
+
 function uuid(value: string): string {
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)) {
     return value;
@@ -118,10 +153,11 @@ function toMindElixirNode(
   sheet: CloudSheetV1,
   node: CloudNodeV1,
   expanded: ReadonlySet<string>,
-): NodeObj {
+): NodeObj<PriorityMetadata> {
   return {
     id: node.id,
     topic: node.title,
+    ...(node.priority === null ? {} : { metadata: { priority: node.priority } }),
     ...(node.parentId === sheet.rootNodeId
       ? (() => {
           const direction = vendorDirection(
@@ -143,7 +179,9 @@ function toMindElixirNode(
       ? {}
       : {
           style: {
-            ...(node.style.fontSize === undefined ? {} : { fontSize: String(node.style.fontSize) }),
+            ...(node.style.fontSize === undefined
+              ? {}
+              : { fontSize: `${String(node.style.fontSize)}px` }),
             ...(node.style.fontFamily === undefined ? {} : { fontFamily: node.style.fontFamily }),
             ...(node.style.textColor === undefined ? {} : { color: node.style.textColor }),
             ...(node.style.backgroundColor === undefined
@@ -278,6 +316,7 @@ export class MindElixirAdapter implements MindMapAdapter {
     this.snapshot = validateCloudDocumentSnapshot(document);
     const instance = new MindElixir({
       el: this.host,
+      theme: MindElixir.THEME,
       editable: !this.viewState.readOnly,
       contextMenu: true,
       toolBar: false,
@@ -286,6 +325,7 @@ export class MindElixirAdapter implements MindMapAdapter {
       overflowHidden: false,
     });
     installUnboundedPan(instance);
+    installPriorityBadges(instance);
     this.instance = instance;
     const error = await instance.init(this.vendorData());
     if (error !== undefined) throw error;
