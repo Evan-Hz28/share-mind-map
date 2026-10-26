@@ -1,0 +1,15 @@
+# 给生产打包用的 arm64 镜像标签。
+# 本机 docker compose up 用的是 compose.yaml 里的默认名（<project>-<service>:latest），
+# 这里把 build 的目标改到 :arm64，:latest 就始终留给本地开发（amd64）。
+# 只用于 build，不要用它起容器（up 时这些服务会去找 :arm64 镜像）。
+# 用法：
+#   DOCKER_DEFAULT_PLATFORM=linux/arm64 \
+#     docker compose -f compose.yaml -f deploy/compose.arm64.yaml \
+#     --env-file deploy/.env build web api worker
+services:
+  web:
+    image: share-mind-map-web:arm64
+  api:
+    image: share-mind-map-api:arm64
+  worker:
+    image: share-mind-map-worker:arm64

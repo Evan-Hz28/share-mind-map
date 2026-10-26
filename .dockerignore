@@ -4,6 +4,7 @@
 **/node_modules
 **/dist
 coverage
+dist-deploy
 playwright-report
 test-results
 .env
