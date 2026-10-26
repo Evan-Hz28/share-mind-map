@@ -95,19 +95,22 @@ function installWorkspaceApi(
         return Promise.resolve(new Response(null, { status: 204 }));
       }
       if (url.pathname.endsWith("/folders") && method === "POST") {
-        const body = parseRequestBody(init?.body) as {
-          name?: string;
-          parentId?: string | null;
-        };
-        const name = body.name ?? "";
-        if (!conflictServed && options.folderConflictOnce === name) {
-          conflictServed = true;
-          createFolderRecord(name, body.parentId ?? null);
-          return Promise.resolve(apiError("FOLDER_NAME_CONFLICT", "conflict", 409));
-        }
-        return Promise.resolve(
-          jsonResponse({ folder: createFolderRecord(name, body.parentId ?? null) }, 201),
-        );
+        // api-client 有时发 Request、有时发 url + init,两种都要能读到请求体。
+        return (async (): Promise<Response> => {
+          const body = (input instanceof Request
+            ? await input.clone().json()
+            : parseRequestBody(init?.body)) as {
+            name?: string;
+            parentId?: string | null;
+          };
+          const name = body.name ?? "";
+          if (!conflictServed && options.folderConflictOnce === name) {
+            conflictServed = true;
+            createFolderRecord(name, body.parentId ?? null);
+            return apiError("FOLDER_NAME_CONFLICT", "conflict", 409);
+          }
+          return jsonResponse({ folder: createFolderRecord(name, body.parentId ?? null) }, 201);
+        })();
       }
       const parentMatch = /\/folders\/([^/]+)\/parent$/u.exec(url.pathname);
       if (parentMatch !== null && method === "PATCH") {
@@ -727,6 +730,32 @@ describe("workspace home", () => {
     return input;
   }
 
+  /** 先在侧栏点开某个文件夹,再打开导入弹窗。 */
+  async function openImportDialogInFolder(
+    folderName: string,
+    options: Parameters<typeof installWorkspaceApi>[0] = {},
+  ): Promise<HTMLInputElement> {
+    installWorkspaceApi(options);
+    await renderWorkspace();
+    await userEvent.click(
+      await screen.findByRole("button", { name: new RegExp(`^${folderName}`, "u") }),
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "导入 XMind" }));
+    const input = await screen.findByLabelText(/可多选/u);
+    if (!(input instanceof HTMLInputElement)) throw new Error("文件输入框没有渲染。");
+    return input;
+  }
+
+  /** 某一行当前选中的目标文件夹值。 */
+  function targetSelect(path: string): HTMLSelectElement {
+    const row = importRows().find((element) =>
+      element.querySelector(".import-list__file")?.textContent.includes(path),
+    );
+    const select = row?.querySelector<HTMLSelectElement>('select[aria-label="目标文件夹"]');
+    if (select === null || select === undefined) throw new Error(`没找到 ${path} 的行。`);
+    return select;
+  }
+
   /** @testing-library/vue 的 fireEvent 是异步的,必须 await 才能等到 Vue 重渲染。 */
   async function pickFiles(input: HTMLInputElement, files: File[]): Promise<void> {
     await fireEvent.change(input, { target: { files } });
@@ -1135,5 +1164,197 @@ describe("workspace home", () => {
       files: Array<{ targetFolderId: string | null }>;
     }>;
     expect(batches[0]?.files[0]?.targetFolderId).toBeNull();
+  });
+
+  it("archives picked files into the selected folder by default", async () => {
+    const input = await openImportDialogInFolder("测试文件夹", {
+      folders: [{ ...folder, parentId: null }],
+      importFailureCode: "IMPORT_QUEUE_LIMIT_REACHED",
+    });
+    await pickFiles(input, [new File(["x"], "a.xmind")]);
+
+    expect(targetSelect("a.xmind").value).toBe(`id:${folder.id}`);
+
+    await userEvent.click(submitButton());
+
+    const batches = (await requestBodies("POST", "/import-batches")) as Array<{
+      files: Array<{ clientFileName: string; targetFolderId: string | null }>;
+    }>;
+    expect(batches[0]?.files).toEqual([
+      expect.objectContaining({ clientFileName: "a.xmind", targetFolderId: folder.id }),
+    ]);
+  });
+
+  it("keeps the unassigned default when no folder is selected", async () => {
+    installWorkspaceApi();
+    await renderWorkspace();
+    await userEvent.click(await screen.findByRole("button", { name: /^未归档/u }));
+    await userEvent.click(await screen.findByRole("button", { name: "导入 XMind" }));
+    const input = await screen.findByLabelText(/可多选/u);
+    if (!(input instanceof HTMLInputElement)) throw new Error("文件输入框没有渲染。");
+
+    await pickFiles(input, [new File(["x"], "a.xmind")]);
+
+    expect(targetSelect("a.xmind").value).toBe("");
+  });
+
+  it("creates incoming folders under the selected folder instead of the root", async () => {
+    await openImportDialogInFolder("测试文件夹", {
+      folders: [{ ...folder, parentId: null }],
+      importFailureCode: "IMPORT_QUEUE_LIMIT_REACHED",
+    });
+    const folderInput = screen.getByLabelText(/选择文件夹/u);
+    if (!(folderInput instanceof HTMLInputElement)) throw new Error("目录输入框没有渲染。");
+    const nested = new File(["x"], "a.xmind");
+    Object.defineProperty(nested, "webkitRelativePath", { value: "用例集/子目录/a.xmind" });
+    const topLevel = new File(["x"], "b.xmind");
+    Object.defineProperty(topLevel, "webkitRelativePath", { value: "用例集/b.xmind" });
+    Object.defineProperty(folderInput, "files", {
+      value: [nested, topLevel],
+      writable: true,
+      configurable: true,
+    });
+    await fireEvent.change(folderInput);
+
+    expect(targetSelect("用例集/b.xmind").value).toBe("path:用例集");
+    expect(screen.getAllByRole("option", { name: "新建：测试文件夹 / 用例集" })).toHaveLength(2);
+    expect(
+      screen.getAllByRole("option", { name: "新建：测试文件夹 / 用例集 / 子目录" }),
+    ).toHaveLength(2);
+
+    await userEvent.click(submitButton());
+
+    const created = (await requestBodies("POST", "/folders")) as Array<{
+      name: string;
+      parentId: string | null;
+    }>;
+    expect(created).toEqual([
+      { name: "用例集", parentId: folder.id },
+      { name: "子目录", parentId: "00000000-0000-7000-8000-000000000040" },
+    ]);
+    const batches = (await requestBodies("POST", "/import-batches")) as Array<{
+      files: Array<{ clientFileName: string; targetFolderId: string | null }>;
+    }>;
+    const targetByFile = Object.fromEntries(
+      (batches[0]?.files ?? []).map((entry) => [entry.clientFileName, entry.targetFolderId]),
+    );
+    expect(targetByFile).toEqual({
+      "b.xmind": "00000000-0000-7000-8000-000000000040",
+      "a.xmind": "00000000-0000-7000-8000-000000000041",
+    });
+  });
+
+  it("reuses a subfolder that already belongs to the selected folder", async () => {
+    const existing = {
+      id: "00000000-0000-7000-8000-000000000031",
+      workspaceId,
+      parentId: folder.id,
+      name: "用例集",
+      createdAt: "2026-09-23T00:00:00.000Z",
+      updatedAt: "2026-09-23T00:00:00.000Z",
+    };
+    await openImportDialogInFolder("测试文件夹", {
+      folders: [{ ...folder, parentId: null }, existing],
+      importFailureCode: "IMPORT_QUEUE_LIMIT_REACHED",
+    });
+    const folderInput = screen.getByLabelText(/选择文件夹/u);
+    if (!(folderInput instanceof HTMLInputElement)) throw new Error("目录输入框没有渲染。");
+    const file = new File(["x"], "a.xmind");
+    Object.defineProperty(file, "webkitRelativePath", { value: "用例集/a.xmind" });
+    Object.defineProperty(folderInput, "files", {
+      value: [file],
+      writable: true,
+      configurable: true,
+    });
+    await fireEvent.change(folderInput);
+
+    expect(targetSelect("用例集/a.xmind").value).toBe(`id:${existing.id}`);
+
+    await userEvent.click(submitButton());
+
+    expect(await requestBodies("POST", "/folders")).toEqual([]);
+    const batches = (await requestBodies("POST", "/import-batches")) as Array<{
+      files: Array<{ targetFolderId: string | null }>;
+    }>;
+    expect(batches[0]?.files[0]?.targetFolderId).toBe(existing.id);
+  });
+
+  it("does not nest the selected folder inside itself when importing it from disk", async () => {
+    await openImportDialogInFolder("测试文件夹", {
+      folders: [{ ...folder, parentId: null }],
+      importFailureCode: "IMPORT_QUEUE_LIMIT_REACHED",
+    });
+    const folderInput = screen.getByLabelText(/选择文件夹/u);
+    if (!(folderInput instanceof HTMLInputElement)) throw new Error("目录输入框没有渲染。");
+    const direct = new File(["x"], "a.xmind");
+    Object.defineProperty(direct, "webkitRelativePath", { value: "测试文件夹/a.xmind" });
+    const nested = new File(["x"], "c.xmind");
+    Object.defineProperty(nested, "webkitRelativePath", { value: "测试文件夹/子/c.xmind" });
+    Object.defineProperty(folderInput, "files", {
+      value: [direct, nested],
+      writable: true,
+      configurable: true,
+    });
+    await fireEvent.change(folderInput);
+
+    expect(targetSelect("测试文件夹/a.xmind").value).toBe(`id:${folder.id}`);
+    expect(targetSelect("测试文件夹/子/c.xmind").value).toBe("path:子");
+    expect(screen.getAllByRole("option", { name: "新建：测试文件夹 / 子" })).toHaveLength(2);
+  });
+
+  it("falls back to the selected folder when a subfolder cannot be created", async () => {
+    await openImportDialogInFolder("测试文件夹", {
+      folders: [{ ...folder, parentId: null }],
+      importFailureCode: "IMPORT_QUEUE_LIMIT_REACHED",
+    });
+    const folderInput = screen.getByLabelText(/选择文件夹/u);
+    if (!(folderInput instanceof HTMLInputElement)) throw new Error("目录输入框没有渲染。");
+    const file = new File(["x"], "a.xmind");
+    Object.defineProperty(file, "webkitRelativePath", { value: `${"目录".repeat(30)}/a.xmind` });
+    Object.defineProperty(folderInput, "files", {
+      value: [file],
+      writable: true,
+      configurable: true,
+    });
+    await fireEvent.change(folderInput);
+
+    await userEvent.click(submitButton());
+
+    expect(
+      screen.getByText(/相关文件改为归入「测试文件夹」。/u),
+    ).toBeInTheDocument();
+    expect(await requestBodies("POST", "/folders")).toEqual([]);
+    const batches = (await requestBodies("POST", "/import-batches")) as Array<{
+      files: Array<{ targetFolderId: string | null }>;
+    }>;
+    expect(batches[0]?.files[0]?.targetFolderId).toBe(folder.id);
+  });
+
+  it("counts the selected folder against the folder depth limit", async () => {
+    await openImportDialogInFolder("测试文件夹", {
+      folders: [{ ...folder, parentId: null }],
+      importFailureCode: "IMPORT_QUEUE_LIMIT_REACHED",
+    });
+    const folderInput = screen.getByLabelText(/选择文件夹/u);
+    if (!(folderInput instanceof HTMLInputElement)) throw new Error("目录输入框没有渲染。");
+    const file = new File(["x"], "a.xmind");
+    Object.defineProperty(file, "webkitRelativePath", {
+      value: "a/b/c/d/e/f/g/h/a.xmind",
+    });
+    Object.defineProperty(folderInput, "files", {
+      value: [file],
+      writable: true,
+      configurable: true,
+    });
+    await fireEvent.change(folderInput);
+
+    await userEvent.click(submitButton());
+
+    expect(screen.getByText(/相关文件改为归入「测试文件夹」。/u)).toBeInTheDocument();
+    expect(await requestBodies("POST", "/folders")).toEqual([]);
+    const batches = (await requestBodies("POST", "/import-batches")) as Array<{
+      files: Array<{ targetFolderId: string | null }>;
+    }>;
+    expect(batches[0]?.files[0]?.targetFolderId).toBe(folder.id);
   });
 });

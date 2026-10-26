@@ -78,6 +78,8 @@ const importFileInput = ref<HTMLInputElement | null>(null);
 const importFolderInput = ref<HTMLInputElement | null>(null);
 const importDragOver = ref(false);
 const importSummary = ref<string | null>(null);
+/** 打开弹窗时选中的文件夹,本批默认归档到它;null 表示未归档/全部文件。 */
+const importBaseFolderId = ref<string | null>(null);
 /** 服务端 409 返回的具体冲突名,用来把错误标到对应行。 */
 const serverConflictNames = ref<string[]>([]);
 /** dragenter/dragleave 会在子元素之间反复冒泡,用计数抵消,免得高亮闪烁。 */
@@ -256,6 +258,41 @@ const folderIdByPath = computed(() => folderIndex.value.idByKey);
 
 function folderPath(folderId: string): string {
   return folderIndex.value.pathById.get(folderId) ?? "";
+}
+
+const importBaseFolder = computed(
+  () => workspace.folders.find((folder) => folder.id === importBaseFolderId.value) ?? null,
+);
+/** base 的归一化路径键;祖先链里有非法段时是 null,此时不自动建子目录。 */
+const importBaseKey = computed(() => {
+  const folder = importBaseFolder.value;
+  return folder === null ? null : (folderIndex.value.keyById.get(folder.id) ?? null);
+});
+/** base 在树里的层级(根为 1);服务端 MAX_FOLDER_DEPTH 也按这个算。 */
+const importBaseLevel = computed(() => {
+  const byId = new Map(workspace.folders.map((folder) => [folder.id, folder]));
+  let level = 0;
+  let cursor: FolderDto | null | undefined = importBaseFolder.value;
+  while (cursor !== null && cursor !== undefined && level < 64) {
+    level += 1;
+    cursor = cursor.parentId === null ? undefined : byId.get(cursor.parentId);
+  }
+  return level;
+});
+const importBaseDisplayPath = computed(() => {
+  const folder = importBaseFolder.value;
+  return folder === null ? null : folderPath(folder.id);
+});
+
+/** 待创建目录的完整展示路径:base 和相对路径都用 " / " 分段。 */
+function pendingFolderLabel(path: string): string {
+  const prefix = importBaseDisplayPath.value;
+  if (prefix === null) return path;
+  const suffix = path
+    .split("/")
+    .filter((segment) => segment !== "")
+    .join(" / ");
+  return `${prefix} / ${suffix}`;
 }
 
 /** 按树序展开成可渲染的行;搜索时只保留命中节点和它们的祖先,并强制展开。 */
@@ -514,6 +551,8 @@ function clearImportNameError(): void {
 }
 
 function openImport(): void {
+  // 选中「全部文件」或「未归档」时 selectedFolder 为 null,退回原来的行为。
+  importBaseFolderId.value = selectedFolder.value?.id ?? null;
   importRows.value = [];
   importSummary.value = null;
   serverConflictNames.value = [];
@@ -549,10 +588,33 @@ function applyCollected(collected: CollectedFiles): void {
     fresh.map((entry) => entry.path),
     importRows.value.map((row) => row.name),
   );
+  const baseFolder = importBaseFolder.value;
+  const baseId = baseFolder?.id ?? null;
+  const baseKey = importBaseKey.value;
+  const rootName = collected.roots.length === 1 ? (collected.roots[0] ?? "") : "";
+  const rootKey = rootName === "" ? null : normalizeFolderName(rootName);
+  // 在 IM 里导入磁盘上的 IM 时,别把根目录名再套成 IM/IM。
+  const stripRoot =
+    baseFolder !== null && rootKey !== null && rootKey === normalizeFolderName(baseFolder.name);
   for (const [index, entry] of fresh.entries()) {
-    const entryFolderPath = importFolderPath(entry.path);
+    const rawFolderPath = importFolderPath(entry.path);
+    const entryFolderPath = stripRoot
+      ? rawFolderPath
+          .split("/")
+          .filter((segment) => segment !== "")
+          .slice(1)
+          .join("/")
+      : rawFolderPath;
     const key = normalizeFolderPath(entryFolderPath);
-    const existingId = key === null ? undefined : folderIdByPath.value.get(key);
+    const lookupKey =
+      key === null
+        ? undefined
+        : baseKey === null
+          ? (baseId === null ? key : undefined)
+          : key === ""
+            ? baseKey
+            : `${baseKey}/${key}`;
+    const existingId = lookupKey === undefined ? undefined : folderIdByPath.value.get(lookupKey);
     importRows.value.push({
       id: nextImportRowId,
       path: entry.path,
@@ -563,7 +625,9 @@ function applyCollected(collected: CollectedFiles): void {
         existingId !== undefined
           ? `id:${existingId}`
           : entryFolderPath === ""
-            ? ""
+            ? baseId === null
+              ? ""
+              : `id:${baseId}`
             : `path:${entryFolderPath}`,
     });
     nextImportRowId += 1;
@@ -621,15 +685,24 @@ function closeImportDialog(): void {
 }
 
 /**
- * 按目录自动归档:把 "path:" 的行逐级落成真实文件夹。
+ * 按目录自动归档:把 "path:" 的行从 base 往下逐级落成真实文件夹。
  * 撞名(别处刚建了同名)就重拉列表复用;层级超限/名字超长/数量到顶则放弃,
- * 该路径下的行退回未归档,不让整批导入失败。
+ * 该路径下的行退回 base(没选文件夹时才是未归档),不让整批导入失败。
  */
-async function ensureFolderPath(path: string): Promise<string | null> {
+async function ensureFolderPath(
+  path: string,
+  baseId: string | null,
+  baseKey: string | null,
+  baseLevel: number,
+): Promise<string | null> {
   const segments = path.split("/").filter((segment) => segment !== "");
-  if (segments.length === 0 || segments.length > IMPORT_FOLDER_MAX_DEPTH) return null;
-  let parentId: string | null = null;
-  let key = "";
+  if (segments.length === 0) return baseId;
+  // 服务端限制整棵树最深 8 层,base 已经占掉的层级要算进去。
+  if (baseLevel + segments.length > IMPORT_FOLDER_MAX_DEPTH) return null;
+  // base 的路径键算不出来就解释不了冲突,宁可整体退回 base 也别在根下建重名目录。
+  if (baseId !== null && baseKey === null) return null;
+  let parentId: string | null = baseId;
+  let key = baseKey ?? "";
   for (const segment of segments) {
     const segmentKey = normalizeFolderName(segment);
     if (segmentKey === null) return null;
@@ -657,18 +730,30 @@ async function ensureFolderPath(path: string): Promise<string | null> {
 }
 
 async function prepareImportFolders(): Promise<void> {
+  const baseFolder = importBaseFolder.value;
+  const baseId = baseFolder?.id ?? null;
+  const baseKey = importBaseKey.value;
+  const baseLevel = importBaseLevel.value;
+  // 弹窗开着时 base 不该消失(模态挡住了删除),真丢了也别把行指向不存在的目录。
+  if (importBaseFolderId.value !== null && baseId === null) {
+    const stale = `id:${importBaseFolderId.value}`;
+    for (const row of importRows.value) {
+      if (row.folderValue === stale) row.folderValue = "";
+    }
+  }
   let abandoned = 0;
   for (const path of pendingImportFolderPaths.value) {
-    const folderId = await ensureFolderPath(path);
+    const folderId = await ensureFolderPath(path, baseId, baseKey, baseLevel);
     for (const row of importRows.value) {
       if (row.folderValue !== `path:${path}`) continue;
-      if (folderId === null) row.folderValue = "";
-      else row.folderValue = `id:${folderId}`;
+      row.folderValue =
+        folderId !== null ? `id:${folderId}` : baseId === null ? "" : `id:${baseId}`;
     }
     if (folderId === null) abandoned += 1;
   }
   if (abandoned > 0) {
-    importSummary.value = `${importSummary.value ?? ""}有 ${String(abandoned)} 个目录无法自动创建，相关文件改为未归档。`;
+    const fallback = baseId === null ? "未归档" : `归入「${baseFolder?.name ?? ""}」`;
+    importSummary.value = `${importSummary.value ?? ""}有 ${String(abandoned)} 个目录无法自动创建，相关文件改为${fallback}。`;
   }
 }
 
@@ -1570,7 +1655,7 @@ onUnmounted(() => {
                 :key="`new:${path}`"
                 :value="`path:${path}`"
               >
-                新建：{{ path }}
+                新建：{{ pendingFolderLabel(path) }}
               </option>
             </select>
             <button
