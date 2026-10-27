@@ -264,7 +264,6 @@ onMounted(() => void load());
                 <tr>
                   <th scope="col">文档</th>
                   <th scope="col">文件夹</th>
-                  <th scope="col">版本</th>
                   <th scope="col">节点</th>
                   <th scope="col">更新时间</th>
                 </tr>
@@ -280,7 +279,6 @@ onMounted(() => void load());
                     </RouterLink>
                   </td>
                   <td>{{ folderLabel(document.folderId) }}</td>
-                  <td>v{{ document.currentVersion }}</td>
                   <td>{{ document.nodeCount }}</td>
                   <td>{{ formatDateTime(document.updatedAt) }}</td>
                 </tr>

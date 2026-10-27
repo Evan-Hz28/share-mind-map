@@ -419,7 +419,6 @@ describe("DocumentView", () => {
       "title",
       "导入内容与在线编辑器及导出格式完全兼容。",
     );
-    expect(screen.getByText(/版本 1/)).toBeInTheDocument();
     expect(screen.getByText("普通备注")).toBeInTheDocument();
     expect(document.body.innerHTML).not.toContain("v-html");
   });
@@ -774,7 +773,6 @@ describe("DocumentView", () => {
     });
     expect(typeof requestBody.browserEditSessionId).toBe("string");
     expect(requestBody.snapshot).toMatchObject({ documentId, version: 3 });
-    expect(screen.getByText(/版本 4/)).toBeInTheDocument();
 
     fetchMock
       .mockResolvedValueOnce(
@@ -806,7 +804,6 @@ describe("DocumentView", () => {
     );
     expect(snapshotRequests).toHaveLength(2);
     expect((snapshotRequests[1]?.[0] as Request).method).toBe("POST");
-    expect(screen.getByText(/版本 5/)).toBeInTheDocument();
   });
 
   it("protects a dirty draft when permission is revoked during save", async () => {

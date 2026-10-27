@@ -154,7 +154,6 @@ describe("home dashboard", () => {
     expect(screen.getByText("执行中导入")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("登录模块")).toBeInTheDocument();
-    expect(screen.getByText("v7")).toBeInTheDocument();
     expect(screen.getByText("128")).toBeInTheDocument();
     expect(screen.getByText("系统公告")).toBeInTheDocument();
     expect(screen.getByText("首页工作台上线")).toBeInTheDocument();

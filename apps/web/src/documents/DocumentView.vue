@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   acquireDocumentLock,
   heartbeatDocumentLock,
@@ -19,7 +19,6 @@ import EditorCommandBar from "../editor/EditorCommandBar.vue";
 import EditorSideRail from "../editor/EditorSideRail.vue";
 import { SaveQueue } from "../editor/save-queue.js";
 import LockStatus from "../editor/LockStatus.vue";
-import ImageUploadControl from "../editor/assets/ImageUploadControl.vue";
 import { MindElixirAdapter } from "../editor/adapters/mind-elixir.js";
 import type { MindMapAdapter } from "../editor/adapters/types.js";
 import { useUnsavedGuard } from "../editor/use-unsaved-guard.js";
@@ -408,33 +407,6 @@ async function endEditing(): Promise<void> {
   if (result.data !== undefined) clearBrowserEditSessionId();
 }
 
-async function uploadImage(file: File): Promise<string> {
-  const lease = editor.lockLease;
-  if (lease === null) throw new Error("编辑锁已失效");
-  const form = new FormData();
-  form.append("file", file);
-  const response = await fetch(
-    `${apiClient.config.baseUrl}/api/v1/workspaces/${currentWorkspaceId.value}/documents/${properties.documentId}/assets`,
-    {
-      method: "POST",
-      body: form,
-      credentials: "include",
-      headers: {
-        "X-Asset-Path": file.name,
-        "X-Browser-Edit-Session": lease.browserEditSessionId,
-        "X-Lock-Token": lease.token,
-        "X-Lock-Generation": String(lease.generation),
-        ...(auth.csrfToken === null ? {} : { "X-CSRF-Token": auth.csrfToken }),
-      },
-    },
-  );
-  if (!response.ok) throw new Error("Image upload failed");
-  const body = (await response.json()) as { asset?: { id?: unknown; byteSize?: unknown } };
-  if (typeof body.asset?.id !== "string") throw new Error("Image asset id missing");
-  if (typeof body.asset.byteSize === "number") imageBytes.value += body.asset.byteSize;
-  return body.asset.id;
-}
-
 async function saveManually(): Promise<void> {
   if (editor.draft === null || !editor.canWrite) return;
   try {
@@ -456,20 +428,6 @@ async function restoreDraft(): Promise<void> {
 
 function discardStoredDraft(): void {
   if (draftKey.value !== null) drafts.clear(draftKey.value);
-}
-
-async function insertImage(assetId: string): Promise<void> {
-  const draft = editor.draft ?? documents.snapshot;
-  const sheet = draft?.sheets[0];
-  if (draft === null || sheet === undefined) return;
-  const next = cloneCloudDocument(toRaw(draft));
-  const nextSheet = next.sheets[0];
-  if (nextSheet === undefined) return;
-  const rootNode = nextSheet.nodes[nextSheet.rootNodeId];
-  if (rootNode === undefined) return;
-  rootNode.imageAssetId = assetId;
-  editor.markChanged(next);
-  if (adapter !== null) await adapter.applySnapshot(next);
 }
 
 async function setAllExpanded(expanded: boolean): Promise<void> {
@@ -598,9 +556,7 @@ onBeforeUnmount(() => {
             }}</span>
             <span aria-hidden="true">›</span>
             <div>
-              <p class="eyebrow">文档</p>
               <h1 id="document-title">{{ documents.metadata.name }}</h1>
-              <p class="document-meta">版本 {{ documents.metadata.currentVersion }}</p>
             </div>
           </div>
           <div class="editor-context-bar__actions">
@@ -616,12 +572,6 @@ onBeforeUnmount(() => {
               :mobile="mobile"
               @begin="beginEditing"
               @end="endEditing"
-            />
-            <ImageUploadControl
-              v-if="editor.canWrite"
-              :disabled="!editor.canWrite"
-              :upload="uploadImage"
-              @asset-selected="insertImage"
             />
           </div>
         </header>

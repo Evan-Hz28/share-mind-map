@@ -1325,7 +1325,7 @@ input:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.doc-table__actions-heading {
+.doc-table th.doc-table__actions-heading {
   text-align: right;
 }
 .doc-table__actions {

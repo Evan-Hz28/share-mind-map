@@ -1371,7 +1371,6 @@ onUnmounted(() => {
             <thead>
               <tr>
                 <th scope="col">名称</th>
-                <th scope="col">版本</th>
                 <th scope="col">节点数</th>
                 <th scope="col">最后更新</th>
                 <th scope="col" class="doc-table__actions-heading">操作</th>
@@ -1412,7 +1411,6 @@ onUnmounted(() => {
                     </div>
                   </div>
                 </td>
-                <td>v{{ document.currentVersion }}</td>
                 <td>{{ document.nodeCount }}</td>
                 <td class="doc-table__updated">{{ formatDateTime(document.updatedAt) }}</td>
                 <td>
@@ -1471,8 +1469,7 @@ onUnmounted(() => {
             >
               <strong>{{ document.name }}</strong>
               <small>
-                版本 {{ document.currentVersion }} · {{ document.nodeCount }} 个节点 ·
-                {{ folderLabel(document.folderId) }}
+                {{ document.nodeCount }} 个节点 · {{ folderLabel(document.folderId) }}
               </small>
             </RouterLink>
             <div class="workspace-document-card__meta">

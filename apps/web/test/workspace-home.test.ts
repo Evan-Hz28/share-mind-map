@@ -238,7 +238,6 @@ describe("workspace home", () => {
     expect(screen.getByRole("table")).toBeInTheDocument();
     const row = screen.getByRole("row", { name: /ViewHistory客户端测试用例/u });
     expect(within(row).getByText("未归档")).toBeInTheDocument();
-    expect(within(row).getByRole("cell", { name: "v28" })).toBeInTheDocument();
     expect(within(row).getByRole("cell", { name: "127" })).toBeInTheDocument();
     expect(within(row).getByRole("link", { name: "ViewHistory客户端测试用例" })).toHaveClass(
       "doc-table__link",
@@ -465,7 +464,7 @@ describe("workspace home", () => {
 
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(document.querySelector(".workspace-document-card")).not.toBeNull();
-    expect(screen.getByText(/版本 28 · 127 个节点 · 未归档/u)).toBeInTheDocument();
+    expect(screen.getByText(/127 个节点 · 未归档/u)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "列表视图" }));
     expect(screen.getByRole("table")).toBeInTheDocument();
