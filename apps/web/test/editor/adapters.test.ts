@@ -155,7 +155,7 @@ describe("formal MindElixir adapter", () => {
     adapter.destroy();
   });
 
-  it("uses the XMind default root split when a legacy snapshot has no directions", async () => {
+  it("balances a legacy snapshot's root branches by subtree leaf count", async () => {
     const host = createCanvasHost();
     const adapter = new MindElixirAdapter(host);
 
@@ -166,8 +166,35 @@ describe("formal MindElixir adapter", () => {
     };
     expect(internals.instance.getData().nodeData.children?.map((node) => node.direction)).toEqual([
       MindElixir.RIGHT,
-      MindElixir.RIGHT,
       MindElixir.LEFT,
+      MindElixir.LEFT,
+      MindElixir.LEFT,
+    ]);
+
+    adapter.destroy();
+  });
+
+  it("moves the heavy branch to the other side when it is ordered last", async () => {
+    const host = createCanvasHost();
+    const input = sampleDocument(31);
+    const sheet = input.sheets[0]!;
+    const [heavyId] = sheet.nodes[sheet.rootNodeId]!.childIds;
+    if (heavyId === undefined) throw new Error("Expected a root child.");
+    sheet.nodes[sheet.rootNodeId]!.childIds = [
+      ...sheet.nodes[sheet.rootNodeId]!.childIds.slice(1),
+      heavyId,
+    ];
+    const adapter = new MindElixirAdapter(host);
+
+    await adapter.mount(input);
+
+    const internals = adapter as unknown as {
+      instance: { getData(): { nodeData: { children?: Array<{ direction?: number }> } } };
+    };
+    expect(internals.instance.getData().nodeData.children?.map((node) => node.direction)).toEqual([
+      MindElixir.RIGHT,
+      MindElixir.RIGHT,
+      MindElixir.RIGHT,
       MindElixir.LEFT,
     ]);
 

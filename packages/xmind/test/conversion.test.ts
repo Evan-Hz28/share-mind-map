@@ -148,7 +148,7 @@ describe("XMind conversion", () => {
     expect(sheet.nodes["left-a"]?.direction).toBe("left");
   });
 
-  it("infers the current XMind default root split when layout metadata is absent", () => {
+  it("leaves root directions unset when layout metadata is absent", () => {
     const parsed = parseContentJson(
       Buffer.from(
         JSON.stringify([
@@ -176,11 +176,75 @@ describe("XMind conversion", () => {
 
     const sheet = parsed.sheets[0];
     if (sheet === undefined) throw new Error("Expected a parsed sheet.");
+    expect(sheet.nodes["branch-1"]?.direction).toBeUndefined();
+    expect(sheet.nodes["branch-2"]?.direction).toBeUndefined();
+    expect(sheet.nodes["branch-3"]?.direction).toBeUndefined();
+    expect(sheet.nodes["branch-4"]?.direction).toBeUndefined();
+    expect(sheet.nodes["branch-5"]?.direction).toBeUndefined();
+  });
+
+  it("leaves a balanced root without directions", () => {
+    const parsed = parseContentJson(
+      Buffer.from(
+        JSON.stringify([
+          {
+            id: "balanced-sheet",
+            title: "Balanced sheet",
+            rootTopic: {
+              id: "balanced-root",
+              title: "Root",
+              structureClass: "org.xmind.ui.map.balanced",
+              children: {
+                attached: [
+                  { id: "branch-1", title: "Branch 1" },
+                  { id: "branch-2", title: "Branch 2" },
+                  { id: "branch-3", title: "Branch 3" },
+                ],
+              },
+            },
+          },
+        ]),
+        "utf8",
+      ),
+    );
+
+    const sheet = parsed.sheets[0];
+    if (sheet === undefined) throw new Error("Expected a parsed sheet.");
+    expect(sheet.nodes["branch-1"]?.direction).toBeUndefined();
+    expect(sheet.nodes["branch-2"]?.direction).toBeUndefined();
+    expect(sheet.nodes["branch-3"]?.direction).toBeUndefined();
+  });
+
+  it("keeps directions declared by a right-logic root", () => {
+    const parsed = parseContentJson(
+      Buffer.from(
+        JSON.stringify([
+          {
+            id: "logic-sheet",
+            title: "Logic sheet",
+            rootTopic: {
+              id: "logic-root",
+              title: "Root",
+              structureClass: "org.xmind.ui.map.logic.right",
+              children: {
+                attached: [
+                  { id: "branch-1", title: "Branch 1" },
+                  { id: "branch-2", title: "Branch 2" },
+                  { id: "branch-3", title: "Branch 3" },
+                ],
+              },
+            },
+          },
+        ]),
+        "utf8",
+      ),
+    );
+
+    const sheet = parsed.sheets[0];
+    if (sheet === undefined) throw new Error("Expected a parsed sheet.");
     expect(sheet.nodes["branch-1"]?.direction).toBe("right");
     expect(sheet.nodes["branch-2"]?.direction).toBe("right");
     expect(sheet.nodes["branch-3"]?.direction).toBe("right");
-    expect(sheet.nodes["branch-4"]?.direction).toBe("left");
-    expect(sheet.nodes["branch-5"]?.direction).toBe("left");
   });
 
   it("preserves current JSON hierarchy, content, styles, and relationships", async () => {

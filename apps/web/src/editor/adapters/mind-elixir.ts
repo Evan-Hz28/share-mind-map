@@ -62,15 +62,42 @@ function branchDirection(direction: unknown): BranchDirection | undefined {
   return undefined;
 }
 
-function defaultRootBranchDirection(
-  sheet: CloudSheetV1,
-  nodeId: string,
-): BranchDirection | undefined {
+/**
+ * Splits root branches by subtree leaf count so both sides span a similar height.
+ * Leaf counts come from the full tree, not the current expansion state, so
+ * expanding or collapsing never moves an already placed branch to the other side.
+ */
+function rootBranchDirections(sheet: CloudSheetV1): ReadonlyMap<string, BranchDirection> {
   const root = sheet.nodes[sheet.rootNodeId];
-  if (root === undefined) return undefined;
-  const index = root.childIds.indexOf(nodeId);
-  if (index < 0) return undefined;
-  return index < Math.ceil(root.childIds.length / 2) ? "right" : "left";
+  if (root === undefined) return new Map<string, BranchDirection>();
+  const leaves = new Map<string, number>();
+  const countLeaves = (nodeId: string): number => {
+    const cached = leaves.get(nodeId);
+    if (cached !== undefined) return cached;
+    const node = sheet.nodes[nodeId];
+    const count =
+      node === undefined || node.childIds.length === 0
+        ? 1
+        : node.childIds.reduce((total, childId) => total + countLeaves(childId), 0);
+    leaves.set(nodeId, count);
+    return count;
+  };
+  const weights = root.childIds.map((nodeId) => countLeaves(nodeId));
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  let cut = weights.length;
+  let best = Number.POSITIVE_INFINITY;
+  let prefix = 0;
+  for (let index = 0; index < weights.length - 1; index += 1) {
+    prefix += weights[index] ?? 0;
+    const difference = Math.abs(total - 2 * prefix);
+    if (difference < best) {
+      best = difference;
+      cut = index + 1;
+    }
+  }
+  return new Map<string, BranchDirection>(
+    root.childIds.map((nodeId, index) => [nodeId, index < cut ? "right" : "left"] as const),
+  );
 }
 
 type MindElixirBus = {
@@ -153,6 +180,7 @@ function toMindElixirNode(
   sheet: CloudSheetV1,
   node: CloudNodeV1,
   expanded: ReadonlySet<string>,
+  rootDirections: ReadonlyMap<string, BranchDirection>,
 ): NodeObj<PriorityMetadata> {
   return {
     id: node.id,
@@ -161,7 +189,7 @@ function toMindElixirNode(
     ...(node.parentId === sheet.rootNodeId
       ? (() => {
           const direction = vendorDirection(
-            readBranchDirection(node.extensions) ?? defaultRootBranchDirection(sheet, node.id),
+            readBranchDirection(node.extensions) ?? rootDirections.get(node.id),
           );
           return direction === undefined ? {} : { direction };
         })()
@@ -170,7 +198,7 @@ function toMindElixirNode(
     children: node.childIds.map((childId) => {
       const child = sheet.nodes[childId];
       if (child === undefined) throw new Error(`Missing child node ${childId}.`);
-      return toMindElixirNode(sheet, child, expanded);
+      return toMindElixirNode(sheet, child, expanded, rootDirections);
     }),
     ...(node.labels.length > 0 ? { tags: [...node.labels] } : {}),
     ...(node.icons.length > 0 ? { icons: [...node.icons] } : {}),
@@ -547,6 +575,7 @@ export class MindElixirAdapter implements MindMapAdapter {
         sheet,
         this.requireNode(sheet, sheet.rootNodeId),
         new Set(this.viewState.expandedNodeIds),
+        rootBranchDirections(sheet),
       ),
       direction: MindElixir.SIDE,
     };

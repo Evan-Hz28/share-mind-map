@@ -186,16 +186,7 @@ function rootDirections(
     }
     return directions;
   }
-  if (structureClass === undefined) {
-    const rightCount = Math.ceil(children.length / 2);
-    children.forEach((child, index) => {
-      directions.set(
-        requiredString(child.id, `${path}.children.attached[${String(index)}].id`),
-        index < rightCount ? "right" : "left",
-      );
-    });
-    return directions;
-  }
+  // Without layout metadata the sides are resolved at render time, so do not persist a guess.
   if (structureClass !== "org.xmind.ui.map.unbalanced") return directions;
 
   const rightNumber = unbalancedRightNumber(rootTopic, path);
