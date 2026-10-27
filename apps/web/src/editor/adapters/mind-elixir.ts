@@ -142,6 +142,14 @@ function installUnboundedPan(instance: MindElixir): void {
   };
 }
 
+/** MindElixir 展开节点时会把这棵子树里 expanded 为 true 的后代一并画出来,所以展开前先清掉。 */
+function collapseDescendants(node: NodeObj): void {
+  for (const child of node.children ?? []) {
+    child.expanded = false;
+    collapseDescendants(child);
+  }
+}
+
 function applyPriorityBadge(topic: HTMLElement, nodeObj: NodeObj<PriorityMetadata>): void {
   const priority = nodeObj.metadata?.priority;
   if (priority === undefined) return;
@@ -360,6 +368,7 @@ export class MindElixirAdapter implements MindMapAdapter {
     });
     installUnboundedPan(instance);
     installPriorityBadges(instance);
+    this.installExpandControls(instance);
     this.instance = instance;
     const error = await instance.init(this.vendorData());
     if (error !== undefined) throw error;
@@ -610,6 +619,37 @@ export class MindElixirAdapter implements MindMapAdapter {
       instance.selectNode(node);
     }
     await this.afterRender();
+  }
+
+  /**
+   * 普通点击只展开一层:先清掉后代残留的 expanded。
+   * Ctrl/Cmd 点击仍走 expandNodeAll 递归展开整棵子树。
+   */
+  private installExpandControls(instance: MindElixir): void {
+    const expandNode = instance.expandNode.bind(instance);
+    instance.expandNode = (element, isExpand) => {
+      collapseDescendants(element.nodeObj);
+      expandNode(element, isExpand);
+      this.syncExpandedNodeIds();
+    };
+    const expandNodeAll = instance.expandNodeAll.bind(instance);
+    instance.expandNodeAll = (element, isExpand) => {
+      expandNodeAll(element, isExpand);
+      this.syncExpandedNodeIds();
+    };
+  }
+
+  /** expandNodeAll 不触发 expandNode 事件,直接按 vendor 树重算展开集合。 */
+  private syncExpandedNodeIds(): void {
+    const expanded: string[] = [];
+    const visit = (node: NodeObj): void => {
+      for (const child of node.children ?? []) {
+        if (child.expanded === true) expanded.push(child.id);
+        visit(child);
+      }
+    };
+    visit(this.requireInstance().nodeData);
+    this.viewState.expandedNodeIds = expanded;
   }
 
   private setZoom(zoom: number): void {

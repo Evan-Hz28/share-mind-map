@@ -90,6 +90,47 @@ describe("formal MindElixir adapter", () => {
     adapter.destroy();
   });
 
+  it("expands one level on click but the whole subtree on ctrl-click", async () => {
+    const host = createCanvasHost();
+    const input = sampleDocument(31);
+    const adapter = new MindElixirAdapter(host);
+    const sheet = input.sheets[0]!;
+    const branchId = sheet.nodes[sheet.rootNodeId]!.childIds[0]!;
+    const childIds = sheet.nodes[branchId]!.childIds;
+    const deepId = sheet.nodes[childIds[0]!]!.childIds[0]!;
+    const internals = adapter as unknown as {
+      instance: { findEle(id: string, container?: HTMLElement): HTMLElement };
+    };
+    const expandControl = (): HTMLElement => {
+      const wrapper = internals.instance.findEle(branchId, host).closest(".me-wrapper");
+      const control = wrapper?.querySelector<HTMLElement>(".me-epd");
+      if (control === null || control === undefined) throw new Error("Expected an expand control.");
+      return control;
+    };
+
+    await adapter.mount(input);
+    const expanded = (): string[] => adapter.getViewState().expandedNodeIds;
+    const visible = (nodeId: string): boolean =>
+      host.querySelector(`[data-nodeid="me${nodeId}"]`) !== null;
+
+    expandControl().dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: true }));
+    expect(new Set(expanded())).toEqual(
+      new Set([branchId, ...childIds, ...childIds.flatMap((id) => sheet.nodes[id]!.childIds)]),
+    );
+    expect(visible(deepId)).toBe(true);
+
+    expandControl().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(expanded()).toEqual([]);
+    expect(visible(childIds[0]!)).toBe(false);
+
+    expandControl().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(expanded()).toEqual([branchId]);
+    expect(visible(childIds[0]!)).toBe(true);
+    expect(visible(deepId)).toBe(false);
+
+    adapter.destroy();
+  });
+
   it("emits a validated standard snapshot on a vendor operation", async () => {
     const host = createCanvasHost();
     const input = sampleDocument(31);
