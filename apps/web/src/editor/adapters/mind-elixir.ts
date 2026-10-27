@@ -327,6 +327,12 @@ export class MindElixirAdapter implements MindMapAdapter {
       typeof operation.name === "string" && operation.name.startsWith("moveNodes"),
     );
   };
+  private readonly zoomListeners = new Set<(zoom: number) => void>();
+  private readonly scaleListener = (payload: unknown): void => {
+    if (typeof payload !== "number" || !Number.isFinite(payload)) return;
+    this.viewState.viewport.zoom = payload;
+    for (const listener of this.zoomListeners) listener(payload);
+  };
   private readonly expandListener = (payload: unknown): void => {
     const node = payload as { id?: unknown; expanded?: unknown };
     if (typeof node.id !== "string" || typeof node.expanded !== "boolean") return;
@@ -359,6 +365,7 @@ export class MindElixirAdapter implements MindMapAdapter {
     if (error !== undefined) throw error;
     this.bus().addListener("operation", this.operationListener);
     this.bus().addListener("expandNode", this.expandListener);
+    this.bus().addListener("scale", this.scaleListener);
     await this.applyViewState();
   }
 
@@ -444,6 +451,13 @@ export class MindElixirAdapter implements MindMapAdapter {
     this.setZoom(this.requireInstance().scaleVal - 0.1);
   }
 
+  public onZoomChange(listener: (zoom: number) => void): () => void {
+    this.zoomListeners.add(listener);
+    return () => {
+      this.zoomListeners.delete(listener);
+    };
+  }
+
   public async focusNode(nodeId: string): Promise<boolean> {
     const instance = this.requireInstance();
     if (this.requireSheet().nodes[nodeId] === undefined) return false;
@@ -488,6 +502,7 @@ export class MindElixirAdapter implements MindMapAdapter {
     if (this.instance !== null) {
       this.bus().removeListener("operation", this.operationListener);
       this.bus().removeListener("expandNode", this.expandListener);
+      this.bus().removeListener("scale", this.scaleListener);
       this.instance.destroy();
     }
     this.instance = null;

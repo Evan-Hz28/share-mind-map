@@ -36,10 +36,12 @@ const canvas = ref<HTMLDivElement | null>(null);
 const editorShell = ref<HTMLElement | null>(null);
 const mobile = ref(false);
 const saveError = ref<string | null>(null);
+const zoomPercent = ref(100);
 const imageBytes = ref(0);
 const lockState = ref<"idle" | "acquiring" | "held" | "lost" | "error">("idle");
 let adapter: MindMapAdapter | null = null;
 let unsubscribe: (() => void) | null = null;
+let unsubscribeZoom: (() => void) | null = null;
 let mediaQuery: MediaQueryList | null = null;
 let lockTimer: ReturnType<typeof setTimeout> | null = null;
 let mounted = false;
@@ -194,6 +196,11 @@ async function mountAdapter(): Promise<void> {
   adapter = new MindElixirAdapter(canvas.value);
   await adapter.mount(documents.snapshot);
   adapter.setReadOnly(readOnly.value);
+  unsubscribeZoom?.();
+  unsubscribeZoom = adapter.onZoomChange((zoom) => {
+    zoomPercent.value = Math.round(zoom * 100);
+  });
+  zoomPercent.value = Math.round(adapter.getViewState().viewport.zoom * 100);
   unsubscribe = adapter.onChange((snapshot) => {
     if (!readOnly.value) {
       editor.markChanged(snapshot);
@@ -559,6 +566,7 @@ onBeforeUnmount(() => {
   realtime.disconnect();
   mediaQuery?.removeEventListener("change", updateMobile);
   unsubscribe?.();
+  unsubscribeZoom?.();
   adapter?.destroy();
 });
 </script>
@@ -671,7 +679,7 @@ onBeforeUnmount(() => {
           >
             −
           </button>
-          <span aria-label="当前缩放比例">100%</span>
+          <span aria-label="当前缩放比例">{{ zoomPercent }}%</span>
           <button
             type="button"
             aria-label="放大画布"

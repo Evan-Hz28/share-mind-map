@@ -466,6 +466,28 @@ describe("formal MindElixir adapter", () => {
     adapter.destroy();
   });
 
+  it("notifies zoom listeners for zoom and fit commands", async () => {
+    const host = createCanvasHost();
+    const adapter = new MindElixirAdapter(host);
+    const zooms: number[] = [];
+
+    await adapter.mount(sampleDocument(31));
+    const unsubscribe = adapter.onZoomChange((zoom) => zooms.push(zoom));
+    const internals = adapter as unknown as { instance: { scaleVal: number } };
+
+    adapter.zoomIn();
+    expect(zooms.at(-1)).toBeCloseTo(internals.instance.scaleVal);
+    adapter.zoomOut();
+    expect(zooms.at(-1)).toBeCloseTo(internals.instance.scaleVal);
+
+    unsubscribe();
+    const count = zooms.length;
+    adapter.zoomIn();
+    expect(zooms).toHaveLength(count);
+
+    adapter.destroy();
+  });
+
   it("allows panning beyond MindElixir's default content boundary", async () => {
     const host = createCanvasHost();
     const adapter = new MindElixirAdapter(host);

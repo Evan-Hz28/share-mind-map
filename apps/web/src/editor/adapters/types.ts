@@ -27,6 +27,8 @@ export interface MindMapAdapter {
   fitToView(): void;
   zoomIn(): void;
   zoomOut(): void;
+  /** 订阅缩放比例变化(滚轮、按钮、适应画布都会触发)。 */
+  onZoomChange(listener: (zoom: number) => void): () => void;
   focusNode(nodeId: string): Promise<boolean>;
   getViewState(): MindMapViewState;
   restoreViewState(state: MindMapViewState): Promise<void>;

@@ -70,6 +70,12 @@ vi.mock("../../src/editor/adapters/mind-elixir.js", () => ({
     onChange(): () => void {
       return () => undefined;
     }
+    onZoomChange(): () => void {
+      return () => undefined;
+    }
+    getViewState(): { viewport: { x: number; y: number; zoom: number } } {
+      return { viewport: { x: 0, y: 0, zoom: 1 } };
+    }
     zoomIn(): void {
       adapterCommands.zoomIn();
     }
