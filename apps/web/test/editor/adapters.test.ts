@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import MindElixir from "mind-elixir";
 
-import { MindElixirAdapter } from "../../src/editor/adapters/mind-elixir.js";
+import { MindElixirAdapter, pickDropTarget } from "../../src/editor/adapters/mind-elixir.js";
 import { sampleDocument } from "../../src/poc/sample.js";
 import { createCanvasHost } from "../poc/helpers.js";
 
@@ -570,5 +570,41 @@ describe("formal MindElixir adapter", () => {
     expect(adapter.getViewState()).toEqual(state);
     expect(adapter.exportSnapshot()).toEqual(replacement);
     adapter.destroy();
+  });
+});
+
+describe("drop target snapping", () => {
+  const rect = (
+    top: number,
+    bottom: number,
+    left: number,
+    right: number,
+  ): {
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+  } => ({ top, bottom, left, right });
+
+  const limits = { verticalGap: 72, horizontalGap: 160 };
+
+  it("snaps to the nearest node on the probe's side", () => {
+    const candidates = [
+      { target: "near", rect: rect(100, 140, 100, 200) },
+      { target: "far", rect: rect(400, 440, 100, 200) },
+    ];
+
+    expect(pickDropTarget({ x: 150, y: 180 }, candidates, limits, "after")).toBe("near");
+    expect(pickDropTarget({ x: 150, y: 60 }, candidates, limits, "before")).toBe("near");
+    expect(pickDropTarget({ x: 150, y: 300 }, candidates, limits, "after")).toBeNull();
+  });
+
+  it("rejects nodes on the wrong side or outside the horizontal band", () => {
+    const candidates = [{ target: "node", rect: rect(100, 140, 100, 200) }];
+
+    // 光标在节点下方,但这次探测问的是 before,不能把节点当成落点。
+    expect(pickDropTarget({ x: 150, y: 180 }, candidates, limits, "before")).toBeNull();
+    // 横向差 500px,属于画布另一侧的分支,不吸附。
+    expect(pickDropTarget({ x: 700, y: 180 }, candidates, limits, "after")).toBeNull();
   });
 });

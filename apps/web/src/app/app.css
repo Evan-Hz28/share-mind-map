@@ -2392,6 +2392,23 @@ input:focus-visible {
 .map-container .me-main > .me-wrapper > .me-parent > .me-tpc {
   color: #333333;
 }
+/* 拖拽插入位置提示:从 vendor 的浅色块改成 XMind 风格的蓝色引导线。 */
+.map-container .me-parent .me-tpc .insert-preview.before.show,
+.map-container .me-parent .me-tpc .insert-preview.after.show {
+  left: -6px;
+  width: calc(100% + 12px);
+  height: 4px;
+  opacity: 1;
+  background: #3b82f6;
+  border-radius: 2px;
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 18%);
+}
+.map-container .me-parent .me-tpc .insert-preview.before.show {
+  top: -7px;
+}
+.map-container .me-parent .me-tpc .insert-preview.after.show {
+  bottom: -7px;
+}
 /* 优先级标记由 adapter 注入到节点标题前，P0/P1/P2 依次显示为 ①②③。 */
 .map-container .priority-badge {
   display: inline-flex;

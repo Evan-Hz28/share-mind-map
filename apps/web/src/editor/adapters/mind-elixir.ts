@@ -142,6 +142,64 @@ function installUnboundedPan(instance: MindElixir): void {
   };
 }
 
+type DropTargetRect = { top: number; right: number; bottom: number; left: number };
+
+export type DropSide = "after" | "before";
+
+/**
+ * 拖拽落点吸附:在探测点同侧的节点里挑最近的一个。
+ * vendor 用探测点相对节点矩形的位置决定 after / in / before,所以侧别必须对上,
+ * 否则会把光标上方的节点误判成“放进节点”。横向距离也设上限,避免吸到画布另一侧的分支。
+ */
+export function pickDropTarget<T>(
+  point: { x: number; y: number },
+  candidates: readonly { target: T; rect: DropTargetRect }[],
+  limits: { verticalGap: number; horizontalGap: number },
+  side: DropSide,
+): T | null {
+  let best: T | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const { target, rect } of candidates) {
+    const verticalGap = side === "after" ? point.y - rect.bottom : rect.top - point.y;
+    if (verticalGap < 0 || verticalGap > limits.verticalGap) continue;
+    const horizontalGap = Math.max(0, rect.left - point.x, point.x - rect.right);
+    if (horizontalGap > limits.horizontalGap) continue;
+    const score = verticalGap + horizontalGap * 0.3;
+    if (score < bestScore) {
+      bestScore = score;
+      best = target;
+    }
+  }
+  return best;
+}
+
+/** 光标附近可落座的节点;命中半径远大于 vendor 固定的 12px 探测距离。 */
+function nearestDropTarget(
+  instance: MindElixir,
+  x: number,
+  y: number,
+  side: DropSide,
+): Element | null {
+  const draggedWrappers = (instance.dragged ?? []).map(
+    (topic) => topic.parentElement.parentElement,
+  );
+  const candidates: { target: Element; rect: DropTargetRect }[] = [];
+  for (const topic of instance.el.querySelectorAll<HTMLElement>(".me-tpc")) {
+    const nodeObj = (topic as HTMLElement & { nodeObj?: NodeObj }).nodeObj;
+    if (nodeObj?.parent === undefined) continue;
+    if (draggedWrappers.some((wrapper) => wrapper.contains(topic))) continue;
+    const rect = topic.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) continue;
+    candidates.push({ target: topic, rect });
+  }
+  return pickDropTarget(
+    { x, y },
+    candidates,
+    { verticalGap: 72 * instance.scaleVal, horizontalGap: 160 * instance.scaleVal },
+    side,
+  );
+}
+
 /** MindElixir 展开节点时会把这棵子树里 expanded 为 true 的后代一并画出来,所以展开前先清掉。 */
 function collapseDescendants(node: NodeObj): void {
   for (const child of node.children ?? []) {
@@ -335,6 +393,8 @@ export class MindElixirAdapter implements MindMapAdapter {
       typeof operation.name === "string" && operation.name.startsWith("moveNodes"),
     );
   };
+  private dropSnapPointerDown: ((event: PointerEvent) => void) | null = null;
+  private dropSnapDeactivate: (() => void) | null = null;
   private readonly zoomListeners = new Set<(zoom: number) => void>();
   private readonly scaleListener = (payload: unknown): void => {
     if (typeof payload !== "number" || !Number.isFinite(payload)) return;
@@ -369,6 +429,7 @@ export class MindElixirAdapter implements MindMapAdapter {
     installUnboundedPan(instance);
     installPriorityBadges(instance);
     this.installExpandControls(instance);
+    this.installDropSnap(instance);
     this.instance = instance;
     const error = await instance.init(this.vendorData());
     if (error !== undefined) throw error;
@@ -512,6 +573,12 @@ export class MindElixirAdapter implements MindMapAdapter {
       this.bus().removeListener("operation", this.operationListener);
       this.bus().removeListener("expandNode", this.expandListener);
       this.bus().removeListener("scale", this.scaleListener);
+      if (this.dropSnapPointerDown !== null) {
+        this.instance.el.removeEventListener("pointerdown", this.dropSnapPointerDown, true);
+        this.dropSnapPointerDown = null;
+      }
+      this.dropSnapDeactivate?.();
+      this.dropSnapDeactivate = null;
       this.instance.destroy();
     }
     this.instance = null;
@@ -619,6 +686,52 @@ export class MindElixirAdapter implements MindMapAdapter {
       instance.selectNode(node);
     }
     await this.afterRender();
+  }
+
+  /**
+   * 拖拽时接管 elementFromPoint:vendor 只探测光标上下 12px,vendor 节点间距大时几乎点不中;
+   * 这里把空画布上的探测点吸附到最近的节点,松开后立即还原。
+   */
+  private installDropSnap(instance: MindElixir): void {
+    const onPointerDown = (event: PointerEvent): void => {
+      if (this.viewState.readOnly) return;
+      const target = event.target;
+      if (!(target instanceof Element) || target.closest(".me-tpc") === null) return;
+      this.activateDropSnap(instance);
+    };
+    instance.el.addEventListener("pointerdown", onPointerDown, true);
+    this.dropSnapPointerDown = onPointerDown;
+  }
+
+  private activateDropSnap(instance: MindElixir): void {
+    if (this.dropSnapDeactivate !== null) return;
+    const original = document.elementFromPoint.bind(document);
+    // vendor 每次 pointermove 先探测光标上方,失败再探测下方;两次探测的 after / before 语义不同。
+    let probeIndex = 0;
+    const resetProbe = (): void => {
+      probeIndex = 0;
+    };
+    const shim = (x: number, y: number): Element | null => {
+      const side: DropSide = probeIndex === 0 ? "after" : "before";
+      probeIndex += 1;
+      const native = original(x, y);
+      if (native === null || !instance.el.contains(native) || native.closest(".me-tpc") !== null) {
+        return native;
+      }
+      return nearestDropTarget(instance, x, y, side) ?? native;
+    };
+    document.elementFromPoint = shim;
+    window.addEventListener("pointermove", resetProbe, true);
+    const deactivate = (): void => {
+      document.elementFromPoint = original;
+      window.removeEventListener("pointermove", resetProbe, true);
+      window.removeEventListener("pointerup", deactivate, true);
+      window.removeEventListener("pointercancel", deactivate, true);
+      this.dropSnapDeactivate = null;
+    };
+    window.addEventListener("pointerup", deactivate, true);
+    window.addEventListener("pointercancel", deactivate, true);
+    this.dropSnapDeactivate = deactivate;
   }
 
   /**

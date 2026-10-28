@@ -156,6 +156,7 @@ describe("home dashboard", () => {
     expect(screen.getByText("登录模块")).toBeInTheDocument();
     expect(screen.getByText("128")).toBeInTheDocument();
     expect(screen.getByText("系统公告")).toBeInTheDocument();
+    expect(screen.getByText("导入的思维导图左右分支更均衡")).toBeInTheDocument();
     expect(screen.getByText("首页工作台上线")).toBeInTheDocument();
   });
 
