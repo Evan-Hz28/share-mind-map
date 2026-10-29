@@ -22,6 +22,18 @@ const workerEnvironmentSchema = z.object({
     .regex(/^[A-Za-z0-9_-]{1,64}$/)
     .default("smm"),
   XMIND_FIXTURE_ROOT: z.string().refine(isAbsolute, { message: "must be an absolute path" }),
+  API_TEST_ROOT: z.string().refine(isAbsolute, { message: "must be an absolute path" }).default("/app/api-tests"),
+  API_TEST_PYTHON: z.string().refine(isAbsolute, { message: "must be an absolute path" }).default("/opt/api-tests-venv/bin/python"),
+  API_TEST_ALLOWED_HOSTS: z
+    .string()
+    .default("api.kitarx.com,ydqapi.kitarx.com,cjyapi.kitarx.com,lfxapi.kitarx.com,lwapi.kitarx.com"),
+  API_TEST_CAPTURE: z.enum(["all", "failures", "none"]).default("failures"),
+  AUTH_METHOD: z.string().min(1).default("sms"),
+  AUTH_PHONE: z.string().default("+6281111111111"),
+  AUTH_SMS_CODE: z.string().default("666666"),
+  API_TOKEN: z.string().optional(),
+  IM_USERNAME: z.string().optional(),
+  IM_PASSWORD: z.string().optional(),
 });
 
 export interface WorkerConfig {
@@ -35,6 +47,16 @@ export interface WorkerConfig {
   minioBucket: string;
   queuePrefix: string;
   fixtureRoot: string;
+  apiTestRoot: string;
+  apiTestPython: string;
+  apiTestAllowedHosts: string[];
+  apiTestCapture: "all" | "failures" | "none";
+  authMethod: string;
+  authPhone: string;
+  authSmsCode: string;
+  apiToken?: string;
+  imUsername?: string;
+  imPassword?: string;
 }
 
 export function parseWorkerConfig(environment: Record<string, string | undefined>): WorkerConfig {
@@ -56,5 +78,17 @@ export function parseWorkerConfig(environment: Record<string, string | undefined
     minioBucket: result.data.MINIO_BUCKET,
     queuePrefix: result.data.XMIND_QUEUE_PREFIX,
     fixtureRoot: result.data.XMIND_FIXTURE_ROOT,
+    apiTestRoot: result.data.API_TEST_ROOT,
+    apiTestPython: result.data.API_TEST_PYTHON,
+    apiTestAllowedHosts: result.data.API_TEST_ALLOWED_HOSTS.split(",")
+      .map((host) => host.trim())
+      .filter((host) => host.length > 0),
+    apiTestCapture: result.data.API_TEST_CAPTURE,
+    authMethod: result.data.AUTH_METHOD,
+    authPhone: result.data.AUTH_PHONE,
+    authSmsCode: result.data.AUTH_SMS_CODE,
+    ...(result.data.API_TOKEN === undefined ? {} : { apiToken: result.data.API_TOKEN }),
+    ...(result.data.IM_USERNAME === undefined ? {} : { imUsername: result.data.IM_USERNAME }),
+    ...(result.data.IM_PASSWORD === undefined ? {} : { imPassword: result.data.IM_PASSWORD }),
   };
 }

@@ -49,6 +49,89 @@ export type ApiErrorEnvelope = {
     };
 };
 
+export type ApiTestEnvironmentListResponseDto = {
+    environments: Array<ApiTestEnvironmentResponseDto>;
+};
+
+export type ApiTestEnvironmentResponseDto = {
+    baseUrl: string;
+    id: string;
+    key: string;
+    name: string;
+};
+
+export type ApiTestRunDetailResponseDto = {
+    cancelRequested: boolean;
+    createdAt: string;
+    environmentId: string;
+    environmentKey: string;
+    environmentName: string;
+    errorMessage?: string | null;
+    failedCount: number;
+    finishedAt?: string | null;
+    id: string;
+    items: Array<ApiTestRunItemResponseDto>;
+    passedCount: number;
+    skippedCount: number;
+    startedAt?: string | null;
+    status: string;
+    suiteId: string;
+    suiteKey: string;
+    suiteName: string;
+    totalCount: number;
+};
+
+export type ApiTestRunItemResponseDto = {
+    caseName: string;
+    durationMs?: number | null;
+    failure?: string | null;
+    id: string;
+    nodeId: string;
+    ordinal: number;
+    request?: {
+        [key: string]: unknown;
+    } | null;
+    response?: {
+        [key: string]: unknown;
+    } | null;
+    status: string;
+};
+
+export type ApiTestRunListResponseDto = {
+    runs: Array<ApiTestRunResponseDto>;
+};
+
+export type ApiTestRunResponseDto = {
+    cancelRequested: boolean;
+    createdAt: string;
+    environmentId: string;
+    environmentKey: string;
+    environmentName: string;
+    errorMessage?: string | null;
+    failedCount: number;
+    finishedAt?: string | null;
+    id: string;
+    passedCount: number;
+    skippedCount: number;
+    startedAt?: string | null;
+    status: string;
+    suiteId: string;
+    suiteKey: string;
+    suiteName: string;
+    totalCount: number;
+};
+
+export type ApiTestSuiteListResponseDto = {
+    suites: Array<ApiTestSuiteResponseDto>;
+};
+
+export type ApiTestSuiteResponseDto = {
+    id: string;
+    key: string;
+    name: string;
+    path: string;
+};
+
 export type AuditListResponseDto = {
     logs: Array<AuditLogDto>;
     nextCursor?: string | null;
@@ -74,6 +157,11 @@ export type ChangeAccountStatusDto = {
 export type ChangePasswordDto = {
     currentPassword: string;
     newPassword: string;
+};
+
+export type CreateApiTestRunDto = {
+    environmentId: string;
+    suiteId: string;
 };
 
 export type CreatedMemberResponseDto = {
@@ -693,6 +781,126 @@ export type AdminReadStorageUsageResponses = {
 };
 
 export type AdminReadStorageUsageResponse = AdminReadStorageUsageResponses[keyof AdminReadStorageUsageResponses];
+
+export type ListApiTestEnvironmentsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/api-tests/environments';
+};
+
+export type ListApiTestEnvironmentsResponses = {
+    200: ApiTestEnvironmentListResponseDto;
+};
+
+export type ListApiTestEnvironmentsResponse = ListApiTestEnvironmentsResponses[keyof ListApiTestEnvironmentsResponses];
+
+export type ListApiTestRunsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query: {
+        limit: string;
+    };
+    url: '/api/v1/api-tests/runs';
+};
+
+export type ListApiTestRunsResponses = {
+    200: ApiTestRunListResponseDto;
+};
+
+export type ListApiTestRunsResponse = ListApiTestRunsResponses[keyof ListApiTestRunsResponses];
+
+export type CreateApiTestRunData = {
+    body: CreateApiTestRunDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/api-tests/runs';
+};
+
+export type CreateApiTestRunResponses = {
+    201: ApiTestRunResponseDto;
+};
+
+export type CreateApiTestRunResponse = CreateApiTestRunResponses[keyof CreateApiTestRunResponses];
+
+export type GetApiTestRunData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        runId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/runs/{runId}';
+};
+
+export type GetApiTestRunResponses = {
+    200: ApiTestRunDetailResponseDto;
+};
+
+export type GetApiTestRunResponse = GetApiTestRunResponses[keyof GetApiTestRunResponses];
+
+export type CancelApiTestRunData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        runId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/runs/{runId}/cancel';
+};
+
+export type CancelApiTestRunResponses = {
+    200: ApiTestRunResponseDto;
+};
+
+export type CancelApiTestRunResponse = CancelApiTestRunResponses[keyof CancelApiTestRunResponses];
+
+export type ListApiTestSuitesData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/api-tests/suites';
+};
+
+export type ListApiTestSuitesResponses = {
+    200: ApiTestSuiteListResponseDto;
+};
+
+export type ListApiTestSuitesResponse = ListApiTestSuitesResponses[keyof ListApiTestSuitesResponses];
 
 export type AuthCsrfData = {
     body?: never;

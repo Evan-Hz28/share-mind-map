@@ -9,6 +9,8 @@ import {
 
 import MembersView from "./admin/MembersView.vue";
 import Phase2AdminView from "./admin/Phase2AdminView.vue";
+import ApiTestsView from "./api-tests/ApiTestsView.vue";
+import ApiTestRunView from "./api-tests/ApiTestRunView.vue";
 import AppShell from "./app/AppShell.vue";
 import HomeView from "./app/HomeView.vue";
 import WorkspaceHomeView from "./app/WorkspaceHomeView.vue";
@@ -78,6 +80,19 @@ const routes: RouteRecordRaw[] = [
         name: "phase2-admin",
         component: Phase2AdminView,
         meta: { requiresAdmin: true, title: "权限与审计" },
+      },
+      {
+        path: "api-tests",
+        name: "api-tests",
+        component: ApiTestsView,
+        meta: { requiresAdmin: true, title: "接口测试" },
+      },
+      {
+        path: "api-tests/runs/:runId",
+        name: "api-test-run",
+        component: ApiTestRunView,
+        props: (route) => ({ runId: String(route.params.runId) }),
+        meta: { requiresAdmin: true, title: "测试报告" },
       },
     ],
   },

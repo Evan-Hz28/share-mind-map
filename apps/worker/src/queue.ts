@@ -11,9 +11,11 @@ import {
   type XMindValidationResult,
 } from "./processor.js";
 import { processProductionImport, type ProductionImportJob } from "./import/processor.js";
+import { processApiTestRun, type ApiTestRunJob } from "./api-test/processor.js";
 
 export const XMIND_VALIDATION_QUEUE = "xmind-validation";
 export const XMIND_IMPORT_QUEUE = "xmind-import";
+export const API_TEST_QUEUE = "api-test-run";
 
 export function createRedisConnection(url: string): Redis {
   return new Redis(url, {
@@ -76,6 +78,32 @@ export function createImportWorker(
       prefix: config.queuePrefix,
       concurrency: 3,
       lockDuration: 5 * 60 * 1000,
+    },
+  );
+}
+
+export function createApiTestQueue(config: WorkerConfig, connection: Redis) {
+  return new Queue<ApiTestRunJob>(API_TEST_QUEUE, {
+    connection,
+    prefix: config.queuePrefix,
+  });
+}
+
+export function createApiTestWorker(
+  config: WorkerConfig,
+  connection: Redis,
+  database: Database,
+) {
+  return new Worker<ApiTestRunJob>(
+    API_TEST_QUEUE,
+    async (job) => {
+      await processApiTestRun(job.data, { database, config });
+    },
+    {
+      connection,
+      prefix: config.queuePrefix,
+      concurrency: 1,
+      lockDuration: 11 * 60 * 1000,
     },
   );
 }

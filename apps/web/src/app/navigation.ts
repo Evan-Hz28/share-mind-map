@@ -1,4 +1,4 @@
-import { FolderOpened, House, Lock, UserFilled } from "@element-plus/icons-vue";
+import { Connection, FolderOpened, House, Lock, UserFilled } from "@element-plus/icons-vue";
 import type { SessionResponseDto } from "@share-mind-map/api-client";
 import type { Component } from "vue";
 
@@ -17,6 +17,7 @@ export interface NavigationItem {
 export const navigationItems: readonly NavigationItem[] = [
   { title: "首页", name: "home", icon: House },
   { title: "用例库", name: "workspace", icon: FolderOpened },
+  { title: "接口测试", name: "api-tests", icon: Connection, roles: ["admin"] },
   { title: "成员管理", name: "members", icon: UserFilled, roles: ["admin"] },
   { title: "权限与审计", name: "phase2-admin", icon: Lock, roles: ["admin"] },
 ];

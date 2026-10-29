@@ -2,6 +2,7 @@ import { Inject, Module } from "@nestjs/common";
 import type { DynamicModule, OnApplicationShutdown } from "@nestjs/common";
 
 import { AdminModule } from "./admin/admin.module.js";
+import { ApiTestsModule } from "./api-tests/api-tests.module.js";
 import { AuditModule } from "./audit/audit.module.js";
 import { AuthModule } from "./auth/auth.module.js";
 import { DocumentsModule } from "./documents/documents.module.js";
@@ -76,6 +77,7 @@ export class AppModule {
         ConfigModule.forRoot(options.config),
         AuthModule.register(options.config),
         AdminModule,
+        ApiTestsModule,
         AuditModule,
         FoldersModule,
         DocumentsModule,

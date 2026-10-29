@@ -91,6 +91,16 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:?MINIO_BUCKET is required}
       XMIND_QUEUE_PREFIX: ${XMIND_QUEUE_PREFIX:-smm}
       XMIND_FIXTURE_ROOT: /app/fixtures/xmind
+      API_TEST_ROOT: /app/api-tests
+      API_TEST_PYTHON: /opt/api-tests-venv/bin/python
+      API_TEST_ALLOWED_HOSTS: ${API_TEST_ALLOWED_HOSTS:-api.kitarx.com,ydqapi.kitarx.com,cjyapi.kitarx.com,lfxapi.kitarx.com,lwapi.kitarx.com}
+      API_TEST_CAPTURE: ${API_TEST_CAPTURE:-failures}
+      AUTH_METHOD: ${AUTH_METHOD:-sms}
+      AUTH_PHONE: ${AUTH_PHONE:-+6281111111111}
+      AUTH_SMS_CODE: ${AUTH_SMS_CODE:-666666}
+      API_TOKEN: ${API_TOKEN:-}
+      IM_USERNAME: ${IM_USERNAME:-}
+      IM_PASSWORD: ${IM_PASSWORD:-}
     ports:
       - "127.0.0.1:${WORKER_PORT:-3001}:3001"
     depends_on:

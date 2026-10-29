@@ -67,6 +67,8 @@ const authenticatedMutations = [
   ["/api/v1/admin/members/{membershipId}/revoke-editing", "post"],
   ["/api/v1/notifications/{notificationId}/read", "post"],
   ["/api/v1/notifications/read-all", "post"],
+  ["/api/v1/api-tests/runs", "post"],
+  ["/api/v1/api-tests/runs/{runId}/cancel", "post"],
 ] as const;
 
 const operationMethods = ["delete", "get", "head", "options", "patch", "post", "put", "trace"];

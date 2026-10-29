@@ -7,6 +7,8 @@ import { Pool } from "pg";
 import { parseWorkerConfig, type WorkerConfig } from "./config.js";
 import { startHealthServer, type HealthServer } from "./health-server.js";
 import {
+  createApiTestQueue,
+  createApiTestWorker,
   createImportQueue,
   createImportWorker,
   createRedisConnection,
@@ -45,11 +47,18 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
   const importWorkerConnection = createRedisConnection(config.redisUrl);
   const importDatabase = createDatabase(config.databaseUrl);
   const importWorker = createImportWorker(config, importWorkerConnection, importDatabase, storage);
+  const apiTestConnection = createRedisConnection(config.redisUrl);
+  const apiTestQueue = createApiTestQueue(config, apiTestConnection);
+  const apiTestWorkerConnection = createRedisConnection(config.redisUrl);
+  const apiTestDatabase = createDatabase(config.databaseUrl);
+  const apiTestWorker = createApiTestWorker(config, apiTestWorkerConnection, apiTestDatabase);
   await Promise.all([
     queue.waitUntilReady(),
     worker.waitUntilReady(),
     importQueue.waitUntilReady(),
     importWorker.waitUntilReady(),
+    apiTestQueue.waitUntilReady(),
+    apiTestWorker.waitUntilReady(),
   ]);
 
   const health = await startHealthServer({
@@ -68,7 +77,11 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
         if (!exists) throw new Error("required bucket is unavailable");
       },
       queue: async () => {
-        await Promise.all([queue.waitUntilReady(), importQueue.waitUntilReady()]);
+        await Promise.all([
+          queue.waitUntilReady(),
+          importQueue.waitUntilReady(),
+          apiTestQueue.waitUntilReady(),
+        ]);
       },
     },
   });
@@ -82,18 +95,28 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
       closed = true;
       clearInterval(notificationTimer);
       await health.close();
-      await Promise.all([worker.close(), queue.close(), importWorker.close(), importQueue.close()]);
+      await Promise.all([
+        worker.close(),
+        queue.close(),
+        importWorker.close(),
+        importQueue.close(),
+        apiTestWorker.close(),
+        apiTestQueue.close(),
+      ]);
       await Promise.all([
         workerConnection.quit(),
         queueConnection.quit(),
         importWorkerConnection.quit(),
         importConnection.quit(),
+        apiTestWorkerConnection.quit(),
+        apiTestConnection.quit(),
         healthRedis.quit(),
       ]);
       await Promise.all([
         pool.end(),
         notificationDatabase.$client.end(),
         importDatabase.$client.end(),
+        apiTestDatabase.$client.end(),
       ]);
     },
   };

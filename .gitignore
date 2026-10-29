@@ -21,3 +21,8 @@ test-results/
 .vitest-reports/
 .tmp/
 
+
+# Python test harness
+**/__pycache__/
+.pytest_cache/
+api-tests/.venv/

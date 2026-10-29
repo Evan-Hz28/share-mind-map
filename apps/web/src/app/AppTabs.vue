@@ -3,7 +3,7 @@ import { Close } from "@element-plus/icons-vue";
 import { watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
-import { HOME_ROUTE_NAME, useAppTabsStore, type AppTab } from "./tabs.store.js";
+import { HOME_PATH, useAppTabsStore, type AppTab } from "./tabs.store.js";
 
 const route = useRoute();
 const router = useRouter();
@@ -15,26 +15,26 @@ function isTabbable(name: unknown): name is string {
 }
 
 watch(
-  () => route.name,
-  (name) => {
-    if (isTabbable(name)) tabs.open(router, name);
+  () => route.path,
+  () => {
+    if (isTabbable(route.name)) tabs.open(router, route.path);
   },
   { immediate: true },
 );
 
 function activate(tab: AppTab): void {
-  if (route.name !== tab.name) void router.push({ name: tab.name });
+  if (route.path !== tab.path) void router.push(tab.path);
 }
 
 function close(tab: AppTab): void {
-  const wasActive = route.name === tab.name;
-  const next = tabs.close(tab.name);
-  if (wasActive && next !== null) void router.push({ name: next });
+  const wasActive = route.path === tab.path;
+  const next = tabs.close(tab.path);
+  if (wasActive && next !== null) void router.push(next);
 }
 
 function closeAll(): void {
   tabs.closeAll(router);
-  if (route.name !== HOME_ROUTE_NAME) void router.push({ name: HOME_ROUTE_NAME });
+  if (route.path !== HOME_PATH) void router.push(HOME_PATH);
 }
 </script>
 
@@ -42,15 +42,15 @@ function closeAll(): void {
   <nav class="app-tabs" aria-label="页面标签">
     <div
       v-for="tab in tabs.tabs"
-      :key="tab.name"
+      :key="tab.path"
       class="app-tab"
-      :class="{ 'app-tab--active': route.name === tab.name }"
+      :class="{ 'app-tab--active': route.path === tab.path }"
     >
       <button class="app-tab__label" type="button" @click="activate(tab)">
         {{ tab.title }}
       </button>
       <button
-        v-if="tab.name !== HOME_ROUTE_NAME"
+        v-if="tab.path !== HOME_PATH"
         class="app-tab__close"
         type="button"
         :aria-label="`关闭 ${tab.title}`"

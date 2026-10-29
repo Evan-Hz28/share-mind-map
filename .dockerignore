@@ -3,6 +3,8 @@
 .superpowers
 **/node_modules
 **/dist
+**/__pycache__
+**/.pytest_cache
 coverage
 dist-deploy
 playwright-report

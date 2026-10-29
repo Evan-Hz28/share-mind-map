@@ -3,6 +3,15 @@ export { newId } from "./id.js";
 export { migrateDatabase } from "./migrate.js";
 export { schema } from "./schema/index.js";
 export * from "./schema/index.js";
+export {
+  ApiTestRepository,
+  type ApiTestEnvironmentRecord,
+  type ApiTestItemStatus,
+  type ApiTestRunItemRecord,
+  type ApiTestRunRecord,
+  type ApiTestRunStatus,
+  type ApiTestSuiteRecord,
+} from "./repositories/api-test.repository.js";
 export { AuditRepository, type AuditEvent } from "./repositories/audit.repository.js";
 export { IdentityRepository, type LocalPrincipal } from "./repositories/identity.repository.js";
 export {
