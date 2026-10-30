@@ -31,6 +31,16 @@ watch(
   },
 );
 
+// 路由守卫只在导航时检查登录态；停在页面上被 401 踢下线时没人跳转，这里补上。
+watch(
+  () => auth.state,
+  (state) => {
+    if (state !== "expired") return;
+    tabs.closeAll(router);
+    void router.replace({ name: "session-expired" });
+  },
+);
+
 function toggleSidebar(): void {
   sidebarCollapsed.value = !sidebarCollapsed.value;
 }

@@ -11,6 +11,7 @@ import { useRoute } from "vue-router";
 
 import { apiClient, toApiFailure, type RequestFailure } from "../api.js";
 import { useAppTabsStore } from "../app/tabs.store.js";
+import RequestErrorAlert from "../components/RequestErrorAlert.vue";
 
 const props = defineProps<{ runId: string }>();
 
@@ -150,9 +151,7 @@ onUnmounted(() => {
       </ElButton>
     </header>
 
-    <ElAlert v-if="error !== null" type="error" :closable="false" class="api-test-run__error">
-      {{ error.code }}
-    </ElAlert>
+    <RequestErrorAlert :error="error" class="api-test-run__error" />
 
     <div>
       <p v-if="loading" class="api-test-run__loading">加载中…</p>

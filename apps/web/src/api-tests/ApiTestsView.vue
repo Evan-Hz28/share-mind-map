@@ -11,11 +11,12 @@ import {
   type ApiTestSuiteResponseDto,
   type ApiTestSyncResponseDto,
 } from "@share-mind-map/api-client";
-import { ElAlert, ElButton, ElTable, ElTableColumn, ElTag } from "element-plus";
+import { ElButton, ElTable, ElTableColumn, ElTag } from "element-plus";
 import { onMounted, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import { apiClient, toApiFailure, type RequestFailure } from "../api.js";
+import RequestErrorAlert from "../components/RequestErrorAlert.vue";
 
 const router = useRouter();
 const suites = ref<ApiTestSuiteResponseDto[]>([]);
@@ -231,9 +232,7 @@ onUnmounted(() => {
       还没有同步过用例仓库，点「同步用例」拉取上游 testcases。
     </p>
 
-    <ElAlert v-if="error !== null" type="error" :closable="false" class="api-tests__error">
-      {{ error.code }}
-    </ElAlert>
+    <RequestErrorAlert :error="error" class="api-tests__error" />
 
     <p v-if="loading" class="api-tests__loading">加载中…</p>
     <ElTable
