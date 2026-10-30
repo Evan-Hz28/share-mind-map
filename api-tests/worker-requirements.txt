@@ -1,0 +1,7 @@
+# worker 镜像里 pytest venv 的依赖：上游用例需要的包 + 平台自己的插件依赖。
+# 上游 requirements.txt 变了要同步这里，否则同步任务会提示依赖漂移。
+pytest==8.3.4
+pytest-timeout==2.3.1
+requests==2.32.3
+psycopg2-binary>=2.9
+PyJWT>=2.8

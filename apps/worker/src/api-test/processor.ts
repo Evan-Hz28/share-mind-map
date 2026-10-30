@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { resolve, sep } from "node:path";
+import { access, readFile } from "node:fs/promises";
+import { join, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import type { Readable } from "node:stream";
 
@@ -12,8 +13,6 @@ export interface ApiTestRunJob {
   runId: string;
 }
 
-const RUN_TIMEOUT_MS = 10 * 60 * 1000;
-const TEST_TIMEOUT_SECONDS = 60;
 const STDERR_LIMIT = 8 * 1024;
 
 const exchangeSchema = z
@@ -95,6 +94,18 @@ function suiteDirectory(config: WorkerConfig, path: string): string | null {
   return directory.startsWith(`${root}${sep}`) ? directory : null;
 }
 
+/** 直接读 .git/HEAD，避免为一次只读操作再 fork 一个 git 进程。 */
+async function currentCommit(root: string): Promise<string | null> {
+  try {
+    const head = (await readFile(join(root, ".git", "HEAD"), "utf8")).trim();
+    if (!head.startsWith("ref: ")) return head === "" ? null : head;
+    const ref = await readFile(join(root, ".git", head.slice(5).trim()), "utf8");
+    return ref.trim() === "" ? null : ref.trim();
+  } catch {
+    return null;
+  }
+}
+
 export async function processApiTestRun(
   job: ApiTestRunJob,
   dependencies: { database: Database; config: WorkerConfig },
@@ -114,7 +125,22 @@ export async function processApiTestRun(
     await repository.finishRun(database, run.id, "failed", "测试环境域名不在允许列表内。");
     return;
   }
+  // 用例仓库靠同步任务维护，没同步过就跑只会得到满屏收集错误。
+  const repositoryReady = await access(join(config.apiTestRoot, "testcases")).then(
+    () => true,
+    () => false,
+  );
+  if (!repositoryReady) {
+    await repository.finishRun(
+      database,
+      run.id,
+      "failed",
+      "用例仓库尚未同步，请先在「接口测试」页执行一次同步。",
+    );
+    return;
+  }
   if (!(await repository.markRunning(database, run.id))) return;
+  await repository.setRunRepoCommit(database, run.id, await currentCommit(config.apiTestRoot));
 
   const child = spawn(
     config.apiTestPython,
@@ -123,7 +149,7 @@ export async function processApiTestRun(
       "pytest",
       run.suitePath,
       "-q",
-      `--timeout=${String(TEST_TIMEOUT_SECONDS)}`,
+      `--timeout=${String(config.apiTestCaseTimeoutSeconds)}`,
       "-p",
       "harness.pytest_platform",
       "-o",
@@ -140,7 +166,10 @@ export async function processApiTestRun(
         TMPDIR: "/tmp",
         PYTHONUNBUFFERED: "1",
         PYTHONDONTWRITEBYTECODE: "1",
+        // harness 在镜像里，common/config 在仓库里，两边都要能 import。
+        PYTHONPATH: `${config.apiTestHarnessRoot}:${config.apiTestRoot}`,
         ENV: "test",
+        BASE_URL: run.environmentBaseUrl,
         API_BASE_URL: run.environmentBaseUrl,
         AUTH_METHOD: config.authMethod,
         AUTH_PHONE: config.authPhone,
@@ -220,10 +249,13 @@ export async function processApiTestRun(
       .catch(() => undefined);
   }, 1_000);
 
+  const runTimeoutMs = config.apiTestRunTimeoutSeconds * 1000;
   const hardTimeout = setTimeout(() => {
-    stderr = `${stderr}\n执行超过 10 分钟，已强制结束。`.slice(-STDERR_LIMIT);
+    stderr = `${stderr}\n执行超过 ${String(config.apiTestRunTimeoutSeconds)} 秒，已强制结束。`.slice(
+      -STDERR_LIMIT,
+    );
     child.kill("SIGKILL");
-  }, RUN_TIMEOUT_MS);
+  }, runTimeoutMs);
 
   const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
     (resolveExit) => {

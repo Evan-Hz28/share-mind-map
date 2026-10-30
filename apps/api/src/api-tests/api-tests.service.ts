@@ -3,6 +3,7 @@ import {
   newId,
   type ApiTestRunItemRecord,
   type ApiTestRunRecord,
+  type ApiTestSyncRecord,
   type Database,
 } from "@share-mind-map/database";
 import { Inject, Injectable } from "@nestjs/common";
@@ -21,12 +22,18 @@ import type {
   ApiTestRunItemResponseDto,
   ApiTestRunResponseDto,
   ApiTestSuiteResponseDto,
+  ApiTestSyncResponseDto,
 } from "./dto/api-test.dto.js";
 
 export const API_TEST_QUEUE = "api-test-run";
+export const API_TEST_SYNC_QUEUE = "api-test-sync";
 
 interface ApiTestRunJob {
   runId: string;
+}
+
+interface ApiTestSyncJob {
+  syncId: string;
 }
 
 function mapRun(run: ApiTestRunRecord): ApiTestRunResponseDto {
@@ -38,6 +45,7 @@ function mapRun(run: ApiTestRunRecord): ApiTestRunResponseDto {
     environmentId: run.environmentId,
     environmentKey: run.environmentKey,
     environmentName: run.environmentName,
+    repoCommit: run.repoCommit,
     status: run.status,
     cancelRequested: run.cancelRequested,
     totalCount: run.totalCount,
@@ -65,18 +73,43 @@ function mapItem(item: ApiTestRunItemRecord): ApiTestRunItemResponseDto {
   };
 }
 
+function mapSync(sync: ApiTestSyncRecord): ApiTestSyncResponseDto {
+  return {
+    id: sync.id,
+    branch: sync.branch,
+    status: sync.status,
+    trigger: sync.trigger,
+    requestedBy: sync.requestedBy,
+    commitSha: sync.commitSha,
+    previousSha: sync.previousSha,
+    changedFiles: sync.changedFiles,
+    suitesAdded: sync.suitesAdded,
+    suitesRemoved: sync.suitesRemoved,
+    requirementsChanged: sync.requirementsChanged,
+    message: sync.message,
+    startedAt: sync.startedAt?.toISOString() ?? null,
+    finishedAt: sync.finishedAt?.toISOString() ?? null,
+    createdAt: sync.createdAt.toISOString(),
+  };
+}
+
 @Injectable()
 export class ApiTestsService implements OnApplicationShutdown {
   private readonly repository = new ApiTestRepository();
   private readonly queue: Queue<ApiTestRunJob>;
+  private readonly syncQueue: Queue<ApiTestSyncJob>;
   private readonly redis: Redis;
 
   public constructor(
     @Inject(AUTH_DATABASE) private readonly database: Database,
-    @Inject(APP_CONFIG) config: AppConfig,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {
     this.redis = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
     this.queue = new Queue<ApiTestRunJob>(API_TEST_QUEUE, {
+      connection: this.redis,
+      prefix: config.queuePrefix,
+    });
+    this.syncQueue = new Queue<ApiTestSyncJob>(API_TEST_SYNC_QUEUE, {
       connection: this.redis,
       prefix: config.queuePrefix,
     });
@@ -84,6 +117,7 @@ export class ApiTestsService implements OnApplicationShutdown {
 
   public async onApplicationShutdown(): Promise<void> {
     await this.queue.close();
+    await this.syncQueue.close();
     await this.redis.quit();
   }
 
@@ -107,28 +141,38 @@ export class ApiTestsService implements OnApplicationShutdown {
     }));
   }
 
-  public async createRun(
+  /** 一次可以选多个套件；按数组顺序入队，worker 单并发保证一条跑完再跑下一条。 */
+  public async createRuns(
     auth: AuthContext,
-    input: { suiteId: string; environmentId: string },
-  ): Promise<ApiTestRunResponseDto> {
-    const suite = await this.repository.findSuite(this.database, input.suiteId);
-    if (suite === null) throw new ApiError("API_TEST_SUITE_NOT_FOUND");
+    input: { suiteIds: string[]; environmentId: string },
+  ): Promise<ApiTestRunResponseDto[]> {
     const environment = await this.repository.findEnvironment(
       this.database,
       input.environmentId,
     );
     if (environment === null) throw new ApiError("API_TEST_ENVIRONMENT_NOT_FOUND");
 
-    const run = await this.repository.createRun(this.database, {
-      id: newId(),
-      suiteId: suite.id,
-      environmentId: environment.id,
-      requestedBy: auth.session.userId,
-      mode: "suite",
-      selection: { path: suite.path },
-    });
-    await this.queue.add("run", { runId: run.id }, { jobId: run.id });
-    return mapRun(run);
+    const suites = [];
+    for (const suiteId of new Set(input.suiteIds)) {
+      const suite = await this.repository.findSuite(this.database, suiteId);
+      if (suite === null) throw new ApiError("API_TEST_SUITE_NOT_FOUND");
+      suites.push(suite);
+    }
+
+    const runs = [];
+    for (const suite of suites) {
+      const run = await this.repository.createRun(this.database, {
+        id: newId(),
+        suiteId: suite.id,
+        environmentId: environment.id,
+        requestedBy: auth.session.userId,
+        mode: "suite",
+        selection: { path: suite.path },
+      });
+      await this.queue.add("run", { runId: run.id }, { jobId: run.id });
+      runs.push(mapRun(run));
+    }
+    return runs;
   }
 
   public async listRuns(limit: number): Promise<ApiTestRunResponseDto[]> {
@@ -156,5 +200,24 @@ export class ApiTestsService implements OnApplicationShutdown {
     const updated = await this.repository.findRun(this.database, runId);
     if (updated === null) throw new ApiError("API_TEST_RUN_NOT_FOUND");
     return mapRun(updated);
+  }
+
+  /** 只有手动触发：前端点「同步用例」。 */
+  public async syncRepository(requestedBy: string | null): Promise<ApiTestSyncResponseDto> {
+    const active = await this.repository.findActiveSync(this.database);
+    if (active !== null) throw new ApiError("API_TEST_SYNC_IN_PROGRESS");
+    const sync = await this.repository.createSync(this.database, {
+      id: newId(),
+      branch: "main",
+      trigger: "manual",
+      requestedBy,
+    });
+    await this.syncQueue.add("sync", { syncId: sync.id }, { jobId: sync.id });
+    return mapSync(sync);
+  }
+
+  public async listSyncs(limit: number): Promise<ApiTestSyncResponseDto[]> {
+    const syncs = await this.repository.listSyncs(this.database, limit);
+    return syncs.map(mapSync);
   }
 }

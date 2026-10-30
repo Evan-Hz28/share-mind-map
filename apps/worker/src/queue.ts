@@ -12,10 +12,12 @@ import {
 } from "./processor.js";
 import { processProductionImport, type ProductionImportJob } from "./import/processor.js";
 import { processApiTestRun, type ApiTestRunJob } from "./api-test/processor.js";
+import { processApiTestSync, type ApiTestSyncJob } from "./api-test/sync.js";
 
 export const XMIND_VALIDATION_QUEUE = "xmind-validation";
 export const XMIND_IMPORT_QUEUE = "xmind-import";
 export const API_TEST_QUEUE = "api-test-run";
+export const API_TEST_SYNC_QUEUE = "api-test-sync";
 
 export function createRedisConnection(url: string): Redis {
   return new Redis(url, {
@@ -87,6 +89,32 @@ export function createApiTestQueue(config: WorkerConfig, connection: Redis) {
     connection,
     prefix: config.queuePrefix,
   });
+}
+
+export function createApiTestSyncQueue(config: WorkerConfig, connection: Redis) {
+  return new Queue<ApiTestSyncJob>(API_TEST_SYNC_QUEUE, {
+    connection,
+    prefix: config.queuePrefix,
+  });
+}
+
+export function createApiTestSyncWorker(
+  config: WorkerConfig,
+  connection: Redis,
+  database: Database,
+) {
+  return new Worker<ApiTestSyncJob>(
+    API_TEST_SYNC_QUEUE,
+    async (job) => {
+      await processApiTestSync(job.data, { database, config });
+    },
+    {
+      connection,
+      prefix: config.queuePrefix,
+      concurrency: 1,
+      lockDuration: 6 * 60 * 1000,
+    },
+  );
 }
 
 export function createApiTestWorker(

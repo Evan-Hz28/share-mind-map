@@ -8,6 +8,8 @@ import { parseWorkerConfig, type WorkerConfig } from "./config.js";
 import { startHealthServer, type HealthServer } from "./health-server.js";
 import {
   createApiTestQueue,
+  createApiTestSyncQueue,
+  createApiTestSyncWorker,
   createApiTestWorker,
   createImportQueue,
   createImportWorker,
@@ -52,6 +54,14 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
   const apiTestWorkerConnection = createRedisConnection(config.redisUrl);
   const apiTestDatabase = createDatabase(config.databaseUrl);
   const apiTestWorker = createApiTestWorker(config, apiTestWorkerConnection, apiTestDatabase);
+  const apiTestSyncConnection = createRedisConnection(config.redisUrl);
+  const apiTestSyncQueue = createApiTestSyncQueue(config, apiTestSyncConnection);
+  const apiTestSyncWorkerConnection = createRedisConnection(config.redisUrl);
+  const apiTestSyncWorker = createApiTestSyncWorker(
+    config,
+    apiTestSyncWorkerConnection,
+    apiTestDatabase,
+  );
   await Promise.all([
     queue.waitUntilReady(),
     worker.waitUntilReady(),
@@ -59,6 +69,8 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
     importWorker.waitUntilReady(),
     apiTestQueue.waitUntilReady(),
     apiTestWorker.waitUntilReady(),
+    apiTestSyncQueue.waitUntilReady(),
+    apiTestSyncWorker.waitUntilReady(),
   ]);
 
   const health = await startHealthServer({
@@ -81,6 +93,7 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
           queue.waitUntilReady(),
           importQueue.waitUntilReady(),
           apiTestQueue.waitUntilReady(),
+          apiTestSyncQueue.waitUntilReady(),
         ]);
       },
     },
@@ -102,6 +115,8 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
         importQueue.close(),
         apiTestWorker.close(),
         apiTestQueue.close(),
+        apiTestSyncWorker.close(),
+        apiTestSyncQueue.close(),
       ]);
       await Promise.all([
         workerConnection.quit(),
@@ -110,6 +125,8 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
         importConnection.quit(),
         apiTestWorkerConnection.quit(),
         apiTestConnection.quit(),
+        apiTestSyncWorkerConnection.quit(),
+        apiTestSyncConnection.quit(),
         healthRedis.quit(),
       ]);
       await Promise.all([

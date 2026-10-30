@@ -62,7 +62,7 @@ describe("production Compose structure", () => {
     const config = await composeConfig();
 
     expect(Object.keys(config.volumes ?? {}).sort()).toEqual(
-      ["postgres-data", "redis-data", "minio-data", "mailpit-data"].sort(),
+      ["postgres-data", "redis-data", "minio-data", "mailpit-data", "api-test-repo"].sort(),
     );
     expect(config.services["minio-init"]?.entrypoint?.join("\n")).toContain(
       'mc anonymous set none "local/$${MINIO_BUCKET}"',

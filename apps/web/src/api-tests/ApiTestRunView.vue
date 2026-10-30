@@ -136,6 +136,7 @@ onUnmounted(() => {
         <h1>测试报告</h1>
         <p v-if="run !== null">
           {{ run.suiteName }} · {{ run.environmentName }} · {{ formatTime(run.startedAt) }}
+          <template v-if="run.repoCommit"> · {{ run.repoCommit.slice(0, 7) }}</template>
         </p>
       </div>
       <ElButton

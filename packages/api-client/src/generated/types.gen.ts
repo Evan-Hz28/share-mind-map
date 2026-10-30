@@ -72,6 +72,7 @@ export type ApiTestRunDetailResponseDto = {
     id: string;
     items: Array<ApiTestRunItemResponseDto>;
     passedCount: number;
+    repoCommit?: string | null;
     skippedCount: number;
     startedAt?: string | null;
     status: string;
@@ -112,6 +113,7 @@ export type ApiTestRunResponseDto = {
     finishedAt?: string | null;
     id: string;
     passedCount: number;
+    repoCommit?: string | null;
     skippedCount: number;
     startedAt?: string | null;
     status: string;
@@ -130,6 +132,28 @@ export type ApiTestSuiteResponseDto = {
     key: string;
     name: string;
     path: string;
+};
+
+export type ApiTestSyncListResponseDto = {
+    syncs: Array<ApiTestSyncResponseDto>;
+};
+
+export type ApiTestSyncResponseDto = {
+    branch: string;
+    changedFiles: number;
+    commitSha?: string | null;
+    createdAt: string;
+    finishedAt?: string | null;
+    id: string;
+    message?: string | null;
+    previousSha?: string | null;
+    requestedBy?: string | null;
+    requirementsChanged: boolean;
+    startedAt?: string | null;
+    status: string;
+    suitesAdded: number;
+    suitesRemoved: number;
+    trigger: string;
 };
 
 export type AuditListResponseDto = {
@@ -161,7 +185,7 @@ export type ChangePasswordDto = {
 
 export type CreateApiTestRunDto = {
     environmentId: string;
-    suiteId: string;
+    suiteIds: Array<string>;
 };
 
 export type CreatedMemberResponseDto = {
@@ -822,7 +846,7 @@ export type ListApiTestRunsResponses = {
 
 export type ListApiTestRunsResponse = ListApiTestRunsResponses[keyof ListApiTestRunsResponses];
 
-export type CreateApiTestRunData = {
+export type CreateApiTestRunsData = {
     body: CreateApiTestRunDto;
     headers?: {
         /**
@@ -835,11 +859,11 @@ export type CreateApiTestRunData = {
     url: '/api/v1/api-tests/runs';
 };
 
-export type CreateApiTestRunResponses = {
-    201: ApiTestRunResponseDto;
+export type CreateApiTestRunsResponses = {
+    201: ApiTestRunListResponseDto;
 };
 
-export type CreateApiTestRunResponse = CreateApiTestRunResponses[keyof CreateApiTestRunResponses];
+export type CreateApiTestRunsResponse = CreateApiTestRunsResponses[keyof CreateApiTestRunsResponses];
 
 export type GetApiTestRunData = {
     body?: never;
@@ -901,6 +925,46 @@ export type ListApiTestSuitesResponses = {
 };
 
 export type ListApiTestSuitesResponse = ListApiTestSuitesResponses[keyof ListApiTestSuitesResponses];
+
+export type SyncApiTestRepositoryData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/api-tests/sync';
+};
+
+export type SyncApiTestRepositoryResponses = {
+    201: ApiTestSyncResponseDto;
+};
+
+export type SyncApiTestRepositoryResponse = SyncApiTestRepositoryResponses[keyof SyncApiTestRepositoryResponses];
+
+export type ListApiTestSyncsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query: {
+        limit: string;
+    };
+    url: '/api/v1/api-tests/syncs';
+};
+
+export type ListApiTestSyncsResponses = {
+    200: ApiTestSyncListResponseDto;
+};
+
+export type ListApiTestSyncsResponse = ListApiTestSyncsResponses[keyof ListApiTestSyncsResponses];
 
 export type AuthCsrfData = {
     body?: never;

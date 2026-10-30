@@ -1,10 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsUUID } from "class-validator";
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsUUID } from "class-validator";
 
 export class CreateApiTestRunDto {
-  @ApiProperty({ type: String, format: "uuid" })
-  @IsUUID("7")
-  public suiteId!: string;
+  /** 可多选；后端按数组顺序建 run，worker 单并发天然串行执行。 */
+  @ApiProperty({ type: [String], format: "uuid" })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @IsUUID("7", { each: true })
+  public suiteIds!: string[];
 
   @ApiProperty({ type: String, format: "uuid" })
   @IsUUID("7")
@@ -54,6 +58,7 @@ export class ApiTestRunResponseDto {
   @ApiProperty() public environmentId!: string;
   @ApiProperty() public environmentKey!: string;
   @ApiProperty() public environmentName!: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) public repoCommit!: string | null;
   @ApiProperty() public status!: string;
   @ApiProperty() public cancelRequested!: boolean;
   @ApiProperty() public totalCount!: number;
@@ -75,4 +80,29 @@ export class ApiTestRunDetailResponseDto extends ApiTestRunResponseDto {
 
 export class ApiTestRunListResponseDto {
   @ApiProperty({ type: [ApiTestRunResponseDto] }) public runs!: ApiTestRunResponseDto[];
+}
+
+export class ApiTestSyncResponseDto {
+  @ApiProperty() public id!: string;
+  @ApiProperty() public branch!: string;
+  @ApiProperty() public status!: string;
+  @ApiProperty() public trigger!: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) public requestedBy!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) public commitSha!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) public previousSha!: string | null;
+  @ApiProperty() public changedFiles!: number;
+  @ApiProperty() public suitesAdded!: number;
+  @ApiProperty() public suitesRemoved!: number;
+  @ApiProperty() public requirementsChanged!: boolean;
+  @ApiPropertyOptional({ type: String, nullable: true }) public message!: string | null;
+  @ApiPropertyOptional({ type: String, format: "date-time", nullable: true })
+  public startedAt!: string | null;
+  @ApiPropertyOptional({ type: String, format: "date-time", nullable: true })
+  public finishedAt!: string | null;
+  @ApiProperty({ type: String, format: "date-time" }) public createdAt!: string;
+}
+
+export class ApiTestSyncListResponseDto {
+  @ApiProperty({ type: [ApiTestSyncResponseDto] })
+  public syncs!: ApiTestSyncResponseDto[];
 }

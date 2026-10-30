@@ -91,8 +91,14 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:?MINIO_BUCKET is required}
       XMIND_QUEUE_PREFIX: ${XMIND_QUEUE_PREFIX:-smm}
       XMIND_FIXTURE_ROOT: /app/fixtures/xmind
-      API_TEST_ROOT: /app/api-tests
+      API_TEST_ROOT: /app/api-test-repo
+      API_TEST_HARNESS_ROOT: /app/api-tests
       API_TEST_PYTHON: /opt/api-tests-venv/bin/python
+      API_TEST_GIT_URL: ${API_TEST_GIT_URL:-https://github.com/kitarkitar/api-test.git}
+      API_TEST_GIT_BRANCH: ${API_TEST_GIT_BRANCH:-main}
+      API_TEST_GIT_TOKEN: ${API_TEST_GIT_TOKEN:-}
+      API_TEST_RUN_TIMEOUT_SECONDS: ${API_TEST_RUN_TIMEOUT_SECONDS:-1800}
+      API_TEST_CASE_TIMEOUT_SECONDS: ${API_TEST_CASE_TIMEOUT_SECONDS:-60}
       API_TEST_ALLOWED_HOSTS: ${API_TEST_ALLOWED_HOSTS:-api.kitarx.com,ydqapi.kitarx.com,cjyapi.kitarx.com,lfxapi.kitarx.com,lwapi.kitarx.com}
       API_TEST_CAPTURE: ${API_TEST_CAPTURE:-failures}
       AUTH_METHOD: ${AUTH_METHOD:-sms}
@@ -101,6 +107,8 @@ services:
       API_TOKEN: ${API_TOKEN:-}
       IM_USERNAME: ${IM_USERNAME:-}
       IM_PASSWORD: ${IM_PASSWORD:-}
+    volumes:
+      - api-test-repo:/app/api-test-repo
     ports:
       - "127.0.0.1:${WORKER_PORT:-3001}:3001"
     depends_on:
@@ -233,6 +241,7 @@ services:
     restart: "on-failure:5"
 
 volumes:
+  api-test-repo:
   postgres-data:
   redis-data:
   minio-data:

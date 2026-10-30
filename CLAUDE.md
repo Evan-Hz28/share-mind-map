@@ -77,6 +77,14 @@ pnpm test:unit
 ```
 
 - **不要用 `pnpm check` / `pnpm format:check` 做门禁**：当前 HEAD 就有 12 个文件未通过 Prettier（含 `deploy/README.md`），`format:check` 必然失败。
+- **重命令串行跑，不要后台跑、不要叠着跑。** 本机只有 7.5 GiB 内存。`pnpm lint`、`pnpm typecheck`、`pnpm test:unit`、`pnpm api:generate` 一次只跑一个；不要用 `run_in_background` 起这些命令（会话断了会留下孤儿进程）。2026-10-29 就是并行跑 typecheck + 多个 vitest + `api:generate` + 未结束的后台 `pnpm lint` 把内存耗尽：没有 OOM killer 记录，但 swap 打满、系统持续 `Under memory pressure, flushing caches`，sshd 无响应，只能重启。
+- 重命令加内存上限，避免单进程吃光内存：
+  ```bash
+  NODE_OPTIONS=--max-old-space-size=1024 pnpm typecheck
+  NODE_OPTIONS=--max-old-space-size=3072 pnpm lint
+  ```
+  `pnpm lint` 全仓扫 1 GB 堆不够，会 `FATAL ERROR: Reached heap limit`；调到 3072 才通过。
+- **不要在本机并行跑 QEMU arm64 构建**：`deploy/make-arm64-bundle.sh` 一次只构建一个服务，也不要和其他验证命令同时进行。
 - 集成测试和 e2e 依赖本地 compose 栈；e2e 命令见 README。
 - 本地验证用 amd64 镜像：`docker compose --env-file .env build <改过的服务>` + `up -d`。本机 `:latest` **必须始终是 amd64**；生产包走部署章节的 `deploy/make-arm64-bundle.sh`，它把 arm64 构建到 `<service>:arm64`，不覆盖 `:latest`。
 - `docker compose up -d web` **会连同依赖一起收敛**：`web` 的 `depends_on` 是 `api`（`service_healthy`），api 再带 redis / minio。镜像 id 变了就会重建 api——所以 `:latest` 被 arm64 覆盖后，`up -d web` 同样会撞 platform 不匹配，不是「只警告」。只动 web 用 `up -d --no-deps web`，但那也跳过了 api 启动时的数据库迁移。

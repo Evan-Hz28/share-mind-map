@@ -54,6 +54,7 @@ export const errorCatalog = {
   API_TEST_ENVIRONMENT_NOT_FOUND: { status: 404, message: "接口测试环境不存在。" },
   API_TEST_RUN_NOT_FOUND: { status: 404, message: "接口测试执行记录不存在。" },
   API_TEST_RUN_STATE_CONFLICT: { status: 409, message: "当前执行状态不允许此操作。" },
+  API_TEST_SYNC_IN_PROGRESS: { status: 409, message: "已有同步任务在执行，请稍后重试。" },
   FOLDER_NOT_FOUND: { status: 404, message: "文件夹不存在。" },
   DOCUMENT_NOT_FOUND: { status: 404, message: "文档不存在。" },
   NOT_FOUND: { status: 404, message: "请求的资源不存在。" },

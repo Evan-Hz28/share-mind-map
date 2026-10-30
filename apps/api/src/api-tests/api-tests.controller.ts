@@ -20,6 +20,8 @@ import {
   ApiTestRunListResponseDto,
   ApiTestRunResponseDto,
   ApiTestSuiteListResponseDto,
+  ApiTestSyncListResponseDto,
+  ApiTestSyncResponseDto,
   CreateApiTestRunDto,
 } from "./dto/api-test.dto.js";
 
@@ -48,13 +50,13 @@ export class ApiTestsController {
 
   @Post("runs")
   @ApiSecurity({ sessionCookie: [], csrfToken: [] })
-  @ApiOperation({ operationId: "createApiTestRun" })
-  @ApiResponse({ status: 201, type: ApiTestRunResponseDto })
-  public createRun(
+  @ApiOperation({ operationId: "createApiTestRuns" })
+  @ApiResponse({ status: 201, type: ApiTestRunListResponseDto })
+  public async createRuns(
     @Body() input: CreateApiTestRunDto,
     @Req() request: Request,
-  ): Promise<ApiTestRunResponseDto> {
-    return this.apiTests.createRun(getAuthContext(request), input);
+  ): Promise<ApiTestRunListResponseDto> {
+    return { runs: await this.apiTests.createRuns(getAuthContext(request), input) };
   }
 
   @Get("runs")
@@ -76,6 +78,23 @@ export class ApiTestsController {
     @Param("runId", new ParseUUIDPipe({ version: "7" })) runId: string,
   ): Promise<ApiTestRunDetailResponseDto> {
     return this.apiTests.getRun(runId);
+  }
+
+  @Post("sync")
+  @ApiSecurity({ sessionCookie: [], csrfToken: [] })
+  @ApiOperation({ operationId: "syncApiTestRepository" })
+  @ApiResponse({ status: 201, type: ApiTestSyncResponseDto })
+  public syncRepository(@Req() request: Request): Promise<ApiTestSyncResponseDto> {
+    return this.apiTests.syncRepository(getAuthContext(request).session.userId);
+  }
+
+  @Get("syncs")
+  @ApiCookieAuth("sessionCookie")
+  @ApiOperation({ operationId: "listApiTestSyncs" })
+  @ApiResponse({ status: 200, type: ApiTestSyncListResponseDto })
+  public async listSyncs(@Query("limit") limit?: string): Promise<ApiTestSyncListResponseDto> {
+    const parsed = limit === undefined ? 10 : Number.parseInt(limit, 10);
+    return { syncs: await this.apiTests.listSyncs(Number.isFinite(parsed) ? parsed : 10) };
   }
 
   @Post("runs/:runId/cancel")
