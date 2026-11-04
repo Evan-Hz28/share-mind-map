@@ -153,6 +153,9 @@ export async function processApiTestRun(
       `--timeout=${String(config.apiTestCaseTimeoutSeconds)}`,
       "-p",
       "harness.pytest_platform",
+      // 上游只要有一个文件收集失败，pytest 默认中断整轮，整个套件变成 0 条。
+      // 加上这个参数后坏文件单独记 error，其余用例照常执行。
+      "--continue-on-collection-errors",
       "-o",
       "addopts=",
       "-o",

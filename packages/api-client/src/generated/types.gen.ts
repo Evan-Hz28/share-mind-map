@@ -836,6 +836,7 @@ export type ListApiTestRunsData = {
     path?: never;
     query: {
         limit: string;
+        suiteId?: string;
     };
     url: '/api/v1/api-tests/runs';
 };

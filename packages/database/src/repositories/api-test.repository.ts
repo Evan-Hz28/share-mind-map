@@ -347,12 +347,19 @@ export class ApiTestRepository {
     return row === undefined ? null : toRun(row);
   }
 
-  public async listRuns(database: Database, limit: number): Promise<ApiTestRunRecord[]> {
+  /** suiteId 为空时返回全部套件的记录，详情页和执行记录页共用这一个查询。 */
+  public async listRuns(
+    database: Database,
+    limit: number,
+    suiteId?: string,
+  ): Promise<ApiTestRunRecord[]> {
+    const suiteFilter = suiteId === undefined ? sql`true` : sql`r.suite_id = ${suiteId}`;
     const result = await database.execute<RunRow>(sql`
       SELECT ${runColumns}
       FROM api_test_runs r
       JOIN api_test_suites s ON s.id = r.suite_id
       JOIN api_test_environments e ON e.id = r.environment_id
+      WHERE ${suiteFilter}
       ORDER BY r.created_at DESC, r.id DESC
       LIMIT ${Math.min(Math.max(limit, 1), 100)}
     `);

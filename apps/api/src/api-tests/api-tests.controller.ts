@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req, UseGuard
 import {
   ApiCookieAuth,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiSecurity,
   ApiTags,
@@ -62,12 +63,17 @@ export class ApiTestsController {
   @Get("runs")
   @ApiCookieAuth("sessionCookie")
   @ApiOperation({ operationId: "listApiTestRuns" })
+  @ApiQuery({ name: "suiteId", required: false, type: String, format: "uuid" })
   @ApiResponse({ status: 200, type: ApiTestRunListResponseDto })
   public async listRuns(
     @Query("limit") limit?: string,
+    @Query("suiteId", new ParseUUIDPipe({ version: "7", optional: true }))
+    suiteId?: string,
   ): Promise<ApiTestRunListResponseDto> {
     const parsed = limit === undefined ? 20 : Number.parseInt(limit, 10);
-    return { runs: await this.apiTests.listRuns(Number.isFinite(parsed) ? parsed : 20) };
+    return {
+      runs: await this.apiTests.listRuns(Number.isFinite(parsed) ? parsed : 20, suiteId),
+    };
   }
 
   @Get("runs/:runId")

@@ -1,4 +1,4 @@
-FROM node:24.16.0-bookworm-slim AS build
+FROM node:24.16.0-trixie-slim AS build
 
 RUN corepack enable && corepack prepare pnpm@11.5.0 --activate
 WORKDIR /workspace
@@ -13,11 +13,12 @@ COPY . .
 RUN pnpm --filter @share-mind-map/worker... build
 RUN pnpm --filter @share-mind-map/worker deploy --legacy --prod /runtime
 
-FROM node:24.16.0-bookworm-slim AS runtime
+FROM node:24.16.0-trixie-slim AS runtime
 
 ENV NODE_ENV=production
 WORKDIR /app
 # git 用于运行时同步上游用例仓库；python 用来跑 pytest。
+# 用 Debian 13 而不是 12：自带 python 3.13，上游有用例用了只有 3.12+ 才认的 f-string 写法。
 RUN sed -i 's|deb.debian.org|mirrors.tencentyun.com|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
     && apt-get install -y --no-install-recommends git python3 python3-venv \

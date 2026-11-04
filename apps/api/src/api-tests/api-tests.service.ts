@@ -175,8 +175,8 @@ export class ApiTestsService implements OnApplicationShutdown {
     return runs;
   }
 
-  public async listRuns(limit: number): Promise<ApiTestRunResponseDto[]> {
-    const runs = await this.repository.listRuns(this.database, limit);
+  public async listRuns(limit: number, suiteId?: string): Promise<ApiTestRunResponseDto[]> {
+    const runs = await this.repository.listRuns(this.database, limit, suiteId);
     return runs.map(mapRun);
   }
 

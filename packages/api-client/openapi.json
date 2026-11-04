@@ -2514,6 +2514,15 @@
             }
           },
           {
+            "in": "query",
+            "name": "suiteId",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
             "$ref": "#/components/parameters/RequestIdHeader"
           }
         ],
