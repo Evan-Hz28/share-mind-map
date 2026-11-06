@@ -3,7 +3,7 @@
 
 import { client } from './client.gen.js';
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client/index.js';
-import type { AcquireDocumentLockData, AcquireDocumentLockResponses, AdminChangeAccountStatusData, AdminChangeAccountStatusResponses, AdminCreateMemberData, AdminCreateMemberResponses, AdminListAuditLogsData, AdminListAuditLogsResponses, AdminListEditPermissionRequestsData, AdminListEditPermissionRequestsResponses, AdminListImportFailuresData, AdminListImportFailuresResponses, AdminListMembersData, AdminListMembersResponses, AdminReadStorageUsageData, AdminReadStorageUsageResponses, AdminResetMemberPasswordData, AdminResetMemberPasswordResponses, AdminRevokeMemberSessionsData, AdminRevokeMemberSessionsResponses, ApproveEditPermissionRequestData, ApproveEditPermissionRequestResponses, AuthChangePasswordData, AuthChangePasswordResponses, AuthCsrfData, AuthCsrfResponses, AuthLoginData, AuthLoginResponses, AuthLogoutData, AuthLogoutResponses, CancelApiTestRunData, CancelApiTestRunResponses, CancelImportJobData, CancelImportJobResponses, CheckFolderDeleteData, CheckFolderDeleteResponses, CreateApiTestRunsData, CreateApiTestRunsResponses, CreateBlankDocumentData, CreateBlankDocumentResponses, CreateEditPermissionRequestData, CreateEditPermissionRequestResponses, CreateFolderData, CreateFolderResponses, CreateImportBatchData, CreateImportBatchResponses, DeleteDocumentData, DeleteDocumentResponses, DeleteFolderData, DeleteFolderResponses, ExportDocumentData, ExportDocumentDraftData, ExportDocumentDraftResponses, ExportDocumentResponses, ForceReleaseDocumentLockData, ForceReleaseDocumentLockResponses, GetApiTestRunData, GetApiTestRunResponses, GetDocumentMetadataData, GetDocumentMetadataResponses, GetImportBatchData, GetImportBatchResponses, GetMeData, GetMeResponses, GetWorkspaceOverviewData, GetWorkspaceOverviewResponses, HealthLiveData, HealthLiveResponses, HealthReadyData, HealthReadyErrors, HealthReadyResponses, HeartbeatDocumentLockData, HeartbeatDocumentLockResponses, InspectDocumentLockData, InspectDocumentLockResponses, ListApiTestEnvironmentsData, ListApiTestEnvironmentsResponses, ListApiTestRunsData, ListApiTestRunsResponses, ListApiTestSuitesData, ListApiTestSuitesResponses, ListApiTestSyncsData, ListApiTestSyncsResponses, ListDocumentsData, ListDocumentsResponses, ListFoldersData, ListFoldersResponses, ListNotificationsData, ListNotificationsResponses, MoveFolderData, MoveFolderResponses, ReadAllNotificationsData, ReadAllNotificationsResponses, ReadDocumentAssetData, ReadDocumentAssetResponses, ReadNotificationData, ReadNotificationResponses, RecoverDocumentLockData, RecoverDocumentLockResponses, RejectEditPermissionRequestData, RejectEditPermissionRequestResponses, ReleaseDocumentLockData, ReleaseDocumentLockResponses, RenameFolderData, RenameFolderResponses, ReorderFoldersData, ReorderFoldersResponses, RetryImportJobData, RetryImportJobResponses, RevokeMemberEditingData, RevokeMemberEditingResponses, SaveDocumentSnapshotData, SaveDocumentSnapshotResponses, SyncApiTestRepositoryData, SyncApiTestRepositoryResponses, UpdateDocumentMetadataData, UpdateDocumentMetadataResponses, UploadDocumentAssetData, UploadDocumentAssetResponses, UploadImportJobData, UploadImportJobResponses } from './types.gen.js';
+import type { AcquireDocumentLockData, AcquireDocumentLockResponses, AdminChangeAccountStatusData, AdminChangeAccountStatusResponses, AdminCreateMemberData, AdminCreateMemberResponses, AdminListAuditLogsData, AdminListAuditLogsResponses, AdminListEditPermissionRequestsData, AdminListEditPermissionRequestsResponses, AdminListImportFailuresData, AdminListImportFailuresResponses, AdminListMembersData, AdminListMembersResponses, AdminReadStorageUsageData, AdminReadStorageUsageResponses, AdminResetMemberPasswordData, AdminResetMemberPasswordResponses, AdminRevokeMemberSessionsData, AdminRevokeMemberSessionsResponses, ApproveEditPermissionRequestData, ApproveEditPermissionRequestResponses, AuthChangePasswordData, AuthChangePasswordResponses, AuthCsrfData, AuthCsrfResponses, AuthLoginData, AuthLoginResponses, AuthLogoutData, AuthLogoutResponses, CancelApiTestBatchData, CancelApiTestBatchResponses, CancelApiTestRunData, CancelApiTestRunResponses, CancelImportJobData, CancelImportJobResponses, CheckFolderDeleteData, CheckFolderDeleteResponses, CreateApiTestCollectionData, CreateApiTestCollectionResponses, CreateApiTestRunsData, CreateApiTestRunsResponses, CreateApiTestScheduleData, CreateApiTestScheduleResponses, CreateBlankDocumentData, CreateBlankDocumentResponses, CreateEditPermissionRequestData, CreateEditPermissionRequestResponses, CreateFolderData, CreateFolderResponses, CreateImportBatchData, CreateImportBatchResponses, DeleteApiTestCollectionData, DeleteApiTestCollectionResponses, DeleteApiTestScheduleData, DeleteApiTestScheduleResponses, DeleteDocumentData, DeleteDocumentResponses, DeleteFolderData, DeleteFolderResponses, ExportDocumentData, ExportDocumentDraftData, ExportDocumentDraftResponses, ExportDocumentResponses, ForceReleaseDocumentLockData, ForceReleaseDocumentLockResponses, GetApiTestBatchData, GetApiTestBatchResponses, GetApiTestCollectionData, GetApiTestCollectionResponses, GetApiTestRunData, GetApiTestRunResponses, GetApiTestScheduleData, GetApiTestScheduleResponses, GetDocumentMetadataData, GetDocumentMetadataResponses, GetImportBatchData, GetImportBatchResponses, GetMeData, GetMeResponses, GetWorkspaceOverviewData, GetWorkspaceOverviewResponses, HealthLiveData, HealthLiveResponses, HealthReadyData, HealthReadyErrors, HealthReadyResponses, HeartbeatDocumentLockData, HeartbeatDocumentLockResponses, InspectDocumentLockData, InspectDocumentLockResponses, ListApiTestCollectionExecutionsData, ListApiTestCollectionExecutionsResponses, ListApiTestCollectionsData, ListApiTestCollectionsResponses, ListApiTestEnvironmentsData, ListApiTestEnvironmentsResponses, ListApiTestRunsData, ListApiTestRunsResponses, ListApiTestSchedulesData, ListApiTestSchedulesResponses, ListApiTestSuitesData, ListApiTestSuitesResponses, ListApiTestSyncsData, ListApiTestSyncsResponses, ListDocumentsData, ListDocumentsResponses, ListFoldersData, ListFoldersResponses, ListNotificationsData, ListNotificationsResponses, MoveFolderData, MoveFolderResponses, PreviewApiTestScheduleData, PreviewApiTestScheduleResponses, ReadAllNotificationsData, ReadAllNotificationsResponses, ReadDocumentAssetData, ReadDocumentAssetResponses, ReadNotificationData, ReadNotificationResponses, RecoverDocumentLockData, RecoverDocumentLockResponses, RejectEditPermissionRequestData, RejectEditPermissionRequestResponses, ReleaseDocumentLockData, ReleaseDocumentLockResponses, RenameFolderData, RenameFolderResponses, ReorderFoldersData, ReorderFoldersResponses, RetryImportJobData, RetryImportJobResponses, RevokeMemberEditingData, RevokeMemberEditingResponses, RunApiTestCollectionData, RunApiTestCollectionResponses, RunApiTestScheduleNowData, RunApiTestScheduleNowResponses, SaveDocumentSnapshotData, SaveDocumentSnapshotResponses, SetApiTestCollectionSuitesData, SetApiTestCollectionSuitesResponses, SetApiTestScheduleEnabledData, SetApiTestScheduleEnabledResponses, SyncApiTestRepositoryData, SyncApiTestRepositoryResponses, UpdateApiTestCollectionData, UpdateApiTestCollectionResponses, UpdateApiTestScheduleData, UpdateApiTestScheduleResponses, UpdateDocumentMetadataData, UpdateDocumentMetadataResponses, UploadDocumentAssetData, UploadDocumentAssetResponses, UploadImportJobData, UploadImportJobResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -57,6 +57,54 @@ export const revokeMemberEditing = <ThrowOnError extends boolean = false>(option
 
 export const adminReadStorageUsage = <ThrowOnError extends boolean = false>(options?: Options<AdminReadStorageUsageData, ThrowOnError>): RequestResult<AdminReadStorageUsageResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminReadStorageUsageResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/storage', ...options });
 
+export const getApiTestBatch = <ThrowOnError extends boolean = false>(options: Options<GetApiTestBatchData, ThrowOnError>): RequestResult<GetApiTestBatchResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiTestBatchResponses, unknown, ThrowOnError>({ url: '/api/v1/api-tests/batches/{batchId}', ...options });
+
+export const cancelApiTestBatch = <ThrowOnError extends boolean = false>(options: Options<CancelApiTestBatchData, ThrowOnError>): RequestResult<CancelApiTestBatchResponses, unknown, ThrowOnError> => (options.client ?? client).post<CancelApiTestBatchResponses, unknown, ThrowOnError>({ url: '/api/v1/api-tests/batches/{batchId}/cancel', ...options });
+
+export const listApiTestCollections = <ThrowOnError extends boolean = false>(options?: Options<ListApiTestCollectionsData, ThrowOnError>): RequestResult<ListApiTestCollectionsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListApiTestCollectionsResponses, unknown, ThrowOnError>({ url: '/api/v1/api-tests/collections', ...options });
+
+export const createApiTestCollection = <ThrowOnError extends boolean = false>(options: Options<CreateApiTestCollectionData, ThrowOnError>): RequestResult<CreateApiTestCollectionResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateApiTestCollectionResponses, unknown, ThrowOnError>({
+    url: '/api/v1/api-tests/collections',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const deleteApiTestCollection = <ThrowOnError extends boolean = false>(options: Options<DeleteApiTestCollectionData, ThrowOnError>): RequestResult<DeleteApiTestCollectionResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteApiTestCollectionResponses, unknown, ThrowOnError>({ url: '/api/v1/api-tests/collections/{collectionId}', ...options });
+
+export const getApiTestCollection = <ThrowOnError extends boolean = false>(options: Options<GetApiTestCollectionData, ThrowOnError>): RequestResult<GetApiTestCollectionResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiTestCollectionResponses, unknown, ThrowOnError>({ url: '/api/v1/api-tests/collections/{collectionId}', ...options });
+
+export const updateApiTestCollection = <ThrowOnError extends boolean = false>(options: Options<UpdateApiTestCollectionData, ThrowOnError>): RequestResult<UpdateApiTestCollectionResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateApiTestCollectionResponses, unknown, ThrowOnError>({
+    url: '/api/v1/api-tests/collections/{collectionId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const listApiTestCollectionExecutions = <ThrowOnError extends boolean = false>(options: Options<ListApiTestCollectionExecutionsData, ThrowOnError>): RequestResult<ListApiTestCollectionExecutionsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListApiTestCollectionExecutionsResponses, unknown, ThrowOnError>({ url: '/api/v1/api-tests/collections/{collectionId}/executions', ...options });
+
+export const runApiTestCollection = <ThrowOnError extends boolean = false>(options: Options<RunApiTestCollectionData, ThrowOnError>): RequestResult<RunApiTestCollectionResponses, unknown, ThrowOnError> => (options.client ?? client).post<RunApiTestCollectionResponses, unknown, ThrowOnError>({
+    url: '/api/v1/api-tests/collections/{collectionId}/runs',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const setApiTestCollectionSuites = <ThrowOnError extends boolean = false>(options: Options<SetApiTestCollectionSuitesData, ThrowOnError>): RequestResult<SetApiTestCollectionSuitesResponses, unknown, ThrowOnError> => (options.client ?? client).put<SetApiTestCollectionSuitesResponses, unknown, ThrowOnError>({
+    url: '/api/v1/api-tests/collections/{collectionId}/suites',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
 export const listApiTestEnvironments = <ThrowOnError extends boolean = false>(options?: Options<ListApiTestEnvironmentsData, ThrowOnError>): RequestResult<ListApiTestEnvironmentsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListApiTestEnvironmentsResponses, unknown, ThrowOnError>({ url: '/api/v1/api-tests/environments', ...options });
 
 export const listApiTestRuns = <ThrowOnError extends boolean = false>(options: Options<ListApiTestRunsData, ThrowOnError>): RequestResult<ListApiTestRunsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListApiTestRunsResponses, unknown, ThrowOnError>({ url: '/api/v1/api-tests/runs', ...options });
@@ -73,6 +121,50 @@ export const createApiTestRuns = <ThrowOnError extends boolean = false>(options:
 export const getApiTestRun = <ThrowOnError extends boolean = false>(options: Options<GetApiTestRunData, ThrowOnError>): RequestResult<GetApiTestRunResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiTestRunResponses, unknown, ThrowOnError>({ url: '/api/v1/api-tests/runs/{runId}', ...options });
 
 export const cancelApiTestRun = <ThrowOnError extends boolean = false>(options: Options<CancelApiTestRunData, ThrowOnError>): RequestResult<CancelApiTestRunResponses, unknown, ThrowOnError> => (options.client ?? client).post<CancelApiTestRunResponses, unknown, ThrowOnError>({ url: '/api/v1/api-tests/runs/{runId}/cancel', ...options });
+
+export const listApiTestSchedules = <ThrowOnError extends boolean = false>(options?: Options<ListApiTestSchedulesData, ThrowOnError>): RequestResult<ListApiTestSchedulesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListApiTestSchedulesResponses, unknown, ThrowOnError>({ url: '/api/v1/api-tests/schedules', ...options });
+
+export const createApiTestSchedule = <ThrowOnError extends boolean = false>(options: Options<CreateApiTestScheduleData, ThrowOnError>): RequestResult<CreateApiTestScheduleResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateApiTestScheduleResponses, unknown, ThrowOnError>({
+    url: '/api/v1/api-tests/schedules',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const deleteApiTestSchedule = <ThrowOnError extends boolean = false>(options: Options<DeleteApiTestScheduleData, ThrowOnError>): RequestResult<DeleteApiTestScheduleResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteApiTestScheduleResponses, unknown, ThrowOnError>({ url: '/api/v1/api-tests/schedules/{scheduleId}', ...options });
+
+export const getApiTestSchedule = <ThrowOnError extends boolean = false>(options: Options<GetApiTestScheduleData, ThrowOnError>): RequestResult<GetApiTestScheduleResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiTestScheduleResponses, unknown, ThrowOnError>({ url: '/api/v1/api-tests/schedules/{scheduleId}', ...options });
+
+export const updateApiTestSchedule = <ThrowOnError extends boolean = false>(options: Options<UpdateApiTestScheduleData, ThrowOnError>): RequestResult<UpdateApiTestScheduleResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateApiTestScheduleResponses, unknown, ThrowOnError>({
+    url: '/api/v1/api-tests/schedules/{scheduleId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const setApiTestScheduleEnabled = <ThrowOnError extends boolean = false>(options: Options<SetApiTestScheduleEnabledData, ThrowOnError>): RequestResult<SetApiTestScheduleEnabledResponses, unknown, ThrowOnError> => (options.client ?? client).patch<SetApiTestScheduleEnabledResponses, unknown, ThrowOnError>({
+    url: '/api/v1/api-tests/schedules/{scheduleId}/enabled',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const runApiTestScheduleNow = <ThrowOnError extends boolean = false>(options: Options<RunApiTestScheduleNowData, ThrowOnError>): RequestResult<RunApiTestScheduleNowResponses, unknown, ThrowOnError> => (options.client ?? client).post<RunApiTestScheduleNowResponses, unknown, ThrowOnError>({ url: '/api/v1/api-tests/schedules/{scheduleId}/run', ...options });
+
+export const previewApiTestSchedule = <ThrowOnError extends boolean = false>(options: Options<PreviewApiTestScheduleData, ThrowOnError>): RequestResult<PreviewApiTestScheduleResponses, unknown, ThrowOnError> => (options.client ?? client).post<PreviewApiTestScheduleResponses, unknown, ThrowOnError>({
+    url: '/api/v1/api-tests/schedules/preview',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
 
 export const listApiTestSuites = <ThrowOnError extends boolean = false>(options?: Options<ListApiTestSuitesData, ThrowOnError>): RequestResult<ListApiTestSuitesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListApiTestSuitesResponses, unknown, ThrowOnError>({ url: '/api/v1/api-tests/suites', ...options });
 

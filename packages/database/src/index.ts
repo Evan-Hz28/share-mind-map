@@ -5,11 +5,16 @@ export { schema } from "./schema/index.js";
 export * from "./schema/index.js";
 export {
   ApiTestRepository,
+  type ApiTestCollectionExecutionRecord,
+  type ApiTestCollectionRecord,
+  type ApiTestCollectionSuiteRecord,
   type ApiTestEnvironmentRecord,
   type ApiTestItemStatus,
   type ApiTestRunItemRecord,
   type ApiTestRunRecord,
   type ApiTestRunStatus,
+  type ApiTestScheduleRecord,
+  type ApiTestScheduleTargetType,
   type ApiTestSuiteRecord,
   type ApiTestSyncRecord,
   type ApiTestSyncStatus,

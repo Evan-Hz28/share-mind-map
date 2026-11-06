@@ -3,15 +3,15 @@ import {
   cancelApiTestRun,
   getApiTestRun,
   type ApiTestRunDetailResponseDto,
-  type ApiTestRunItemResponseDto,
 } from "@share-mind-map/api-client";
-import { ElAlert, ElButton, ElDescriptions, ElDescriptionsItem, ElTable, ElTableColumn, ElTag } from "element-plus";
+import { ElAlert, ElButton, ElDescriptions, ElDescriptionsItem, ElTag } from "element-plus";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import { apiClient, toApiFailure, type RequestFailure } from "../api.js";
 import { useAppTabsStore } from "../app/tabs.store.js";
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
+import ApiTestRunItemsTable from "./ApiTestRunItemsTable.vue";
 
 const props = defineProps<{ runId: string }>();
 
@@ -38,13 +38,6 @@ const statusTypes: Record<string, "info" | "warning" | "success" | "danger"> = {
   succeeded: "success",
   failed: "danger",
   cancelled: "info",
-};
-
-const itemStatusTypes: Record<string, "info" | "warning" | "success" | "danger"> = {
-  passed: "success",
-  failed: "danger",
-  error: "danger",
-  skipped: "info",
 };
 
 const terminal = computed(
@@ -101,16 +94,6 @@ watch(run, (value) => {
 function formatTime(value: string | null | undefined): string {
   if (value === null || value === undefined) return "-";
   return new Date(value).toLocaleString();
-}
-
-function pretty(value: unknown): string {
-  if (value === null || value === undefined) return "-";
-  return JSON.stringify(value, null, 2);
-}
-
-function exchanges(item: unknown): string {
-  const record = item as ApiTestRunItemResponseDto;
-  return pretty({ request: record.request, response: record.response });
 }
 
 onMounted(async () => {
@@ -177,34 +160,7 @@ onUnmounted(() => {
         <pre class="api-test-run__pre">{{ run.errorMessage }}</pre>
       </ElAlert>
 
-      <ElTable
-        v-if="run !== null"
-        :data="run.items"
-        row-key="id"
-        empty-text="暂时没有用例结果"
-        class="api-test-run__table"
-      >
-        <ElTableColumn type="expand">
-          <template #default="{ row }">
-            <div class="api-test-run__detail">
-              <p class="api-test-run__node">{{ row.nodeId }}</p>
-              <pre v-if="row.failure" class="api-test-run__pre">{{ row.failure }}</pre>
-              <pre class="api-test-run__pre">{{ exchanges(row) }}</pre>
-            </div>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="caseName" label="用例" min-width="320" />
-        <ElTableColumn label="状态" width="100">
-          <template #default="{ row }">
-            <ElTag :type="itemStatusTypes[row.status] ?? 'info'">{{ row.status }}</ElTag>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn label="耗时" width="110">
-          <template #default="{ row }">
-            {{ row.durationMs === null ? "-" : `${row.durationMs} ms` }}
-          </template>
-        </ElTableColumn>
-      </ElTable>
+      <ApiTestRunItemsTable v-if="run !== null" :items="run.items" class="api-test-run__table" />
     </div>
   </section>
 </template>
@@ -239,27 +195,8 @@ onUnmounted(() => {
   margin-bottom: 16px;
 }
 
-.api-test-run__detail {
-  padding: 12px 16px;
-}
-
 .api-test-run__loading {
   color: var(--el-text-color-secondary);
   font-size: 13px;
-}
-
-.api-test-run__node {
-  margin: 0 0 8px;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-
-.api-test-run__pre {
-  margin: 0;
-  max-height: 420px;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-size: 12px;
 }
 </style>

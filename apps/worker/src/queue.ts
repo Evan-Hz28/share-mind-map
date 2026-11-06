@@ -12,12 +12,17 @@ import {
 } from "./processor.js";
 import { processProductionImport, type ProductionImportJob } from "./import/processor.js";
 import { processApiTestRun, type ApiTestRunJob } from "./api-test/processor.js";
+import {
+  processApiTestSchedule,
+  type ApiTestScheduleJob,
+} from "./api-test/schedule.js";
 import { processApiTestSync, type ApiTestSyncJob } from "./api-test/sync.js";
 
 export const XMIND_VALIDATION_QUEUE = "xmind-validation";
 export const XMIND_IMPORT_QUEUE = "xmind-import";
 export const API_TEST_QUEUE = "api-test-run";
 export const API_TEST_SYNC_QUEUE = "api-test-sync";
+export const API_TEST_SCHEDULE_QUEUE = "api-test-schedule";
 
 export function createRedisConnection(url: string): Redis {
   return new Redis(url, {
@@ -113,6 +118,33 @@ export function createApiTestSyncWorker(
       prefix: config.queuePrefix,
       concurrency: 1,
       lockDuration: 6 * 60 * 1000,
+    },
+  );
+}
+
+export function createApiTestScheduleQueue(config: WorkerConfig, connection: Redis) {
+  return new Queue<ApiTestScheduleJob>(API_TEST_SCHEDULE_QUEUE, {
+    connection,
+    prefix: config.queuePrefix,
+  });
+}
+
+export function createApiTestScheduleWorker(
+  config: WorkerConfig,
+  connection: Redis,
+  database: Database,
+  runQueue: Queue<{ runId: string }>,
+) {
+  return new Worker<ApiTestScheduleJob>(
+    API_TEST_SCHEDULE_QUEUE,
+    async (job) => {
+      await processApiTestSchedule(job.data, { database, config, runQueue });
+    },
+    {
+      connection,
+      prefix: config.queuePrefix,
+      concurrency: 1,
+      lockDuration: 15 * 60 * 1000,
     },
   );
 }

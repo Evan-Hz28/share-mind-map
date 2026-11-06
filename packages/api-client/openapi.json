@@ -159,6 +159,306 @@
         ],
         "type": "object"
       },
+      "ApiTestBatchResponseDto": {
+        "properties": {
+          "batchId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "environmentName": {
+            "type": "string"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/ApiTestRunResponseDto"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/ApiTestBatchTotalsDto"
+          }
+        },
+        "required": [
+          "batchId",
+          "environmentId",
+          "environmentName",
+          "runs",
+          "status",
+          "totals"
+        ],
+        "type": "object"
+      },
+      "ApiTestBatchTotalsDto": {
+        "properties": {
+          "failedCount": {
+            "type": "number"
+          },
+          "passedCount": {
+            "type": "number"
+          },
+          "skippedCount": {
+            "type": "number"
+          },
+          "suiteCount": {
+            "type": "number"
+          },
+          "totalCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "failedCount",
+          "passedCount",
+          "skippedCount",
+          "suiteCount",
+          "totalCount"
+        ],
+        "type": "object"
+      },
+      "ApiTestCollectionDetailResponseDto": {
+        "properties": {
+          "caseCount": {
+            "type": "number"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lastRunAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "lastRunStatus": {
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "suiteCount": {
+            "type": "number"
+          },
+          "suites": {
+            "items": {
+              "$ref": "#/components/schemas/ApiTestCollectionSuiteResponseDto"
+            },
+            "type": "array"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "caseCount",
+          "createdAt",
+          "description",
+          "id",
+          "name",
+          "suiteCount",
+          "suites",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ApiTestCollectionExecutionListResponseDto": {
+        "properties": {
+          "executions": {
+            "items": {
+              "$ref": "#/components/schemas/ApiTestCollectionExecutionResponseDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "executions"
+        ],
+        "type": "object"
+      },
+      "ApiTestCollectionExecutionResponseDto": {
+        "properties": {
+          "batchId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "failedCount": {
+            "type": "number"
+          },
+          "finishedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "passedCount": {
+            "type": "number"
+          },
+          "skippedCount": {
+            "type": "number"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "suiteCount": {
+            "type": "number"
+          },
+          "totalCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "batchId",
+          "createdAt",
+          "failedCount",
+          "passedCount",
+          "skippedCount",
+          "status",
+          "suiteCount",
+          "totalCount"
+        ],
+        "type": "object"
+      },
+      "ApiTestCollectionListResponseDto": {
+        "properties": {
+          "collections": {
+            "items": {
+              "$ref": "#/components/schemas/ApiTestCollectionResponseDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "collections"
+        ],
+        "type": "object"
+      },
+      "ApiTestCollectionResponseDto": {
+        "properties": {
+          "caseCount": {
+            "type": "number"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lastRunAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "lastRunStatus": {
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "suiteCount": {
+            "type": "number"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "caseCount",
+          "createdAt",
+          "description",
+          "id",
+          "name",
+          "suiteCount",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ApiTestCollectionSuiteResponseDto": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "failedCount": {
+            "type": "number"
+          },
+          "key": {
+            "type": "string"
+          },
+          "lastRunAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "lastRunId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "lastRunStatus": {
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "passedCount": {
+            "type": "number"
+          },
+          "path": {
+            "type": "string"
+          },
+          "position": {
+            "type": "number"
+          },
+          "skippedCount": {
+            "type": "number"
+          },
+          "suiteId": {
+            "type": "string"
+          },
+          "totalCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "enabled",
+          "failedCount",
+          "key",
+          "name",
+          "passedCount",
+          "path",
+          "position",
+          "skippedCount",
+          "suiteId",
+          "totalCount"
+        ],
+        "type": "object"
+      },
       "ApiTestEnvironmentListResponseDto": {
         "properties": {
           "environments": {
@@ -196,8 +496,32 @@
         ],
         "type": "object"
       },
+      "ApiTestRunCreateResponseDto": {
+        "properties": {
+          "batchId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/ApiTestRunResponseDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "batchId",
+          "runs"
+        ],
+        "type": "object"
+      },
       "ApiTestRunDetailResponseDto": {
         "properties": {
+          "batchId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
           "cancelRequested": {
             "type": "boolean"
           },
@@ -344,6 +668,11 @@
       },
       "ApiTestRunResponseDto": {
         "properties": {
+          "batchId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
           "cancelRequested": {
             "type": "boolean"
           },
@@ -421,6 +750,143 @@
           "suiteKey",
           "suiteName",
           "totalCount"
+        ],
+        "type": "object"
+      },
+      "ApiTestScheduleListResponseDto": {
+        "properties": {
+          "schedules": {
+            "items": {
+              "$ref": "#/components/schemas/ApiTestScheduleResponseDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "schedules"
+        ],
+        "type": "object"
+      },
+      "ApiTestSchedulePreviewResponseDto": {
+        "properties": {
+          "nextRuns": {
+            "description": "接下来三次触发时间（ISO 8601）",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "nextRuns"
+        ],
+        "type": "object"
+      },
+      "ApiTestScheduleResponseDto": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "cron": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "environmentKey": {
+            "nullable": true,
+            "type": "string"
+          },
+          "environmentName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lastBatchId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "lastError": {
+            "nullable": true,
+            "type": "string"
+          },
+          "lastFailedCount": {
+            "type": "number"
+          },
+          "lastPassedCount": {
+            "type": "number"
+          },
+          "lastRunAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "lastRunStatus": {
+            "nullable": true,
+            "type": "string"
+          },
+          "lastSkippedCount": {
+            "type": "number"
+          },
+          "lastTotalCount": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nextRunAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "syncBeforeRun": {
+            "type": "boolean"
+          },
+          "targetId": {
+            "type": "string"
+          },
+          "targetName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "targetPath": {
+            "nullable": true,
+            "type": "string"
+          },
+          "targetType": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "createdAt",
+          "cron",
+          "enabled",
+          "environmentId",
+          "id",
+          "lastFailedCount",
+          "lastPassedCount",
+          "lastSkippedCount",
+          "lastTotalCount",
+          "name",
+          "syncBeforeRun",
+          "targetId",
+          "targetType",
+          "timezone",
+          "updatedAt"
         ],
         "type": "object"
       },
@@ -647,6 +1113,31 @@
         ],
         "type": "object"
       },
+      "CreateApiTestCollectionDto": {
+        "properties": {
+          "description": {
+            "maxLength": 500,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "suiteIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "suiteIds"
+        ],
+        "type": "object"
+      },
       "CreateApiTestRunDto": {
         "properties": {
           "environmentId": {
@@ -664,6 +1155,54 @@
         "required": [
           "environmentId",
           "suiteIds"
+        ],
+        "type": "object"
+      },
+      "CreateApiTestScheduleDto": {
+        "properties": {
+          "cron": {
+            "example": "0 2 * * *",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "environmentId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "syncBeforeRun": {
+            "default": false,
+            "type": "boolean"
+          },
+          "targetId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "targetType": {
+            "enum": [
+              "collection",
+              "suite"
+            ],
+            "type": "string"
+          },
+          "timezone": {
+            "default": "Asia/Shanghai",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cron",
+          "environmentId",
+          "name",
+          "targetId",
+          "targetType"
         ],
         "type": "object"
       },
@@ -1571,6 +2110,22 @@
         ],
         "type": "object"
       },
+      "PreviewApiTestScheduleDto": {
+        "properties": {
+          "cron": {
+            "example": "0 2 * * *",
+            "type": "string"
+          },
+          "timezone": {
+            "default": "Asia/Shanghai",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cron"
+        ],
+        "type": "object"
+      },
       "ReorderFoldersDto": {
         "properties": {
           "folderIds": {
@@ -1619,6 +2174,18 @@
           "membershipId",
           "role",
           "userId"
+        ],
+        "type": "object"
+      },
+      "RunApiTestCollectionDto": {
+        "properties": {
+          "environmentId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "environmentId"
         ],
         "type": "object"
       },
@@ -1763,6 +2330,32 @@
         ],
         "type": "object"
       },
+      "SetApiTestCollectionSuitesDto": {
+        "properties": {
+          "suiteIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "suiteIds"
+        ],
+        "type": "object"
+      },
+      "SetApiTestScheduleEnabledDto": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "type": "object"
+      },
       "SnapshotResponseDto": {
         "properties": {
           "document": {
@@ -1840,6 +2433,71 @@
         },
         "required": [
           "temporaryPassword"
+        ],
+        "type": "object"
+      },
+      "UpdateApiTestCollectionDto": {
+        "properties": {
+          "description": {
+            "maxLength": 500,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "UpdateApiTestScheduleDto": {
+        "properties": {
+          "cron": {
+            "example": "0 2 * * *",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "environmentId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "syncBeforeRun": {
+            "default": false,
+            "type": "boolean"
+          },
+          "targetId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "targetType": {
+            "enum": [
+              "collection",
+              "suite"
+            ],
+            "type": "string"
+          },
+          "timezone": {
+            "default": "Asia/Shanghai",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cron",
+          "environmentId",
+          "name",
+          "targetId",
+          "targetType"
         ],
         "type": "object"
       },
@@ -2470,6 +3128,421 @@
         ]
       }
     },
+    "/api/v1/api-tests/batches/{batchId}": {
+      "get": {
+        "operationId": "getApiTestBatch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestBatchResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      }
+    },
+    "/api/v1/api-tests/batches/{batchId}/cancel": {
+      "post": {
+        "operationId": "cancelApiTestBatch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestBatchResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      }
+    },
+    "/api/v1/api-tests/collections": {
+      "get": {
+        "operationId": "listApiTestCollections",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestCollectionListResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      },
+      "post": {
+        "operationId": "createApiTestCollection",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateApiTestCollectionDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestCollectionDetailResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      }
+    },
+    "/api/v1/api-tests/collections/{collectionId}": {
+      "delete": {
+        "operationId": "deleteApiTestCollection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collectionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      },
+      "get": {
+        "operationId": "getApiTestCollection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collectionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestCollectionDetailResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      },
+      "patch": {
+        "operationId": "updateApiTestCollection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collectionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateApiTestCollectionDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestCollectionDetailResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      }
+    },
+    "/api/v1/api-tests/collections/{collectionId}/executions": {
+      "get": {
+        "operationId": "listApiTestCollectionExecutions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collectionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestCollectionExecutionListResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      }
+    },
+    "/api/v1/api-tests/collections/{collectionId}/runs": {
+      "post": {
+        "operationId": "runApiTestCollection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collectionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunApiTestCollectionDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestRunCreateResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      }
+    },
+    "/api/v1/api-tests/collections/{collectionId}/suites": {
+      "put": {
+        "operationId": "setApiTestCollectionSuites",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collectionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetApiTestCollectionSuitesDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestCollectionDetailResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      }
+    },
     "/api/v1/api-tests/environments": {
       "get": {
         "operationId": "listApiTestEnvironments",
@@ -2516,6 +3589,15 @@
           {
             "in": "query",
             "name": "suiteId",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "batchId",
             "required": false,
             "schema": {
               "format": "uuid",
@@ -2570,7 +3652,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiTestRunListResponseDto"
+                  "$ref": "#/components/schemas/ApiTestRunCreateResponseDto"
                 }
               }
             },
@@ -2650,6 +3732,327 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiTestRunResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      }
+    },
+    "/api/v1/api-tests/schedules": {
+      "get": {
+        "operationId": "listApiTestSchedules",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestScheduleListResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      },
+      "post": {
+        "operationId": "createApiTestSchedule",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateApiTestScheduleDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestScheduleResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      }
+    },
+    "/api/v1/api-tests/schedules/{scheduleId}": {
+      "delete": {
+        "operationId": "deleteApiTestSchedule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scheduleId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      },
+      "get": {
+        "operationId": "getApiTestSchedule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scheduleId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestScheduleResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      },
+      "patch": {
+        "operationId": "updateApiTestSchedule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scheduleId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateApiTestScheduleDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestScheduleResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      }
+    },
+    "/api/v1/api-tests/schedules/{scheduleId}/enabled": {
+      "patch": {
+        "operationId": "setApiTestScheduleEnabled",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scheduleId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetApiTestScheduleEnabledDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestScheduleResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      }
+    },
+    "/api/v1/api-tests/schedules/{scheduleId}/run": {
+      "post": {
+        "operationId": "runApiTestScheduleNow",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scheduleId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestRunCreateResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      }
+    },
+    "/api/v1/api-tests/schedules/preview": {
+      "post": {
+        "operationId": "previewApiTestSchedule",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewApiTestScheduleDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestSchedulePreviewResponseDto"
                 }
               }
             },

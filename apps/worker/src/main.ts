@@ -8,6 +8,8 @@ import { parseWorkerConfig, type WorkerConfig } from "./config.js";
 import { startHealthServer, type HealthServer } from "./health-server.js";
 import {
   createApiTestQueue,
+  createApiTestScheduleQueue,
+  createApiTestScheduleWorker,
   createApiTestSyncQueue,
   createApiTestSyncWorker,
   createApiTestWorker,
@@ -17,6 +19,7 @@ import {
   createValidationQueue,
   createValidationWorker,
 } from "./queue.js";
+import { restoreApiTestSchedulers } from "./api-test/schedule.js";
 import { NotificationOutboxProcessor } from "./notification-outbox.processor.js";
 
 export interface WorkerRuntime {
@@ -62,6 +65,15 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
     apiTestSyncWorkerConnection,
     apiTestDatabase,
   );
+  const apiTestScheduleConnection = createRedisConnection(config.redisUrl);
+  const apiTestScheduleQueue = createApiTestScheduleQueue(config, apiTestScheduleConnection);
+  const apiTestScheduleWorkerConnection = createRedisConnection(config.redisUrl);
+  const apiTestScheduleWorker = createApiTestScheduleWorker(
+    config,
+    apiTestScheduleWorkerConnection,
+    apiTestDatabase,
+    apiTestQueue,
+  );
   await Promise.all([
     queue.waitUntilReady(),
     worker.waitUntilReady(),
@@ -71,7 +83,11 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
     apiTestWorker.waitUntilReady(),
     apiTestSyncQueue.waitUntilReady(),
     apiTestSyncWorker.waitUntilReady(),
+    apiTestScheduleQueue.waitUntilReady(),
+    apiTestScheduleWorker.waitUntilReady(),
   ]);
+  // Redis 里的调度只是副本，容器重建或换 Redis 后要按库里的表补回来。
+  await restoreApiTestSchedulers(apiTestScheduleQueue, apiTestDatabase).catch(() => undefined);
 
   const health = await startHealthServer({
     host: config.host,
@@ -94,6 +110,7 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
           importQueue.waitUntilReady(),
           apiTestQueue.waitUntilReady(),
           apiTestSyncQueue.waitUntilReady(),
+          apiTestScheduleQueue.waitUntilReady(),
         ]);
       },
     },
@@ -117,6 +134,8 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
         apiTestQueue.close(),
         apiTestSyncWorker.close(),
         apiTestSyncQueue.close(),
+        apiTestScheduleWorker.close(),
+        apiTestScheduleQueue.close(),
       ]);
       await Promise.all([
         workerConnection.quit(),
@@ -127,6 +146,8 @@ export async function startWorker(config: WorkerConfig): Promise<WorkerRuntime> 
         apiTestConnection.quit(),
         apiTestSyncWorkerConnection.quit(),
         apiTestSyncConnection.quit(),
+        apiTestScheduleWorkerConnection.quit(),
+        apiTestScheduleConnection.quit(),
         healthRedis.quit(),
       ]);
       await Promise.all([

@@ -49,6 +49,85 @@ export type ApiErrorEnvelope = {
     };
 };
 
+export type ApiTestBatchResponseDto = {
+    batchId: string;
+    environmentId: string;
+    environmentName: string;
+    runs: Array<ApiTestRunResponseDto>;
+    status: string;
+    totals: ApiTestBatchTotalsDto;
+};
+
+export type ApiTestBatchTotalsDto = {
+    failedCount: number;
+    passedCount: number;
+    skippedCount: number;
+    suiteCount: number;
+    totalCount: number;
+};
+
+export type ApiTestCollectionDetailResponseDto = {
+    caseCount: number;
+    createdAt: string;
+    description: string;
+    id: string;
+    lastRunAt?: string | null;
+    lastRunStatus?: string | null;
+    name: string;
+    suiteCount: number;
+    suites: Array<ApiTestCollectionSuiteResponseDto>;
+    updatedAt: string;
+};
+
+export type ApiTestCollectionExecutionListResponseDto = {
+    executions: Array<ApiTestCollectionExecutionResponseDto>;
+};
+
+export type ApiTestCollectionExecutionResponseDto = {
+    batchId: string;
+    createdAt: string;
+    failedCount: number;
+    finishedAt?: string | null;
+    passedCount: number;
+    skippedCount: number;
+    startedAt?: string | null;
+    status: string;
+    suiteCount: number;
+    totalCount: number;
+};
+
+export type ApiTestCollectionListResponseDto = {
+    collections: Array<ApiTestCollectionResponseDto>;
+};
+
+export type ApiTestCollectionResponseDto = {
+    caseCount: number;
+    createdAt: string;
+    description: string;
+    id: string;
+    lastRunAt?: string | null;
+    lastRunStatus?: string | null;
+    name: string;
+    suiteCount: number;
+    updatedAt: string;
+};
+
+export type ApiTestCollectionSuiteResponseDto = {
+    enabled: boolean;
+    failedCount: number;
+    key: string;
+    lastRunAt?: string | null;
+    lastRunId?: string | null;
+    lastRunStatus?: string | null;
+    name: string;
+    passedCount: number;
+    path: string;
+    position: number;
+    skippedCount: number;
+    suiteId: string;
+    totalCount: number;
+};
+
 export type ApiTestEnvironmentListResponseDto = {
     environments: Array<ApiTestEnvironmentResponseDto>;
 };
@@ -60,7 +139,13 @@ export type ApiTestEnvironmentResponseDto = {
     name: string;
 };
 
+export type ApiTestRunCreateResponseDto = {
+    batchId: string;
+    runs: Array<ApiTestRunResponseDto>;
+};
+
 export type ApiTestRunDetailResponseDto = {
+    batchId?: string | null;
     cancelRequested: boolean;
     createdAt: string;
     environmentId: string;
@@ -103,6 +188,7 @@ export type ApiTestRunListResponseDto = {
 };
 
 export type ApiTestRunResponseDto = {
+    batchId?: string | null;
     cancelRequested: boolean;
     createdAt: string;
     environmentId: string;
@@ -121,6 +207,44 @@ export type ApiTestRunResponseDto = {
     suiteKey: string;
     suiteName: string;
     totalCount: number;
+};
+
+export type ApiTestScheduleListResponseDto = {
+    schedules: Array<ApiTestScheduleResponseDto>;
+};
+
+export type ApiTestSchedulePreviewResponseDto = {
+    /**
+     * 接下来三次触发时间（ISO 8601）
+     */
+    nextRuns: Array<string>;
+};
+
+export type ApiTestScheduleResponseDto = {
+    createdAt: string;
+    cron: string;
+    enabled: boolean;
+    environmentId: string;
+    environmentKey?: string | null;
+    environmentName?: string | null;
+    id: string;
+    lastBatchId?: string | null;
+    lastError?: string | null;
+    lastFailedCount: number;
+    lastPassedCount: number;
+    lastRunAt?: string | null;
+    lastRunStatus?: string | null;
+    lastSkippedCount: number;
+    lastTotalCount: number;
+    name: string;
+    nextRunAt?: string | null;
+    syncBeforeRun: boolean;
+    targetId: string;
+    targetName?: string | null;
+    targetPath?: string | null;
+    targetType: string;
+    timezone: string;
+    updatedAt: string;
 };
 
 export type ApiTestSuiteListResponseDto = {
@@ -183,9 +307,26 @@ export type ChangePasswordDto = {
     newPassword: string;
 };
 
+export type CreateApiTestCollectionDto = {
+    description?: string;
+    name: string;
+    suiteIds: Array<string>;
+};
+
 export type CreateApiTestRunDto = {
     environmentId: string;
     suiteIds: Array<string>;
+};
+
+export type CreateApiTestScheduleDto = {
+    cron: string;
+    enabled?: boolean;
+    environmentId: string;
+    name: string;
+    syncBeforeRun?: boolean;
+    targetId: string;
+    targetType: 'collection' | 'suite';
+    timezone?: string;
 };
 
 export type CreatedMemberResponseDto = {
@@ -436,6 +577,11 @@ export type PermissionRequestResponseDto = {
     request: PermissionRequestDto;
 };
 
+export type PreviewApiTestScheduleDto = {
+    cron: string;
+    timezone?: string;
+};
+
 export type ReorderFoldersDto = {
     folderIds: Array<string>;
     parentId?: string | null;
@@ -446,6 +592,10 @@ export type RevokeEditingResponseDto = {
     membershipId: string;
     role: 'admin' | 'editor' | 'reader';
     userId: string;
+};
+
+export type RunApiTestCollectionDto = {
+    environmentId: string;
 };
 
 export type SafeOrganizationDto = {
@@ -485,6 +635,14 @@ export type SessionResponseDto = {
     user: SafeUserDto;
 };
 
+export type SetApiTestCollectionSuitesDto = {
+    suiteIds: Array<string>;
+};
+
+export type SetApiTestScheduleEnabledDto = {
+    enabled: boolean;
+};
+
 export type SnapshotResponseDto = {
     document: DocumentDto;
     idempotent: boolean;
@@ -506,6 +664,22 @@ export type StorageUsageDto = {
 
 export type TemporaryPasswordResponseDto = {
     readonly temporaryPassword: string;
+};
+
+export type UpdateApiTestCollectionDto = {
+    description?: string;
+    name: string;
+};
+
+export type UpdateApiTestScheduleDto = {
+    cron: string;
+    enabled?: boolean;
+    environmentId: string;
+    name: string;
+    syncBeforeRun?: boolean;
+    targetId: string;
+    targetType: 'collection' | 'suite';
+    timezone?: string;
 };
 
 export type UpdateDocumentDto = {
@@ -806,6 +980,214 @@ export type AdminReadStorageUsageResponses = {
 
 export type AdminReadStorageUsageResponse = AdminReadStorageUsageResponses[keyof AdminReadStorageUsageResponses];
 
+export type GetApiTestBatchData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        batchId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/batches/{batchId}';
+};
+
+export type GetApiTestBatchResponses = {
+    200: ApiTestBatchResponseDto;
+};
+
+export type GetApiTestBatchResponse = GetApiTestBatchResponses[keyof GetApiTestBatchResponses];
+
+export type CancelApiTestBatchData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        batchId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/batches/{batchId}/cancel';
+};
+
+export type CancelApiTestBatchResponses = {
+    201: ApiTestBatchResponseDto;
+};
+
+export type CancelApiTestBatchResponse = CancelApiTestBatchResponses[keyof CancelApiTestBatchResponses];
+
+export type ListApiTestCollectionsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/api-tests/collections';
+};
+
+export type ListApiTestCollectionsResponses = {
+    200: ApiTestCollectionListResponseDto;
+};
+
+export type ListApiTestCollectionsResponse = ListApiTestCollectionsResponses[keyof ListApiTestCollectionsResponses];
+
+export type CreateApiTestCollectionData = {
+    body: CreateApiTestCollectionDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/api-tests/collections';
+};
+
+export type CreateApiTestCollectionResponses = {
+    201: ApiTestCollectionDetailResponseDto;
+};
+
+export type CreateApiTestCollectionResponse = CreateApiTestCollectionResponses[keyof CreateApiTestCollectionResponses];
+
+export type DeleteApiTestCollectionData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        collectionId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/collections/{collectionId}';
+};
+
+export type DeleteApiTestCollectionResponses = {
+    204: void;
+};
+
+export type DeleteApiTestCollectionResponse = DeleteApiTestCollectionResponses[keyof DeleteApiTestCollectionResponses];
+
+export type GetApiTestCollectionData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        collectionId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/collections/{collectionId}';
+};
+
+export type GetApiTestCollectionResponses = {
+    200: ApiTestCollectionDetailResponseDto;
+};
+
+export type GetApiTestCollectionResponse = GetApiTestCollectionResponses[keyof GetApiTestCollectionResponses];
+
+export type UpdateApiTestCollectionData = {
+    body: UpdateApiTestCollectionDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        collectionId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/collections/{collectionId}';
+};
+
+export type UpdateApiTestCollectionResponses = {
+    200: ApiTestCollectionDetailResponseDto;
+};
+
+export type UpdateApiTestCollectionResponse = UpdateApiTestCollectionResponses[keyof UpdateApiTestCollectionResponses];
+
+export type ListApiTestCollectionExecutionsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        collectionId: string;
+    };
+    query: {
+        limit: string;
+    };
+    url: '/api/v1/api-tests/collections/{collectionId}/executions';
+};
+
+export type ListApiTestCollectionExecutionsResponses = {
+    200: ApiTestCollectionExecutionListResponseDto;
+};
+
+export type ListApiTestCollectionExecutionsResponse = ListApiTestCollectionExecutionsResponses[keyof ListApiTestCollectionExecutionsResponses];
+
+export type RunApiTestCollectionData = {
+    body: RunApiTestCollectionDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        collectionId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/collections/{collectionId}/runs';
+};
+
+export type RunApiTestCollectionResponses = {
+    201: ApiTestRunCreateResponseDto;
+};
+
+export type RunApiTestCollectionResponse = RunApiTestCollectionResponses[keyof RunApiTestCollectionResponses];
+
+export type SetApiTestCollectionSuitesData = {
+    body: SetApiTestCollectionSuitesDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        collectionId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/collections/{collectionId}/suites';
+};
+
+export type SetApiTestCollectionSuitesResponses = {
+    200: ApiTestCollectionDetailResponseDto;
+};
+
+export type SetApiTestCollectionSuitesResponse = SetApiTestCollectionSuitesResponses[keyof SetApiTestCollectionSuitesResponses];
+
 export type ListApiTestEnvironmentsData = {
     body?: never;
     headers?: {
@@ -837,6 +1219,7 @@ export type ListApiTestRunsData = {
     query: {
         limit: string;
         suiteId?: string;
+        batchId?: string;
     };
     url: '/api/v1/api-tests/runs';
 };
@@ -861,7 +1244,7 @@ export type CreateApiTestRunsData = {
 };
 
 export type CreateApiTestRunsResponses = {
-    201: ApiTestRunListResponseDto;
+    201: ApiTestRunCreateResponseDto;
 };
 
 export type CreateApiTestRunsResponse = CreateApiTestRunsResponses[keyof CreateApiTestRunsResponses];
@@ -907,6 +1290,168 @@ export type CancelApiTestRunResponses = {
 };
 
 export type CancelApiTestRunResponse = CancelApiTestRunResponses[keyof CancelApiTestRunResponses];
+
+export type ListApiTestSchedulesData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/api-tests/schedules';
+};
+
+export type ListApiTestSchedulesResponses = {
+    200: ApiTestScheduleListResponseDto;
+};
+
+export type ListApiTestSchedulesResponse = ListApiTestSchedulesResponses[keyof ListApiTestSchedulesResponses];
+
+export type CreateApiTestScheduleData = {
+    body: CreateApiTestScheduleDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/api-tests/schedules';
+};
+
+export type CreateApiTestScheduleResponses = {
+    201: ApiTestScheduleResponseDto;
+};
+
+export type CreateApiTestScheduleResponse = CreateApiTestScheduleResponses[keyof CreateApiTestScheduleResponses];
+
+export type DeleteApiTestScheduleData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        scheduleId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/schedules/{scheduleId}';
+};
+
+export type DeleteApiTestScheduleResponses = {
+    204: void;
+};
+
+export type DeleteApiTestScheduleResponse = DeleteApiTestScheduleResponses[keyof DeleteApiTestScheduleResponses];
+
+export type GetApiTestScheduleData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        scheduleId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/schedules/{scheduleId}';
+};
+
+export type GetApiTestScheduleResponses = {
+    200: ApiTestScheduleResponseDto;
+};
+
+export type GetApiTestScheduleResponse = GetApiTestScheduleResponses[keyof GetApiTestScheduleResponses];
+
+export type UpdateApiTestScheduleData = {
+    body: UpdateApiTestScheduleDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        scheduleId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/schedules/{scheduleId}';
+};
+
+export type UpdateApiTestScheduleResponses = {
+    200: ApiTestScheduleResponseDto;
+};
+
+export type UpdateApiTestScheduleResponse = UpdateApiTestScheduleResponses[keyof UpdateApiTestScheduleResponses];
+
+export type SetApiTestScheduleEnabledData = {
+    body: SetApiTestScheduleEnabledDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        scheduleId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/schedules/{scheduleId}/enabled';
+};
+
+export type SetApiTestScheduleEnabledResponses = {
+    200: ApiTestScheduleResponseDto;
+};
+
+export type SetApiTestScheduleEnabledResponse = SetApiTestScheduleEnabledResponses[keyof SetApiTestScheduleEnabledResponses];
+
+export type RunApiTestScheduleNowData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        scheduleId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/schedules/{scheduleId}/run';
+};
+
+export type RunApiTestScheduleNowResponses = {
+    201: ApiTestRunCreateResponseDto;
+};
+
+export type RunApiTestScheduleNowResponse = RunApiTestScheduleNowResponses[keyof RunApiTestScheduleNowResponses];
+
+export type PreviewApiTestScheduleData = {
+    body: PreviewApiTestScheduleDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/api-tests/schedules/preview';
+};
+
+export type PreviewApiTestScheduleResponses = {
+    201: ApiTestSchedulePreviewResponseDto;
+};
+
+export type PreviewApiTestScheduleResponse = PreviewApiTestScheduleResponses[keyof PreviewApiTestScheduleResponses];
 
 export type ListApiTestSuitesData = {
     body?: never;

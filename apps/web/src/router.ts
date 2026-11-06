@@ -9,8 +9,9 @@ import {
 
 import MembersView from "./admin/MembersView.vue";
 import Phase2AdminView from "./admin/Phase2AdminView.vue";
-import ApiTestsView from "./api-tests/ApiTestsView.vue";
+import ApiTestBatchView from "./api-tests/ApiTestBatchView.vue";
 import ApiTestRunView from "./api-tests/ApiTestRunView.vue";
+import ApiTestsView from "./api-tests/ApiTestsView.vue";
 import AppShell from "./app/AppShell.vue";
 import HomeView from "./app/HomeView.vue";
 import WorkspaceHomeView from "./app/WorkspaceHomeView.vue";
@@ -86,6 +87,13 @@ const routes: RouteRecordRaw[] = [
         name: "api-tests",
         component: ApiTestsView,
         meta: { requiresAdmin: true, title: "接口测试" },
+      },
+      {
+        path: "api-tests/batches/:batchId",
+        name: "api-test-batch",
+        component: ApiTestBatchView,
+        props: (route) => ({ batchId: String(route.params.batchId) }),
+        meta: { requiresAdmin: true, title: "测试报告" },
       },
       {
         path: "api-tests/runs/:runId",
