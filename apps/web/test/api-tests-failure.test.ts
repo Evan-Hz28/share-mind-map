@@ -64,7 +64,7 @@ describe("parseFailure", () => {
     const view = parseFailure(ASSERTION_WITH_MESSAGE);
 
     expect(view?.kind).toBe("assertion");
-    expect(view?.label).toBe("断言不符");
+    expect(view?.label).toBe("Assertion failed");
     expect(view?.headline).toBe("REFUNDED状态应返回400, 实际返回200");
     expect(view?.location).toBe("testcases/refund/test_refund_urgency_strict.py:240");
     expect(view?.sources).toEqual([
@@ -77,13 +77,23 @@ describe("parseFailure", () => {
 
     expect(view?.kind).toBe("assertion");
     expect(view?.headline).toBe("assert 400 in [200, 404]");
-    expect(view?.detail).toBe("实际 400，期望 [200, 404]");
+    expect(view?.detail).toBe("Got 400, expected one of [200, 404]");
   });
 
   it("keeps only the server message when the assertion embeds a JSON body", () => {
     const view = parseFailure(ASSERTION_WITH_RESPONSE);
 
-    expect(view?.headline).toBe("期望状态码 200，实际 404 · route not found");
+    expect(view?.headline).toBe("Expected status 200, got 404 · route not found");
+  });
+
+  it("translates the upstream status template and keeps the business code", () => {
+    const view = parseFailure(
+      `E       AssertionError: 期望状态码 400，实际 200，响应: {"code":1001,"message":"error","details":{"businessCode":"PRODUCT_NOT_FOUND","message":"Product not found"},"path":"/api/v2/product/cart"}`,
+    );
+
+    expect(view?.headline).toBe(
+      "Expected status 400, got 200 · PRODUCT_NOT_FOUND: Product not found",
+    );
   });
 
   it("compacts a JSON body that follows 实际:", () => {
@@ -91,7 +101,9 @@ describe("parseFailure", () => {
       `E       AssertionError: 响应缺少 businessCode 字段，实际: {"code":1001,"message":"missing inventoryId","path":"/api/v3/checkout/quote"}`,
     );
 
-    expect(view?.headline).toBe("响应缺少 businessCode 字段 · missing inventoryId");
+    expect(view?.headline).toBe(
+      "Response is missing field businessCode · missing inventoryId",
+    );
   });
 
   it("classifies pytest.fail as an assertion failure", () => {
@@ -113,7 +125,7 @@ describe("parseFailure", () => {
     const view = parseFailure(DNS_FAILURE);
 
     expect(view?.kind).toBe("unreachable");
-    expect(view?.label).toBe("环境不可达");
+    expect(view?.label).toBe("Unreachable");
     expect(view?.headline).toBe("域名解析失败：mhjapi.kitarx.com");
     expect(view?.location).toBe("testcases/tawar/auction/test_trade.py:207");
     // 没有采集 exchanges 时，从 urllib3 的参数行里兜底取请求信息。

@@ -23,13 +23,14 @@ export interface FailureView {
   raw: string;
 }
 
+// 分类是技术标签，和状态列一样保留英文，避免中英混排时对不齐。
 const LABELS: Record<FailureKind, string> = {
-  assertion: "断言不符",
-  unreachable: "环境不可达",
-  timeout: "请求超时",
-  "not-run": "用例未执行",
-  "script-error": "用例代码报错",
-  unknown: "未分类",
+  assertion: "Assertion failed",
+  unreachable: "Unreachable",
+  timeout: "Timeout",
+  "not-run": "Not run",
+  "script-error": "Script error",
+  unknown: "Unknown",
 };
 
 const TAG_TYPES: Record<FailureKind, FailureView["tagType"]> = {
@@ -146,50 +147,133 @@ function classify(text: string, eLines: string[]): FailureKind {
   return "unknown";
 }
 
+/** 从响应体里提炼一句人话：优先业务错误码，其次服务端 message。 */
+function responseNote(body: Record<string, unknown>): string | null {
+  const details = body["details"];
+  if (typeof details === "string" && details !== "") return details;
+  if (details !== null && typeof details === "object") {
+    const record = details as Record<string, unknown>;
+    const code = typeof record["businessCode"] === "string" ? record["businessCode"] : null;
+    const text =
+      typeof record["message"] === "string" && record["message"] !== "error"
+        ? record["message"]
+        : null;
+    if (code !== null && text !== null) return `${code}: ${text}`;
+    if (code !== null) return code;
+    if (text !== null) return text;
+  }
+  const message = body["message"];
+  return typeof message === "string" && message !== "" && message !== "error" ? message : null;
+}
+
 /**
  * 断言消息经常把整个响应体塞进字符串，例如
- * `期望状态码 200，实际 404，响应: {"code":1001,"details":"route not found",...}`。
+ * `Expected status 200, got 404, response: {"code":1001,"details":"route not found",...}`。
  * 只留 details/message 这一句，比一长串 JSON 好读；解析失败（截断过）就保留原文。
  */
 function compactResponse(message: string): string {
-  const match = /^(.*)[:：]\s*(\{.*)$/s.exec(message);
+  // 前缀必须非贪婪，否则 JSON 内部的 `":{` 会把响应体切成两半。
+  const match = /^(.*?)[:：]\s*(\{.*)$/s.exec(message);
   const prefix = match?.[1];
   const payload = match?.[2];
   if (prefix === undefined || payload === undefined) return message;
   try {
     const body = JSON.parse(payload) as Record<string, unknown>;
-    const details = body["details"];
-    const text = typeof details === "string" && details !== "" ? details : body["message"];
-    const note = typeof text === "string" && text !== "" && text !== "error" ? text : null;
-    const head = prefix.replace(/[，,、\s]*(?:响应|实际)?\s*$/, "");
+    const note = responseNote(body);
+    const head = prefix.replace(/[，,、\s]*(?:响应|实际|response|actual|body)?\s*$/i, "");
     return note === null ? head : `${head} · ${note}`;
   } catch {
     return message;
   }
 }
 
+/**
+ * 上游 common/assertions.py 用中文模板拼断言消息。报告里只翻这些固定句式，
+ * 用例自己写的自由文本保持原样，避免逐词替换把句子改坏。
+ */
+function englishAssertion(message: string): string {
+  const text = message.replace(/\n\s*CURL:[\s\S]*$/, "").trim();
+
+  const status =
+    /^期望状态码\s*(\S+?)\s*[，,]\s*实际\s*(\S+?)\s*[，,]\s*响应\s*[:：]\s*([\s\S]*)$/.exec(text);
+  if (status !== null) {
+    return `Expected status ${status[1] ?? ""}, got ${status[2] ?? ""}, response: ${status[3] ?? ""}`;
+  }
+
+  const code =
+    /^期望业务(?:错误)?码\s*(\S+?)\s*[，,]\s*实际\s*(\S+?)(?:\s*[，,]\s*message\s*[:：]\s*([\s\S]*))?$/.exec(
+      text,
+    );
+  if (code !== null) {
+    const note = code[3]?.trim() ?? "";
+    return `Expected code ${code[1] ?? ""}, got ${code[2] ?? ""}${note === "" ? "" : `, message: ${note}`}`;
+  }
+
+  const field = /^字段\s*(\S+?)\s*期望值\s*([\s\S]*?)\s*[，,]\s*实际\s*([\s\S]*)$/.exec(text);
+  if (field !== null) {
+    return `Field ${field[1] ?? ""}: expected ${field[2] ?? ""}, got ${field[3] ?? ""}`;
+  }
+
+  const dataMissing =
+    /^data 中缺少字段\s*[:：]\s*(\S+?)\s*[，,]\s*实际字段\s*[:：]\s*([\s\S]*)$/.exec(text);
+  if (dataMissing !== null) {
+    return `Response data is missing field ${dataMissing[1] ?? ""}, actual fields: ${dataMissing[2] ?? ""}`;
+  }
+
+  const jsonMissing =
+    /^响应 JSON 中缺少字段\s*[:：]\s*(\S+?)\s*(?:[，,]\s*实际\s*[:：]\s*([\s\S]*))?$/.exec(text);
+  if (jsonMissing !== null) {
+    const actual = jsonMissing[2];
+    return `Response JSON is missing field ${jsonMissing[1] ?? ""}${actual === undefined ? "" : `, actual: ${actual}`}`;
+  }
+
+  const invalidJson =
+    /^响应不是有效 JSON\s*[，,]\s*状态码\s*(\S+?)\s*[，,]\s*响应\s*[:：]\s*([\s\S]*)$/.exec(text);
+  if (invalidJson !== null) {
+    return `Response is not valid JSON (status ${invalidJson[1] ?? ""}), body: ${invalidJson[2] ?? ""}`;
+  }
+
+  const missing =
+    /^响应缺少\s*(\S+?)\s*字段\s*(?:[，,]\s*实际\s*[:：]\s*([\s\S]*))?$/.exec(text);
+  if (missing !== null) {
+    const actual = missing[2];
+    return `Response is missing field ${missing[1] ?? ""}${actual === undefined ? "" : `, actual: ${actual}`}`;
+  }
+
+  // 兜底：用例里最常见的「期望 X，实际 Y」写法。
+  const expected = /^期望\s*([\s\S]+?)\s*[，,]\s*实际\s*([\s\S]+)$/.exec(text);
+  if (expected !== null) {
+    return `Expected ${expected[1] ?? ""}, got ${expected[2] ?? ""}`;
+  }
+
+  return text;
+}
+
 /** 断言消息通常写得最清楚，优先用它；没有消息再退回归一化后的 assert 表达式。 */
 function assertionHeadline(eLines: string[]): string {
   const message = eLines.find((line) => /^AssertionError\s*:\s*\S/.test(line));
-  if (message) return clip(compactResponse(message.replace(/^AssertionError\s*:\s*/, "")));
+  if (message) {
+    return clip(compactResponse(englishAssertion(message.replace(/^AssertionError\s*:\s*/, ""))));
+  }
   const assertion = eLines.find((line) => /^assert\b/.test(line));
-  return clip(assertion ?? eLines.at(-1) ?? "断言失败");
+  return clip(assertion ?? eLines.at(-1) ?? "Assertion failed");
 }
 
 function assertionDetail(eLines: string[], headline: string): string | null {
-  if (/实际/.test(headline)) return null;
+  // 消息里已经写了实际值，就不用再从 assert 表达式里拼一遍。
+  if (/实际|,\s*got\s/i.test(headline)) return null;
   for (const line of eLines) {
     const equals = /^assert\s+(\S+)\s*==\s*([^,\s]+)\s*(?:,|$)/.exec(line);
     const actual = equals?.[1];
     const expected = equals?.[2];
     if (actual !== undefined && expected !== undefined) {
-      return `期望 ${expected}，实际 ${actual}`;
+      return `Expected ${expected}, got ${actual}`;
     }
     const inList = /^assert\s+(\S+)\s+in\s+(.+?)\s*(?:,\s*(?:"|f["']|'|$)|$)/.exec(line);
     const actualItem = inList?.[1];
     const allowed = inList?.[2];
     if (actualItem !== undefined && allowed !== undefined) {
-      return `实际 ${actualItem}，期望 ${allowed}`;
+      return `Got ${actualItem}, expected one of ${allowed}`;
     }
   }
   return null;

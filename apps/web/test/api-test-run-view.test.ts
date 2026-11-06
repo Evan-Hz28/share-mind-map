@@ -264,8 +264,8 @@ describe("api test run items table", () => {
 
     await expandRow(0);
 
-    expect(screen.getAllByText("断言不符")).not.toHaveLength(0);
-    expect(screen.getByText("期望 200，实际 500")).toBeInTheDocument();
+    expect(screen.getAllByText("Assertion failed")).not.toHaveLength(0);
+    expect(screen.getByText("Expected 200, got 500")).toBeInTheDocument();
     expect(screen.queryByText(/AssertionError: 期望 200，实际 500/)).not.toBeInTheDocument();
   });
 

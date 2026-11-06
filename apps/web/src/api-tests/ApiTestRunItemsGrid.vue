@@ -55,7 +55,7 @@ const itemStatusTypes: Record<string, "info" | "warning" | "success" | "danger">
         <ElTag :type="itemStatusTypes[row.status] ?? 'info'">{{ row.status }}</ElTag>
       </template>
     </ElTableColumn>
-    <ElTableColumn v-if="showReason" label="失败原因" width="120">
+    <ElTableColumn v-if="showReason" label="Failure" width="150">
       <template #default="{ row }">
         <ElTag v-if="reasonOf(row).label" :type="reasonOf(row).type" size="small">
           {{ reasonOf(row).label }}
