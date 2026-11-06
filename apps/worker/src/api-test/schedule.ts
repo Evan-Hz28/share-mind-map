@@ -1,6 +1,8 @@
 import {
   ApiTestRepository,
+  groupCollectionTargets,
   newId,
+  type ApiTestRunTarget,
   type ApiTestScheduleRecord,
   type Database,
 } from "@share-mind-map/database";
@@ -20,10 +22,6 @@ interface ScheduleDependencies {
   runQueue: Queue<{ runId: string }>;
 }
 
-interface ScheduleSuite {
-  id: string;
-  path: string;
-}
 
 const SYNC_WAIT_LIMIT_MS = 10 * 60 * 1000;
 const SYNC_WAIT_INTERVAL_MS = 5_000;
@@ -41,20 +39,18 @@ function nextRunAt(schedule: ApiTestScheduleRecord): Date | null {
 }
 
 /** 目标套件可能被同步任务停用或删除，解析不到就当作无效目标处理。 */
-async function resolveSuites(
+async function resolveTargets(
   repository: ApiTestRepository,
   database: Database,
   schedule: ApiTestScheduleRecord,
-): Promise<ScheduleSuite[] | null> {
+): Promise<ApiTestRunTarget[] | null> {
   if (schedule.targetType === "suite") {
     const suite = await repository.findSuite(database, schedule.targetId);
-    return suite === null ? null : [{ id: suite.id, path: suite.path }];
+    return suite === null ? null : [{ suiteId: suite.id, path: suite.path, nodeIds: [] }];
   }
   if ((await repository.findCollection(database, schedule.targetId)) === null) return null;
-  const suites = await repository.listCollectionSuites(database, schedule.targetId);
-  return suites
-    .filter((suite) => suite.enabled)
-    .map((suite) => ({ id: suite.suiteId, path: suite.path }));
+  const items = await repository.listCollectionItems(database, schedule.targetId);
+  return groupCollectionTargets(items);
 }
 
 /** 同步任务只允许一个并发，队列里已有就直接排队等它，不要并行 reset 工作区。 */
@@ -162,26 +158,28 @@ export async function processApiTestSchedule(
     }
   }
 
-  const suites = await resolveSuites(repository, database, schedule);
-  if (suites === null) {
+  const targets = await resolveTargets(repository, database, schedule);
+  if (targets === null) {
     await fail("目标测试集或测试集合已不存在。", true);
     return;
   }
-  if (suites.length === 0) {
+  if (targets.length === 0) {
     await fail("目标里没有可执行的测试集。", true);
     return;
   }
 
   const batchId = newId();
   const collectionId = schedule.targetType === "collection" ? schedule.targetId : null;
-  for (const suite of suites) {
+  for (const target of targets) {
+    const selection =
+      target.nodeIds.length > 0 ? { path: target.path, nodeIds: target.nodeIds } : { path: target.path };
     const run = await repository.createRun(database, {
       id: newId(),
-      suiteId: suite.id,
+      suiteId: target.suiteId,
       environmentId: schedule.environmentId,
       requestedBy: createdBy,
-      mode: "suite",
-      selection: { path: suite.path },
+      mode: target.nodeIds.length > 0 ? "selected" : "suite",
+      selection,
       batchId,
       collectionId,
     });

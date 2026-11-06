@@ -95,6 +95,32 @@ function suiteDirectory(config: WorkerConfig, path: string): string | null {
   return directory.startsWith(`${root}${sep}`) ? directory : null;
 }
 
+/** run.selection 里存的是仓库相对 node id；老记录没有 nodeIds，按整个测试集执行。 */
+function selectionNodeIds(selection: unknown): string[] {
+  if (selection === null || typeof selection !== "object") return [];
+  const value = (selection as Record<string, unknown>)["nodeIds"];
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && item !== "");
+}
+
+/**
+ * 所选用例必须落在测试集目录内。node id 直接变成 pytest 参数，不能接受任意路径，
+ * 否则等于给了执行仓库里任何文件的能力。
+ */
+function pytestTargets(suitePath: string, nodeIds: string[]): string[] | null {
+  for (const nodeId of nodeIds) {
+    if (nodeId.startsWith("/") || nodeId.includes("..") || /[\0\n\r]/.test(nodeId)) return null;
+    if (nodeId !== suitePath && !nodeId.startsWith(`${suitePath}/`)) return null;
+  }
+  // 文件行已经覆盖了它的函数行；历史数据里两者可能并存，这里再兜一次底。
+  const files = new Set(nodeIds.filter((nodeId) => !nodeId.includes("::")));
+  const pruned = nodeIds.filter((nodeId) => {
+    const separator = nodeId.indexOf("::");
+    return separator === -1 || !files.has(nodeId.slice(0, separator));
+  });
+  return pruned.length > 0 ? pruned : [suitePath];
+}
+
 /** 直接读 .git/HEAD，避免为一次只读操作再 fork 一个 git 进程。 */
 async function currentCommit(root: string): Promise<string | null> {
   try {
@@ -140,6 +166,11 @@ export async function processApiTestRun(
     );
     return;
   }
+  const targets = pytestTargets(run.suitePath, selectionNodeIds(run.selection));
+  if (targets === null) {
+    await repository.finishRun(database, run.id, "failed", "所选用例不在测试集目录内。");
+    return;
+  }
   if (!(await repository.markRunning(database, run.id))) return;
   await repository.setRunRepoCommit(database, run.id, await currentCommit(config.apiTestRoot));
 
@@ -148,7 +179,7 @@ export async function processApiTestRun(
     [
       "-m",
       "pytest",
-      run.suitePath,
+      ...targets,
       "-q",
       `--timeout=${String(config.apiTestCaseTimeoutSeconds)}`,
       "-p",

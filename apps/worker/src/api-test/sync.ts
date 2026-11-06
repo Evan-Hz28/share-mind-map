@@ -13,11 +13,22 @@ export interface ApiTestSyncJob {
 
 const GIT_TIMEOUT_MS = 5 * 60 * 1000;
 const MESSAGE_LIMIT = 4 * 1024;
+// 6000+ 条 NDJSON 大约 1 MB，留足余量；超过上限说明扫描结果异常，宁可放弃本轮编目。
+const CASE_SCAN_TIMEOUT_MS = 2 * 60 * 1000;
+const CASE_OUTPUT_LIMIT = 8 * 1024 * 1024;
 
 interface CommandResult {
   code: number | null;
   stdout: string;
   stderr: string;
+}
+
+interface CollectedCase {
+  file_path: string;
+  node_id: string;
+  name: string;
+  kind: "file" | "case";
+  ordinal: number;
 }
 
 /** 同步只做 fetch + reset，工作副本是一次性的，所以永远不接受本地改动。 */
@@ -98,6 +109,90 @@ async function containsTests(directory: string): Promise<boolean> {
   return false;
 }
 
+/**
+ * 静态扫描用例清单。扫描失败不阻断同步：返回 null，本轮只更新套件、不动已有用例。
+ * 这里不能复用 `run`，因为 python 需要 PYTHONPATH 才能 import 镜像里的 harness。
+ */
+function scanCases(config: WorkerConfig, root: string): Promise<CollectedCase[] | null> {
+  return new Promise((resolve) => {
+    const child = spawn(config.apiTestPython, ["-m", "harness.collect_cases", "."], {
+      cwd: root,
+      env: {
+        PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+        HOME: process.env.HOME ?? "/home/node",
+        LANG: "C.UTF-8",
+        PYTHONDONTWRITEBYTECODE: "1",
+        PYTHONPATH: `${config.apiTestHarnessRoot}:${root}`,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let overflow = false;
+    child.stdout.on("data", (chunk: Buffer) => {
+      if (overflow) return;
+      stdout += chunk.toString("utf8");
+      if (stdout.length > CASE_OUTPUT_LIMIT) {
+        overflow = true;
+        child.kill("SIGKILL");
+      }
+    });
+    child.stderr.resume();
+
+    const timer = setTimeout(() => child.kill("SIGKILL"), CASE_SCAN_TIMEOUT_MS);
+    child.once("error", () => {
+      clearTimeout(timer);
+      resolve(null);
+    });
+    child.once("close", (code) => {
+      clearTimeout(timer);
+      if (overflow || code !== 0) {
+        resolve(null);
+        return;
+      }
+      const cases: CollectedCase[] = [];
+      for (const line of stdout.split("\n")) {
+        if (line.trim() === "") continue;
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(line) as unknown;
+        } catch {
+          resolve(null);
+          return;
+        }
+        if (!isCollectedCase(parsed)) continue;
+        cases.push(parsed);
+      }
+      resolve(cases);
+    });
+  });
+}
+
+function isCollectedCase(value: unknown): value is CollectedCase {
+  if (value === null || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record["file_path"] === "string" &&
+    typeof record["node_id"] === "string" &&
+    typeof record["name"] === "string" &&
+    (record["kind"] === "file" || record["kind"] === "case") &&
+    typeof record["ordinal"] === "number"
+  );
+}
+
+/** 用例的 node_id 以测试集目录开头；嵌套目录取最长匹配，避免误挂到外层套件。 */
+export function suiteForNode<T extends { path: string }>(
+  nodeId: string,
+  suites: readonly T[],
+): T | null {
+  let matched: T | null = null;
+  for (const suite of suites) {
+    if (nodeId !== suite.path && !nodeId.startsWith(`${suite.path}/`)) continue;
+    if (matched === null || suite.path.length > matched.path.length) matched = suite;
+  }
+  return matched;
+}
+
 /** key 只用于内部引用和排序，重复风险交给路径唯一索引，加摘要后缀避免跨路径撞车。 */
 export function suiteKey(path: string): string {
   const slug = path
@@ -136,6 +231,8 @@ export async function processApiTestSync(
       changedFiles: 0,
       suitesAdded: 0,
       suitesRemoved: 0,
+      casesAdded: 0,
+      casesRemoved: 0,
       requirementsChanged: false,
       message: tail(message),
     });
@@ -229,6 +326,32 @@ export async function processApiTestSync(
     found.map((suite) => suite.path),
   );
 
+  // 用例编目是附加信息：扫描失败只影响选择器，不影响套件同步和已有执行。
+  let casesAdded = 0;
+  let casesRemoved = 0;
+  const collected = await scanCases(config, repo);
+  if (collected !== null) {
+    const suites = await repository.listSuites(database);
+    const rows = [];
+    for (const item of collected) {
+      const suite = suiteForNode(item.node_id, suites);
+      if (suite === null) continue;
+      rows.push({
+        id: newId(),
+        suiteId: suite.id,
+        nodeId: item.node_id,
+        filePath: item.file_path,
+        name: item.name,
+        kind: item.kind,
+        ordinal: item.ordinal,
+        commit,
+      });
+    }
+    casesAdded = await repository.upsertCases(database, rows);
+    // 只有完整扫描成功才停用旧用例，避免一次临时失败把整个选择器清空。
+    casesRemoved = await repository.disableCasesMissing(database, commit);
+  }
+
   let requirementsChanged = false;
   try {
     const requirements = await readFile(join(repo, "requirements.txt"), "utf8");
@@ -247,6 +370,8 @@ export async function processApiTestSync(
     changedFiles,
     suitesAdded,
     suitesRemoved,
+    casesAdded,
+    casesRemoved,
     requirementsChanged,
     message: requirementsChanged
       ? "上游依赖有变化，需要重新构建 worker 镜像后再执行用例。"

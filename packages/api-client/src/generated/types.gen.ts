@@ -66,16 +66,30 @@ export type ApiTestBatchTotalsDto = {
     totalCount: number;
 };
 
+export type ApiTestCaseListResponseDto = {
+    cases: Array<ApiTestCaseResponseDto>;
+};
+
+export type ApiTestCaseResponseDto = {
+    filePath: string;
+    id: string;
+    kind: 'case' | 'file';
+    name: string;
+    nodeId: string;
+    ordinal: number;
+    suiteId: string;
+};
+
 export type ApiTestCollectionDetailResponseDto = {
     caseCount: number;
     createdAt: string;
     description: string;
     id: string;
+    items: Array<ApiTestCollectionItemResponseDto>;
     lastRunAt?: string | null;
     lastRunStatus?: string | null;
     name: string;
     suiteCount: number;
-    suites: Array<ApiTestCollectionSuiteResponseDto>;
     updatedAt: string;
 };
 
@@ -96,6 +110,34 @@ export type ApiTestCollectionExecutionResponseDto = {
     totalCount: number;
 };
 
+export type ApiTestCollectionItemInputDto = {
+    id: string;
+    type: 'case' | 'suite';
+};
+
+export type ApiTestCollectionItemResponseDto = {
+    caseEnabled?: boolean | null;
+    caseId?: string | null;
+    caseKind?: 'case' | 'file';
+    caseName?: string | null;
+    caseNodeId?: string | null;
+    failedCount: number;
+    id: string;
+    lastRunAt?: string | null;
+    lastRunId?: string | null;
+    lastRunStatus?: string | null;
+    passedCount: number;
+    position: number;
+    skippedCount: number;
+    suiteEnabled: boolean;
+    suiteId: string;
+    suiteKey: string;
+    suiteName: string;
+    suitePath: string;
+    totalCount: number;
+    type: 'case' | 'suite';
+};
+
 export type ApiTestCollectionListResponseDto = {
     collections: Array<ApiTestCollectionResponseDto>;
 };
@@ -110,22 +152,6 @@ export type ApiTestCollectionResponseDto = {
     name: string;
     suiteCount: number;
     updatedAt: string;
-};
-
-export type ApiTestCollectionSuiteResponseDto = {
-    enabled: boolean;
-    failedCount: number;
-    key: string;
-    lastRunAt?: string | null;
-    lastRunId?: string | null;
-    lastRunStatus?: string | null;
-    name: string;
-    passedCount: number;
-    path: string;
-    position: number;
-    skippedCount: number;
-    suiteId: string;
-    totalCount: number;
 };
 
 export type ApiTestEnvironmentListResponseDto = {
@@ -147,6 +173,7 @@ export type ApiTestRunCreateResponseDto = {
 export type ApiTestRunDetailResponseDto = {
     batchId?: string | null;
     cancelRequested: boolean;
+    collectionId?: string | null;
     createdAt: string;
     environmentId: string;
     environmentKey: string;
@@ -158,6 +185,9 @@ export type ApiTestRunDetailResponseDto = {
     items: Array<ApiTestRunItemResponseDto>;
     passedCount: number;
     repoCommit?: string | null;
+    selection?: {
+        [key: string]: unknown;
+    } | null;
     skippedCount: number;
     startedAt?: string | null;
     status: string;
@@ -190,6 +220,7 @@ export type ApiTestRunListResponseDto = {
 export type ApiTestRunResponseDto = {
     batchId?: string | null;
     cancelRequested: boolean;
+    collectionId?: string | null;
     createdAt: string;
     environmentId: string;
     environmentKey: string;
@@ -200,6 +231,9 @@ export type ApiTestRunResponseDto = {
     id: string;
     passedCount: number;
     repoCommit?: string | null;
+    selection?: {
+        [key: string]: unknown;
+    } | null;
     skippedCount: number;
     startedAt?: string | null;
     status: string;
@@ -252,6 +286,8 @@ export type ApiTestSuiteListResponseDto = {
 };
 
 export type ApiTestSuiteResponseDto = {
+    caseCount: number;
+    fileCount: number;
     id: string;
     key: string;
     name: string;
@@ -264,6 +300,8 @@ export type ApiTestSyncListResponseDto = {
 
 export type ApiTestSyncResponseDto = {
     branch: string;
+    casesAdded: number;
+    casesRemoved: number;
     changedFiles: number;
     commitSha?: string | null;
     createdAt: string;
@@ -309,13 +347,14 @@ export type ChangePasswordDto = {
 
 export type CreateApiTestCollectionDto = {
     description?: string;
+    items: Array<ApiTestCollectionItemInputDto>;
     name: string;
-    suiteIds: Array<string>;
 };
 
 export type CreateApiTestRunDto = {
+    caseIds?: Array<string>;
     environmentId: string;
-    suiteIds: Array<string>;
+    suiteIds?: Array<string>;
 };
 
 export type CreateApiTestScheduleDto = {
@@ -635,8 +674,8 @@ export type SessionResponseDto = {
     user: SafeUserDto;
 };
 
-export type SetApiTestCollectionSuitesDto = {
-    suiteIds: Array<string>;
+export type SetApiTestCollectionItemsDto = {
+    items: Array<ApiTestCollectionItemInputDto>;
 };
 
 export type SetApiTestScheduleEnabledDto = {
@@ -1022,6 +1061,27 @@ export type CancelApiTestBatchResponses = {
 
 export type CancelApiTestBatchResponse = CancelApiTestBatchResponses[keyof CancelApiTestBatchResponses];
 
+export type ListApiTestCasesData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path?: never;
+    query: {
+        suiteId: string;
+    };
+    url: '/api/v1/api-tests/cases';
+};
+
+export type ListApiTestCasesResponses = {
+    200: ApiTestCaseListResponseDto;
+};
+
+export type ListApiTestCasesResponse = ListApiTestCasesResponses[keyof ListApiTestCasesResponses];
+
 export type ListApiTestCollectionsData = {
     body?: never;
     headers?: {
@@ -1146,6 +1206,27 @@ export type ListApiTestCollectionExecutionsResponses = {
 
 export type ListApiTestCollectionExecutionsResponse = ListApiTestCollectionExecutionsResponses[keyof ListApiTestCollectionExecutionsResponses];
 
+export type SetApiTestCollectionItemsData = {
+    body: SetApiTestCollectionItemsDto;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        collectionId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/collections/{collectionId}/items';
+};
+
+export type SetApiTestCollectionItemsResponses = {
+    200: ApiTestCollectionDetailResponseDto;
+};
+
+export type SetApiTestCollectionItemsResponse = SetApiTestCollectionItemsResponses[keyof SetApiTestCollectionItemsResponses];
+
 export type RunApiTestCollectionData = {
     body: RunApiTestCollectionDto;
     headers?: {
@@ -1166,27 +1247,6 @@ export type RunApiTestCollectionResponses = {
 };
 
 export type RunApiTestCollectionResponse = RunApiTestCollectionResponses[keyof RunApiTestCollectionResponses];
-
-export type SetApiTestCollectionSuitesData = {
-    body: SetApiTestCollectionSuitesDto;
-    headers?: {
-        /**
-         * Optional caller-provided request correlation identifier.
-         */
-        'X-Request-ID'?: string;
-    };
-    path: {
-        collectionId: string;
-    };
-    query?: never;
-    url: '/api/v1/api-tests/collections/{collectionId}/suites';
-};
-
-export type SetApiTestCollectionSuitesResponses = {
-    200: ApiTestCollectionDetailResponseDto;
-};
-
-export type SetApiTestCollectionSuitesResponse = SetApiTestCollectionSuitesResponses[keyof SetApiTestCollectionSuitesResponses];
 
 export type ListApiTestEnvironmentsData = {
     body?: never;

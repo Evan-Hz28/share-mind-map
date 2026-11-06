@@ -31,13 +31,14 @@ import { SessionGuard } from "../common/guards/session.guard.js";
 import { ApiTestsService } from "./api-tests.service.js";
 import {
   ApiTestBatchResponseDto,
+  ApiTestCaseListResponseDto,
   ApiTestCollectionDetailResponseDto,
   ApiTestCollectionExecutionListResponseDto,
   ApiTestCollectionListResponseDto,
   ApiTestEnvironmentListResponseDto,
   CreateApiTestCollectionDto,
   RunApiTestCollectionDto,
-  SetApiTestCollectionSuitesDto,
+  SetApiTestCollectionItemsDto,
   UpdateApiTestCollectionDto,
   ApiTestRunCreateResponseDto,
   ApiTestRunDetailResponseDto,
@@ -71,6 +72,17 @@ export class ApiTestsController {
     return { suites: await this.apiTests.listSuites() };
   }
 
+  @Get("cases")
+  @ApiCookieAuth("sessionCookie")
+  @ApiOperation({ operationId: "listApiTestCases" })
+  @ApiQuery({ name: "suiteId", required: true, type: String, format: "uuid" })
+  @ApiResponse({ status: 200, type: ApiTestCaseListResponseDto })
+  public async listCases(
+    @Query("suiteId", new ParseUUIDPipe({ version: "7" })) suiteId: string,
+  ): Promise<ApiTestCaseListResponseDto> {
+    return { cases: await this.apiTests.listCases(suiteId) };
+  }
+
   @Get("collections")
   @ApiCookieAuth("sessionCookie")
   @ApiOperation({ operationId: "listApiTestCollections" })
@@ -90,7 +102,7 @@ export class ApiTestsController {
     return this.apiTests.createCollection(getAuthContext(request), {
       name: input.name,
       description: input.description ?? "",
-      suiteIds: input.suiteIds,
+      items: input.items,
     });
   }
 
@@ -129,15 +141,15 @@ export class ApiTestsController {
     await this.apiTests.deleteCollection(collectionId);
   }
 
-  @Put("collections/:collectionId/suites")
+  @Put("collections/:collectionId/items")
   @ApiSecurity({ sessionCookie: [], csrfToken: [] })
-  @ApiOperation({ operationId: "setApiTestCollectionSuites" })
+  @ApiOperation({ operationId: "setApiTestCollectionItems" })
   @ApiResponse({ status: 200, type: ApiTestCollectionDetailResponseDto })
-  public setCollectionSuites(
+  public setCollectionItems(
     @Param("collectionId", new ParseUUIDPipe({ version: "7" })) collectionId: string,
-    @Body() input: SetApiTestCollectionSuitesDto,
+    @Body() input: SetApiTestCollectionItemsDto,
   ): Promise<ApiTestCollectionDetailResponseDto> {
-    return this.apiTests.setCollectionSuites(collectionId, input.suiteIds);
+    return this.apiTests.setCollectionItems(collectionId, input.items);
   }
 
   @Post("collections/:collectionId/runs")

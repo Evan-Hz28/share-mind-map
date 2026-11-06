@@ -4,7 +4,12 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { discoverSuites, suiteKey, type DiscoveredSuite } from "../src/api-test/sync.js";
+import {
+  discoverSuites,
+  suiteForNode,
+  suiteKey,
+  type DiscoveredSuite,
+} from "../src/api-test/sync.js";
 
 const created: string[] = [];
 
@@ -57,6 +62,24 @@ describe("api test repository discovery", () => {
     await discoverSuites(root, found);
 
     expect(found.map((suite) => suite.path)).toEqual(["testcases/kaka"]);
+  });
+
+  it("attaches each node id to the longest matching suite", () => {
+    const suites = [
+      { path: "testcases/checkout" },
+      { path: "testcases/checkout/preorder" },
+      { path: "testcases/kaka" },
+    ];
+
+    expect(suiteForNode("testcases/checkout/test_order.py", suites)?.path).toBe(
+      "testcases/checkout",
+    );
+    // 子目录 fixture 文件不能误挂到外层套件。
+    expect(
+      suiteForNode("testcases/checkout/preorder/test_preorder.py::TestPay::test_ok", suites)?.path,
+    ).toBe("testcases/checkout/preorder");
+    // 前缀相同但不是子目录的不算匹配。
+    expect(suiteForNode("testcases/checkout2/test_x.py", suites)).toBeNull();
   });
 
   it("builds a stable key that survives non-ascii paths", () => {

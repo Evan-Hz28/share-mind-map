@@ -51,6 +51,8 @@ export const errorCatalog = {
   IMPORT_FILE_TOO_LARGE: { status: 413, message: "导入文件超过 20 MB 限制。" },
   EXPORT_NOT_FOUND: { status: 404, message: "导出任务不存在。" },
   API_TEST_SUITE_NOT_FOUND: { status: 404, message: "接口测试套件不存在。" },
+  API_TEST_CASE_NOT_FOUND: { status: 404, message: "接口测试用例不存在或已失效。" },
+  API_TEST_RUN_TARGET_REQUIRED: { status: 400, message: "请至少选择一个测试集或用例。" },
   API_TEST_ENVIRONMENT_NOT_FOUND: { status: 404, message: "接口测试环境不存在。" },
   API_TEST_RUN_NOT_FOUND: { status: 404, message: "接口测试执行记录不存在。" },
   API_TEST_RUN_STATE_CONFLICT: { status: 409, message: "当前执行状态不允许此操作。" },

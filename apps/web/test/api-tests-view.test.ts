@@ -8,8 +8,43 @@ import ApiTestsView from "../src/api-tests/ApiTestsView.vue";
 import { jsonResponse } from "./helpers.js";
 
 const suites = [
-  { id: "suite-auth", key: "auth", name: "v3 基础", path: "testcases/auth" },
-  { id: "suite-cart", key: "cart", name: "购物车", path: "testcases/cart" },
+  {
+    id: "suite-auth",
+    key: "auth",
+    name: "v3 基础",
+    path: "testcases/auth",
+    caseCount: 120,
+    fileCount: 8,
+  },
+  {
+    id: "suite-cart",
+    key: "cart",
+    name: "购物车",
+    path: "testcases/cart",
+    caseCount: 68,
+    fileCount: 5,
+  },
+];
+
+const suiteCases = [
+  {
+    id: "case-auth-file",
+    suiteId: "suite-auth",
+    nodeId: "testcases/auth/test_login.py",
+    filePath: "testcases/auth/test_login.py",
+    name: "test_login.py",
+    kind: "file",
+    ordinal: 0,
+  },
+  {
+    id: "case-auth-login",
+    suiteId: "suite-auth",
+    nodeId: "testcases/auth/test_login.py::test_login",
+    filePath: "testcases/auth/test_login.py",
+    name: "test_login",
+    kind: "case",
+    ordinal: 1,
+  },
 ];
 
 const collectionId = "01900000-0000-7000-8000-00000000c011";
@@ -69,39 +104,58 @@ const collection = {
   updatedAt: "2026-10-29T11:14:45Z",
 };
 
+function suiteMember(
+  id: string,
+  suiteId: string,
+  suiteName: string,
+  path: string,
+  position: number,
+  overrides: Partial<Record<string, unknown>> = {},
+): Record<string, unknown> {
+  return {
+    id,
+    position,
+    type: "suite",
+    suiteId,
+    suiteKey: suiteId.replace("suite-", ""),
+    suiteName,
+    suitePath: path,
+    suiteEnabled: true,
+    caseId: null,
+    caseNodeId: null,
+    caseName: null,
+    caseKind: null,
+    caseEnabled: null,
+    lastRunId: null,
+    lastRunStatus: null,
+    totalCount: 0,
+    passedCount: 0,
+    failedCount: 0,
+    skippedCount: 0,
+    lastRunAt: null,
+    ...overrides,
+  };
+}
+
 const collectionDetail = {
   ...collection,
-  suites: [
-    {
-      suiteId: "suite-auth",
-      key: "auth",
-      name: "v3 基础",
-      path: "testcases/auth",
-      enabled: true,
-      position: 0,
+  items: [
+    suiteMember("member-auth", "suite-auth", "v3 基础", "testcases/auth", 0, {
       lastRunId: "run-auth-0001",
       lastRunStatus: "succeeded",
       totalCount: 128,
       passedCount: 126,
       failedCount: 2,
-      skippedCount: 0,
       lastRunAt: "2026-10-29T11:14:45Z",
-    },
-    {
-      suiteId: "suite-cart",
-      key: "cart",
-      name: "购物车",
-      path: "testcases/cart",
-      enabled: true,
-      position: 1,
+    }),
+    suiteMember("member-cart", "suite-cart", "购物车", "testcases/cart", 1, {
       lastRunId: "run-cart-0001",
       lastRunStatus: "failed",
       totalCount: 72,
       passedCount: 70,
       failedCount: 2,
-      skippedCount: 0,
       lastRunAt: "2026-10-29T11:14:45Z",
-    },
+    }),
   ],
 };
 
@@ -165,7 +219,7 @@ async function requestBody(
   return JSON.parse(typeof raw === "string" ? raw : "{}");
 }
 
-function stubApi(): void {
+function stubApi(syncs: unknown[] = [], collections: unknown[] = [collection]): void {
   // api-client 的请求拦截器返回 Request 对象，fetch 收到的是 Request 而不是 (url, init)，
   // 所以 method 和 body 都要从 Request 上取。
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -208,7 +262,7 @@ function stubApi(): void {
     if (path.includes("/api-tests/collections")) {
       const isCollectionRoot = path.endsWith("/api-tests/collections");
       if (isCollectionRoot && method === "GET") {
-        return jsonResponse({ collections: [collection] });
+        return jsonResponse({ collections });
       }
       if (isCollectionRoot && method === "POST") {
         const body = await requestBody(request, init);
@@ -232,7 +286,7 @@ function stubApi(): void {
           201,
         );
       }
-      if (path.endsWith("/suites") && method === "PUT") {
+      if (path.endsWith("/items") && method === "PUT") {
         const body = await requestBody(request, init);
         createdBodies.push({ path, body });
         return jsonResponse(collectionDetail);
@@ -255,6 +309,7 @@ function stubApi(): void {
         201,
       );
     }
+    if (path.includes("/api-tests/cases")) return jsonResponse({ cases: suiteCases });
     if (path.includes("/api-tests/suites")) return jsonResponse({ suites });
     if (path.includes("/api-tests/environments")) {
       return jsonResponse({
@@ -268,7 +323,7 @@ function stubApi(): void {
         ],
       });
     }
-    if (path.includes("/api-tests/syncs")) return jsonResponse({ syncs: [] });
+    if (path.includes("/api-tests/syncs")) return jsonResponse({ syncs });
     if (path.includes("/api-tests/runs")) {
       const suiteId = url.searchParams.get("suiteId") ?? "";
       return jsonResponse({ runs: runsBySuite[suiteId] ?? [] });
@@ -315,7 +370,41 @@ beforeEach(() => {
   stubApi();
 });
 
+function sync(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
+  return {
+    id: "sync-0001",
+    status: "succeeded",
+    commitSha: "c261cf0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    suitesAdded: 2,
+    suitesRemoved: 0,
+    casesAdded: 0,
+    casesRemoved: 0,
+    message: null,
+    createdAt: "2026-11-05T13:13:17Z",
+    finishedAt: "2026-11-05T13:13:17Z",
+    ...overrides,
+  };
+}
+
 describe("api tests suites view", () => {
+  it("shows the latest sync as a compact chip in the header", async () => {
+    stubApi([sync()]);
+    await renderView();
+
+    expect(await screen.findByText(/已同步 · /)).toBeInTheDocument();
+    // 明细只在 tooltip 里，正文不再平铺 sha 和时间。
+    expect(screen.queryByText(/仓库 已同步/)).not.toBeInTheDocument();
+  });
+
+  it("opens the failure detail from the sync chip", async () => {
+    stubApi([sync({ status: "failed", message: "git clone 失败：远端不可达" })]);
+    await renderView();
+
+    await userEvent.click(await screen.findByRole("button", { name: /同步失败/ }));
+
+    expect(await screen.findByText("git clone 失败：远端不可达")).toBeInTheDocument();
+  });
+
   it("shows the latest run of the selected suite on the overview tab", async () => {
     await renderView();
 
@@ -363,6 +452,26 @@ describe("api tests suites view", () => {
     });
   });
 
+  it("runs the checked cases from the case tree", async () => {
+    const router = await renderView();
+    await screen.findByText(/run-aut/);
+
+    await userEvent.click(screen.getByRole("button", { name: /^用例（/ }));
+    // 文件默认收起，先展开才能勾选里面的函数。
+    expect(screen.queryByRole("checkbox", { name: "test_login" })).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: "展开 test_login.py" }));
+    await userEvent.click(await screen.findByRole("checkbox", { name: "test_login" }));
+    await userEvent.click(screen.getByRole("button", { name: "执行所选用例" }));
+
+    await waitFor(() => {
+      expect(router.currentRoute.value.name).toBe("api-test-batch");
+    });
+    expect(createdBodies[0]?.body).toEqual({
+      caseIds: ["case-auth-login"],
+      environmentId: "environment-api",
+    });
+  });
+
   it("filters the suite list by the search box", async () => {
     await renderView();
     await screen.findByText(/run-aut/);
@@ -384,6 +493,15 @@ describe("api tests collections view", () => {
     expect(screen.getByText("testcases/auth")).toBeInTheDocument();
   });
 
+  it("leaves the collection list free of placeholder text and counts", async () => {
+    stubApi([], [{ ...collection, description: "", suiteCount: 321 }]);
+    await renderView();
+    await openCollectionsTab();
+
+    expect(screen.queryByText("—")).not.toBeInTheDocument();
+    expect(screen.queryByText("321")).not.toBeInTheDocument();
+  });
+
   it("creates a collection from the header dialog", async () => {
     await renderView();
     await openCollectionsTab();
@@ -398,7 +516,7 @@ describe("api tests collections view", () => {
     await waitFor(() => {
       expect(createdBodies).toHaveLength(1);
     });
-    expect(createdBodies[0]?.body).toMatchObject({ name: "回归集合", suiteIds: [] });
+    expect(createdBodies[0]?.body).toMatchObject({ name: "回归集合", items: [] });
   });
 
   it("executes the selected collection as one batch", async () => {

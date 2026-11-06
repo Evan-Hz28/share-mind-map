@@ -221,6 +221,59 @@
         ],
         "type": "object"
       },
+      "ApiTestCaseListResponseDto": {
+        "properties": {
+          "cases": {
+            "items": {
+              "$ref": "#/components/schemas/ApiTestCaseResponseDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "cases"
+        ],
+        "type": "object"
+      },
+      "ApiTestCaseResponseDto": {
+        "properties": {
+          "filePath": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "case",
+              "file"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "ordinal": {
+            "type": "number"
+          },
+          "suiteId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filePath",
+          "id",
+          "kind",
+          "name",
+          "nodeId",
+          "ordinal",
+          "suiteId"
+        ],
+        "type": "object"
+      },
       "ApiTestCollectionDetailResponseDto": {
         "properties": {
           "caseCount": {
@@ -235,6 +288,12 @@
           },
           "id": {
             "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiTestCollectionItemResponseDto"
+            },
+            "type": "array"
           },
           "lastRunAt": {
             "format": "date-time",
@@ -251,12 +310,6 @@
           "suiteCount": {
             "type": "number"
           },
-          "suites": {
-            "items": {
-              "$ref": "#/components/schemas/ApiTestCollectionSuiteResponseDto"
-            },
-            "type": "array"
-          },
           "updatedAt": {
             "format": "date-time",
             "type": "string"
@@ -267,9 +320,9 @@
           "createdAt",
           "description",
           "id",
+          "items",
           "name",
           "suiteCount",
-          "suites",
           "updatedAt"
         ],
         "type": "object"
@@ -339,6 +392,124 @@
         ],
         "type": "object"
       },
+      "ApiTestCollectionItemInputDto": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "case",
+              "suite"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object"
+      },
+      "ApiTestCollectionItemResponseDto": {
+        "properties": {
+          "caseEnabled": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "caseId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "caseKind": {
+            "enum": [
+              "case",
+              "file"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "caseName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "caseNodeId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "failedCount": {
+            "type": "number"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lastRunAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "lastRunId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "lastRunStatus": {
+            "nullable": true,
+            "type": "string"
+          },
+          "passedCount": {
+            "type": "number"
+          },
+          "position": {
+            "type": "number"
+          },
+          "skippedCount": {
+            "type": "number"
+          },
+          "suiteEnabled": {
+            "type": "boolean"
+          },
+          "suiteId": {
+            "type": "string"
+          },
+          "suiteKey": {
+            "type": "string"
+          },
+          "suiteName": {
+            "type": "string"
+          },
+          "suitePath": {
+            "type": "string"
+          },
+          "totalCount": {
+            "type": "number"
+          },
+          "type": {
+            "enum": [
+              "case",
+              "suite"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "failedCount",
+          "id",
+          "passedCount",
+          "position",
+          "skippedCount",
+          "suiteEnabled",
+          "suiteId",
+          "suiteKey",
+          "suiteName",
+          "suitePath",
+          "totalCount",
+          "type"
+        ],
+        "type": "object"
+      },
       "ApiTestCollectionListResponseDto": {
         "properties": {
           "collections": {
@@ -396,66 +567,6 @@
           "name",
           "suiteCount",
           "updatedAt"
-        ],
-        "type": "object"
-      },
-      "ApiTestCollectionSuiteResponseDto": {
-        "properties": {
-          "enabled": {
-            "type": "boolean"
-          },
-          "failedCount": {
-            "type": "number"
-          },
-          "key": {
-            "type": "string"
-          },
-          "lastRunAt": {
-            "format": "date-time",
-            "nullable": true,
-            "type": "string"
-          },
-          "lastRunId": {
-            "nullable": true,
-            "type": "string"
-          },
-          "lastRunStatus": {
-            "nullable": true,
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "passedCount": {
-            "type": "number"
-          },
-          "path": {
-            "type": "string"
-          },
-          "position": {
-            "type": "number"
-          },
-          "skippedCount": {
-            "type": "number"
-          },
-          "suiteId": {
-            "type": "string"
-          },
-          "totalCount": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "enabled",
-          "failedCount",
-          "key",
-          "name",
-          "passedCount",
-          "path",
-          "position",
-          "skippedCount",
-          "suiteId",
-          "totalCount"
         ],
         "type": "object"
       },
@@ -525,6 +636,11 @@
           "cancelRequested": {
             "type": "boolean"
           },
+          "collectionId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -565,6 +681,10 @@
           "repoCommit": {
             "nullable": true,
             "type": "string"
+          },
+          "selection": {
+            "nullable": true,
+            "type": "object"
           },
           "skippedCount": {
             "type": "number"
@@ -676,6 +796,11 @@
           "cancelRequested": {
             "type": "boolean"
           },
+          "collectionId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -710,6 +835,10 @@
           "repoCommit": {
             "nullable": true,
             "type": "string"
+          },
+          "selection": {
+            "nullable": true,
+            "type": "object"
           },
           "skippedCount": {
             "type": "number"
@@ -906,6 +1035,12 @@
       },
       "ApiTestSuiteResponseDto": {
         "properties": {
+          "caseCount": {
+            "type": "number"
+          },
+          "fileCount": {
+            "type": "number"
+          },
           "id": {
             "type": "string"
           },
@@ -920,6 +1055,8 @@
           }
         },
         "required": [
+          "caseCount",
+          "fileCount",
           "id",
           "key",
           "name",
@@ -945,6 +1082,12 @@
         "properties": {
           "branch": {
             "type": "string"
+          },
+          "casesAdded": {
+            "type": "number"
+          },
+          "casesRemoved": {
+            "type": "number"
           },
           "changedFiles": {
             "type": "number"
@@ -1000,6 +1143,8 @@
         },
         "required": [
           "branch",
+          "casesAdded",
+          "casesRemoved",
           "changedFiles",
           "createdAt",
           "id",
@@ -1119,27 +1264,33 @@
             "maxLength": 500,
             "type": "string"
           },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiTestCollectionItemInputDto"
+            },
+            "type": "array"
+          },
           "name": {
             "maxLength": 100,
             "minLength": 1,
             "type": "string"
-          },
-          "suiteIds": {
-            "items": {
-              "format": "uuid",
-              "type": "string"
-            },
-            "type": "array"
           }
         },
         "required": [
-          "name",
-          "suiteIds"
+          "items",
+          "name"
         ],
         "type": "object"
       },
       "CreateApiTestRunDto": {
         "properties": {
+          "caseIds": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
           "environmentId": {
             "format": "uuid",
             "type": "string"
@@ -1153,8 +1304,7 @@
           }
         },
         "required": [
-          "environmentId",
-          "suiteIds"
+          "environmentId"
         ],
         "type": "object"
       },
@@ -2330,18 +2480,17 @@
         ],
         "type": "object"
       },
-      "SetApiTestCollectionSuitesDto": {
+      "SetApiTestCollectionItemsDto": {
         "properties": {
-          "suiteIds": {
+          "items": {
             "items": {
-              "format": "uuid",
-              "type": "string"
+              "$ref": "#/components/schemas/ApiTestCollectionItemInputDto"
             },
             "type": "array"
           }
         },
         "required": [
-          "suiteIds"
+          "items"
         ],
         "type": "object"
       },
@@ -3207,6 +3356,46 @@
         ]
       }
     },
+    "/api/v1/api-tests/cases": {
+      "get": {
+        "operationId": "listApiTestCases",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "suiteId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestCaseListResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      }
+    },
     "/api/v1/api-tests/collections": {
       "get": {
         "operationId": "listApiTestCollections",
@@ -3443,6 +3632,56 @@
         ]
       }
     },
+    "/api/v1/api-tests/collections/{collectionId}/items": {
+      "put": {
+        "operationId": "setApiTestCollectionItems",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collectionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetApiTestCollectionItemsDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestCollectionDetailResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      }
+    },
     "/api/v1/api-tests/collections/{collectionId}/runs": {
       "post": {
         "operationId": "runApiTestCollection",
@@ -3475,56 +3714,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiTestRunCreateResponseDto"
-                }
-              }
-            },
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "csrfToken": [],
-            "sessionCookie": []
-          }
-        ],
-        "summary": "",
-        "tags": [
-          "api-tests"
-        ]
-      }
-    },
-    "/api/v1/api-tests/collections/{collectionId}/suites": {
-      "put": {
-        "operationId": "setApiTestCollectionSuites",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "collectionId",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "$ref": "#/components/parameters/RequestIdHeader"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetApiTestCollectionSuitesDto"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiTestCollectionDetailResponseDto"
                 }
               }
             },

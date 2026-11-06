@@ -1,11 +1,14 @@
 import {
   ApiTestRepository,
+  groupCollectionTargets,
   newId,
+  type ApiTestCaseRecord,
   type ApiTestCollectionExecutionRecord,
+  type ApiTestCollectionItemRecord,
   type ApiTestCollectionRecord,
-  type ApiTestCollectionSuiteRecord,
   type ApiTestRunItemRecord,
   type ApiTestRunRecord,
+  type ApiTestRunTarget,
   type ApiTestScheduleRecord,
   type ApiTestScheduleTargetType,
   type ApiTestSyncRecord,
@@ -24,10 +27,11 @@ import { APP_CONFIG } from "../platform/config/config.module.js";
 import { ApiError } from "../platform/errors/api-error.js";
 import type {
   ApiTestBatchResponseDto,
+  ApiTestCaseResponseDto,
   ApiTestCollectionDetailResponseDto,
   ApiTestCollectionExecutionResponseDto,
+  ApiTestCollectionItemResponseDto,
   ApiTestCollectionResponseDto,
-  ApiTestCollectionSuiteResponseDto,
   ApiTestEnvironmentResponseDto,
   ApiTestRunDetailResponseDto,
   ApiTestRunItemResponseDto,
@@ -36,6 +40,12 @@ import type {
   ApiTestSuiteResponseDto,
   ApiTestSyncResponseDto,
 } from "./dto/api-test.dto.js";
+
+/** 集合成员输入：type=suite 表示整个测试集，type=case 表示一个文件或函数。 */
+export interface ApiTestCollectionItemInput {
+  type: "suite" | "case";
+  id: string;
+}
 
 export const API_TEST_QUEUE = "api-test-run";
 export const API_TEST_SYNC_QUEUE = "api-test-sync";
@@ -67,6 +77,8 @@ function mapRun(run: ApiTestRunRecord): ApiTestRunResponseDto {
     environmentKey: run.environmentKey,
     environmentName: run.environmentName,
     batchId: run.batchId,
+    collectionId: run.collectionId,
+    selection: run.selection,
     repoCommit: run.repoCommit,
     status: run.status,
     cancelRequested: run.cancelRequested,
@@ -107,6 +119,8 @@ function mapSync(sync: ApiTestSyncRecord): ApiTestSyncResponseDto {
     changedFiles: sync.changedFiles,
     suitesAdded: sync.suitesAdded,
     suitesRemoved: sync.suitesRemoved,
+    casesAdded: sync.casesAdded,
+    casesRemoved: sync.casesRemoved,
     requirementsChanged: sync.requirementsChanged,
     message: sync.message,
     startedAt: sync.startedAt?.toISOString() ?? null,
@@ -129,23 +143,50 @@ function mapCollection(collection: ApiTestCollectionRecord): ApiTestCollectionRe
   };
 }
 
-function mapCollectionSuite(
-  suite: ApiTestCollectionSuiteRecord,
-): ApiTestCollectionSuiteResponseDto {
+function mapCollectionItem(
+  item: ApiTestCollectionItemRecord,
+): ApiTestCollectionItemResponseDto {
   return {
-    suiteId: suite.suiteId,
-    key: suite.key,
-    name: suite.name,
-    path: suite.path,
-    enabled: suite.enabled,
-    position: suite.position,
-    lastRunId: suite.lastRunId,
-    lastRunStatus: suite.lastRunStatus,
-    totalCount: suite.totalCount,
-    passedCount: suite.passedCount,
-    failedCount: suite.failedCount,
-    skippedCount: suite.skippedCount,
-    lastRunAt: suite.lastRunAt?.toISOString() ?? null,
+    id: item.id,
+    position: item.position,
+    type: item.caseId === null ? "suite" : "case",
+    suiteId: item.suiteId,
+    suiteKey: item.suiteKey,
+    suiteName: item.suiteName,
+    suitePath: item.suitePath,
+    suiteEnabled: item.suiteEnabled,
+    caseId: item.caseId,
+    caseNodeId: item.caseNodeId,
+    caseName: item.caseName,
+    caseKind: item.caseKind,
+    caseEnabled: item.caseEnabled,
+    lastRunId: item.lastRunId,
+    lastRunStatus: item.lastRunStatus,
+    totalCount: item.totalCount,
+    passedCount: item.passedCount,
+    failedCount: item.failedCount,
+    skippedCount: item.skippedCount,
+    lastRunAt: item.lastRunAt?.toISOString() ?? null,
+  };
+}
+
+function mapCase(item: {
+  id: string;
+  suiteId: string;
+  nodeId: string;
+  filePath: string;
+  name: string;
+  kind: "file" | "case";
+  ordinal: number;
+}): ApiTestCaseResponseDto {
+  return {
+    id: item.id,
+    suiteId: item.suiteId,
+    nodeId: item.nodeId,
+    filePath: item.filePath,
+    name: item.name,
+    kind: item.kind,
+    ordinal: item.ordinal,
   };
 }
 
@@ -263,7 +304,18 @@ export class ApiTestsService implements OnApplicationShutdown {
       key: suite.key,
       name: suite.name,
       path: suite.path,
+      caseCount: suite.caseCount,
+      fileCount: suite.fileCount,
     }));
+  }
+
+  /** 测试集下的用例编目；前端按需懒加载，不随套件列表一起下发。 */
+  public async listCases(suiteId: string): Promise<ApiTestCaseResponseDto[]> {
+    if ((await this.repository.findSuite(this.database, suiteId)) === null) {
+      throw new ApiError("API_TEST_SUITE_NOT_FOUND");
+    }
+    const cases = await this.repository.listCases(this.database, suiteId);
+    return cases.map(mapCase);
   }
 
   public async listEnvironments(): Promise<ApiTestEnvironmentResponseDto[]> {
@@ -277,31 +329,75 @@ export class ApiTestsService implements OnApplicationShutdown {
   }
 
   /**
-   * 一次可以选多个套件；按数组顺序入队，worker 单并发保证一条跑完再跑下一条。
+   * 可以选整个测试集，也可以选具体文件/函数；按选择顺序入队，worker 单并发。
+   * 同一测试集既选整体又选用例时整体优先，避免同一批里重复跑一遍。
    * 这批 run 共享一个 batchId，报告页据此聚合成一个任务。
    */
   public async createRuns(
     auth: AuthContext,
-    input: { suiteIds: string[]; environmentId: string },
+    input: { suiteIds?: string[]; caseIds?: string[]; environmentId: string },
   ): Promise<{ batchId: string; runs: ApiTestRunResponseDto[] }> {
-    const suites = [];
-    for (const suiteId of new Set(input.suiteIds)) {
+    const suiteIds = [...new Set(input.suiteIds ?? [])];
+    const caseIds = [...new Set(input.caseIds ?? [])];
+    if (suiteIds.length === 0 && caseIds.length === 0) {
+      throw new ApiError("API_TEST_RUN_TARGET_REQUIRED");
+    }
+
+    const targets: ApiTestRunTarget[] = [];
+    const wholeSuites = new Set<string>();
+    for (const suiteId of suiteIds) {
       const suite = await this.repository.findSuite(this.database, suiteId);
       if (suite === null) throw new ApiError("API_TEST_SUITE_NOT_FOUND");
-      suites.push(suite);
+      wholeSuites.add(suite.id);
+      targets.push({ suiteId: suite.id, path: suite.path, nodeIds: [] });
     }
-    return this.enqueueRuns(
-      auth,
-      suites.map((suite) => ({ id: suite.id, path: suite.path })),
-      input.environmentId,
-      null,
-    );
+
+    // 用例按测试集分组；整体已选中的测试集跳过，保持「整体优先」。
+    const selectedCases: ApiTestCaseRecord[] = [];
+    for (const caseId of caseIds) {
+      const testCase = await this.repository.findCase(this.database, caseId);
+      if (testCase === null) throw new ApiError("API_TEST_CASE_NOT_FOUND");
+      if (wholeSuites.has(testCase.suiteId)) continue;
+      selectedCases.push(testCase);
+    }
+    // 文件行优先于它下面的函数行，避免同一个用例重复执行。
+    const fileNodes = new Map<string, Set<string>>();
+    for (const testCase of selectedCases) {
+      if (testCase.kind !== "file") continue;
+      const files = fileNodes.get(testCase.suiteId) ?? new Set<string>();
+      files.add(testCase.nodeId);
+      fileNodes.set(testCase.suiteId, files);
+    }
+    const caseGroups = new Map<string, ApiTestRunTarget>();
+    for (const testCase of selectedCases) {
+      if (testCase.kind === "case") {
+        const separator = testCase.nodeId.indexOf("::");
+        if (
+          separator !== -1 &&
+          fileNodes.get(testCase.suiteId)?.has(testCase.nodeId.slice(0, separator)) === true
+        ) {
+          continue;
+        }
+      }
+      const suite = await this.repository.findSuite(this.database, testCase.suiteId);
+      if (suite === null) throw new ApiError("API_TEST_SUITE_NOT_FOUND");
+      const existing = caseGroups.get(suite.id);
+      if (existing === undefined) {
+        const target = { suiteId: suite.id, path: suite.path, nodeIds: [testCase.nodeId] };
+        caseGroups.set(suite.id, target);
+        targets.push(target);
+      } else if (!existing.nodeIds.includes(testCase.nodeId)) {
+        existing.nodeIds.push(testCase.nodeId);
+      }
+    }
+
+    return this.enqueueRuns(auth, targets, input.environmentId, null);
   }
 
   /** 集合和散跑共用：入队顺序就是执行顺序，worker 单并发，一批共享 batchId。 */
   private async enqueueRuns(
     auth: AuthContext,
-    suites: { id: string; path: string }[],
+    targets: ApiTestRunTarget[],
     environmentId: string,
     collectionId: string | null,
   ): Promise<{ batchId: string; runs: ApiTestRunResponseDto[] }> {
@@ -310,14 +406,17 @@ export class ApiTestsService implements OnApplicationShutdown {
 
     const batchId = newId();
     const runs = [];
-    for (const suite of suites) {
+    for (const target of targets) {
+      const selected = target.nodeIds.length > 0;
       const run = await this.repository.createRun(this.database, {
         id: newId(),
-        suiteId: suite.id,
+        suiteId: target.suiteId,
         environmentId: environment.id,
         requestedBy: auth.session.userId,
-        mode: "suite",
-        selection: { path: suite.path },
+        mode: selected ? "selected" : "suite",
+        selection: selected
+          ? { path: target.path, nodeIds: target.nodeIds }
+          : { path: target.path },
         batchId,
         collectionId,
       });
@@ -335,17 +434,17 @@ export class ApiTestsService implements OnApplicationShutdown {
   public async getCollection(collectionId: string): Promise<ApiTestCollectionDetailResponseDto> {
     const collection = await this.repository.findCollection(this.database, collectionId);
     if (collection === null) throw new ApiError("API_TEST_COLLECTION_NOT_FOUND");
-    const suites = await this.repository.listCollectionSuites(this.database, collectionId);
-    return Object.assign(mapCollection(collection), { suites: suites.map(mapCollectionSuite) });
+    const items = await this.repository.listCollectionItems(this.database, collectionId);
+    return Object.assign(mapCollection(collection), { items: items.map(mapCollectionItem) });
   }
 
   public async createCollection(
     auth: AuthContext,
-    input: { name: string; description: string; suiteIds: string[] },
+    input: { name: string; description: string; items: ApiTestCollectionItemInput[] },
   ): Promise<ApiTestCollectionDetailResponseDto> {
     const name = input.name.trim();
     if (name === "") throw new ApiError("API_TEST_COLLECTION_NAME_INVALID");
-    const suites = await this.resolveSuites(input.suiteIds);
+    const items = await this.resolveCollectionItems(input.items);
     const created = await this.repository
       .createCollection(this.database, {
         id: newId(),
@@ -357,11 +456,7 @@ export class ApiTestsService implements OnApplicationShutdown {
         if (isUniqueViolation(error)) throw new ApiError("API_TEST_COLLECTION_NAME_CONFLICT");
         throw error;
       });
-    await this.repository.replaceCollectionSuites(
-      this.database,
-      created.id,
-      suites.map((suite) => suite.id),
-    );
+    await this.repository.replaceCollectionItems(this.database, created.id, items);
     return this.getCollection(created.id);
   }
 
@@ -399,18 +494,14 @@ export class ApiTestsService implements OnApplicationShutdown {
     );
   }
 
-  public async setCollectionSuites(
+  public async setCollectionItems(
     collectionId: string,
-    suiteIds: string[],
+    input: ApiTestCollectionItemInput[],
   ): Promise<ApiTestCollectionDetailResponseDto> {
     const collection = await this.repository.findCollection(this.database, collectionId);
     if (collection === null) throw new ApiError("API_TEST_COLLECTION_NOT_FOUND");
-    const suites = await this.resolveSuites(suiteIds);
-    await this.repository.replaceCollectionSuites(
-      this.database,
-      collectionId,
-      suites.map((suite) => suite.id),
-    );
+    const items = await this.resolveCollectionItems(input);
+    await this.repository.replaceCollectionItems(this.database, collectionId, items);
     return this.getCollection(collectionId);
   }
 
@@ -421,15 +512,10 @@ export class ApiTestsService implements OnApplicationShutdown {
   ): Promise<{ batchId: string; runs: ApiTestRunResponseDto[] }> {
     const collection = await this.repository.findCollection(this.database, collectionId);
     if (collection === null) throw new ApiError("API_TEST_COLLECTION_NOT_FOUND");
-    const suites = await this.repository.listCollectionSuites(this.database, collectionId);
-    const runnable = suites.filter((suite) => suite.enabled);
-    if (runnable.length === 0) throw new ApiError("API_TEST_COLLECTION_EMPTY");
-    return this.enqueueRuns(
-      auth,
-      runnable.map((suite) => ({ id: suite.suiteId, path: suite.path })),
-      environmentId,
-      collectionId,
-    );
+    const items = await this.repository.listCollectionItems(this.database, collectionId);
+    const targets = groupCollectionTargets(items);
+    if (targets.length === 0) throw new ApiError("API_TEST_COLLECTION_EMPTY");
+    return this.enqueueRuns(auth, targets, environmentId, collectionId);
   }
 
   public async listCollectionExecutions(
@@ -446,17 +532,35 @@ export class ApiTestsService implements OnApplicationShutdown {
     return executions.map(mapCollectionExecution);
   }
 
-  /** 重复、不存在的套件 id 都按「套件不存在」处理：集合里只放同步得到的套件。 */
-  private async resolveSuites(
-    suiteIds: string[],
-  ): Promise<{ id: string; path: string }[]> {
-    const suites = [];
-    for (const suiteId of new Set(suiteIds)) {
-      const suite = await this.repository.findSuite(this.database, suiteId);
-      if (suite === null) throw new ApiError("API_TEST_SUITE_NOT_FOUND");
-      suites.push({ id: suite.id, path: suite.path });
+  /**
+   * 校验集合成员并转成库里的 `{suiteId, caseId}`。
+   * 重复成员按第一次出现保留；用例必须仍在编目里且属于其测试集，否则拒绝保存。
+   */
+  private async resolveCollectionItems(
+    items: ApiTestCollectionItemInput[],
+  ): Promise<{ suiteId: string; caseId: string | null }[]> {
+    const resolved: { suiteId: string; caseId: string | null }[] = [];
+    const seenSuites = new Set<string>();
+    const seenCases = new Set<string>();
+    for (const item of items) {
+      if (item.type === "suite") {
+        if (seenSuites.has(item.id)) continue;
+        const suite = await this.repository.findSuite(this.database, item.id);
+        if (suite === null) throw new ApiError("API_TEST_SUITE_NOT_FOUND");
+        seenSuites.add(suite.id);
+        resolved.push({ suiteId: suite.id, caseId: null });
+        continue;
+      }
+      if (seenCases.has(item.id)) continue;
+      const testCase = await this.repository.findCase(this.database, item.id);
+      if (testCase === null) throw new ApiError("API_TEST_CASE_NOT_FOUND");
+      if ((await this.repository.findSuite(this.database, testCase.suiteId)) === null) {
+        throw new ApiError("API_TEST_SUITE_NOT_FOUND");
+      }
+      seenCases.add(testCase.id);
+      resolved.push({ suiteId: testCase.suiteId, caseId: testCase.id });
     }
-    return suites;
+    return resolved;
   }
 
   public async listRuns(
@@ -674,10 +778,10 @@ export class ApiTestsService implements OnApplicationShutdown {
   ): Promise<{ batchId: string; runs: ApiTestRunResponseDto[] }> {
     const schedule = await this.repository.findSchedule(this.database, scheduleId);
     if (schedule === null) throw new ApiError("API_TEST_SCHEDULE_NOT_FOUND");
-    const suites = await this.scheduleSuites(schedule.targetType, schedule.targetId);
+    const targets = await this.scheduleTargets(schedule.targetType, schedule.targetId);
     const result = await this.enqueueRuns(
       auth,
-      suites,
+      targets,
       schedule.environmentId,
       schedule.targetType === "collection" ? schedule.targetId : null,
     );
@@ -732,21 +836,21 @@ export class ApiTestsService implements OnApplicationShutdown {
     }
   }
 
-  private async scheduleSuites(
+  private async scheduleTargets(
     targetType: ApiTestScheduleTargetType,
     targetId: string,
-  ): Promise<{ id: string; path: string }[]> {
+  ): Promise<ApiTestRunTarget[]> {
     if (targetType === "suite") {
       const suite = await this.repository.findSuite(this.database, targetId);
       if (suite === null) throw new ApiError("API_TEST_SCHEDULE_TARGET_INVALID");
-      return [{ id: suite.id, path: suite.path }];
+      return [{ suiteId: suite.id, path: suite.path, nodeIds: [] }];
     }
     if ((await this.repository.findCollection(this.database, targetId)) === null) {
       throw new ApiError("API_TEST_SCHEDULE_TARGET_INVALID");
     }
-    const suites = await this.repository.listCollectionSuites(this.database, targetId);
-    const runnable = suites.filter((suite) => suite.enabled);
-    if (runnable.length === 0) throw new ApiError("API_TEST_COLLECTION_EMPTY");
-    return runnable.map((suite) => ({ id: suite.suiteId, path: suite.path }));
+    const items = await this.repository.listCollectionItems(this.database, targetId);
+    const targets = groupCollectionTargets(items);
+    if (targets.length === 0) throw new ApiError("API_TEST_COLLECTION_EMPTY");
+    return targets;
   }
 }

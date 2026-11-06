@@ -10,7 +10,10 @@ import pytest
 
 REQUEST_BODY_LIMIT = 8 * 1024
 RESPONSE_BODY_LIMIT = 256 * 1024
-FAILURE_LIMIT = 16 * 1024
+# pytest 的 traceback 由外到内：开头是测试源码，中间几十帧是 requests/urllib3 内部，
+# 末尾才是 E 断言行。只留头部会把最关键的断言切掉，所以头尾各留一段。
+FAILURE_HEAD_LIMIT = 4 * 1024
+FAILURE_TAIL_LIMIT = 12 * 1024
 CAPTURE_MODE = os.getenv("API_TEST_CAPTURE", "failures").strip().lower()
 
 _stream = None
@@ -44,6 +47,17 @@ def _truncate(value, limit):
     if len(text) <= limit:
         return value
     return {"truncated": True, "text": text[:limit]}
+
+
+def _clip_failure(text):
+    if len(text) <= FAILURE_HEAD_LIMIT + FAILURE_TAIL_LIMIT:
+        return text
+    dropped = len(text) - FAILURE_HEAD_LIMIT - FAILURE_TAIL_LIMIT
+    return (
+        text[:FAILURE_HEAD_LIMIT]
+        + f"\n…已省略 {dropped} 个字符…\n"
+        + text[-FAILURE_TAIL_LIMIT:]
+    )
 
 
 SENSITIVE_KEYS = {
@@ -176,7 +190,7 @@ def pytest_runtest_logreport(report):
             "duration_ms": int(report.duration * 1000),
         }
         if report.failed:
-            payload["failure"] = (report.longreprtext or "测试失败")[:FAILURE_LIMIT]
+            payload["failure"] = _clip_failure(report.longreprtext or "测试失败")
         exchanges = _exchanges.get(report.nodeid, [])
         if CAPTURE_MODE == "all" or (CAPTURE_MODE == "failures" and report.failed):
             payload["exchanges"] = exchanges

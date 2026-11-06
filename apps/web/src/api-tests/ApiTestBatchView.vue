@@ -8,7 +8,6 @@ import {
   type ApiTestRunResponseDto,
 } from "@share-mind-map/api-client";
 import {
-  ElAlert,
   ElButton,
   ElDescriptions,
   ElDescriptionsItem,
@@ -22,6 +21,7 @@ import { useRoute, useRouter } from "vue-router";
 import { apiClient, toApiFailure, type RequestFailure } from "../api.js";
 import { useAppTabsStore } from "../app/tabs.store.js";
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
+import ApiTestErrorOutput from "./ApiTestErrorOutput.vue";
 import ApiTestRunItemsTable from "./ApiTestRunItemsTable.vue";
 
 const props = defineProps<{ batchId: string }>();
@@ -228,15 +228,11 @@ onUnmounted(() => {
         <ElTableColumn type="expand">
           <template #default="{ row }">
             <div class="api-test-batch__items">
-              <ElAlert
+              <ApiTestErrorOutput
                 v-if="row.errorMessage"
-                type="error"
-                :closable="false"
-                title="执行错误"
+                :message="row.errorMessage"
                 class="api-test-batch__run-error"
-              >
-                <pre class="api-test-batch__pre">{{ row.errorMessage }}</pre>
-              </ElAlert>
+              />
               <p v-if="loadingItems[row.id]" class="api-test-batch__loading">加载用例明细…</p>
               <ApiTestRunItemsTable v-else :items="itemsOf(row)" />
             </div>
@@ -303,15 +299,6 @@ onUnmounted(() => {
 
 .api-test-batch__run-error {
   margin-bottom: 12px;
-}
-
-.api-test-batch__pre {
-  margin: 0;
-  max-height: 420px;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-size: 12px;
 }
 
 .api-test-batch__loading {

@@ -8,8 +8,8 @@ import {
   type ApiTestSuiteResponseDto,
   type ApiTestSyncResponseDto,
 } from "@share-mind-map/api-client";
-import { ElButton } from "element-plus";
-import { onMounted, onUnmounted, ref } from "vue";
+import { ElButton, ElPopover, ElTooltip } from "element-plus";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 
 import { apiClient, toApiFailure, type RequestFailure } from "../api.js";
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
@@ -27,14 +27,9 @@ const loading = ref(true);
 const error = ref<RequestFailure | null>(null);
 const collectionsRef = ref<InstanceType<typeof CollectionsPanel> | null>(null);
 const schedulesRef = ref<InstanceType<typeof SchedulesPanel> | null>(null);
+const now = ref(Date.now());
 let poll: ReturnType<typeof setInterval> | null = null;
-
-const syncLabels: Record<string, string> = {
-  queued: "排队中",
-  running: "同步中",
-  succeeded: "已同步",
-  failed: "同步失败",
-};
+let clock: ReturnType<typeof setInterval> | null = null;
 
 async function loadOptions(): Promise<void> {
   const [suiteResult, environmentResult] = await Promise.all([
@@ -94,6 +89,50 @@ function formatTime(value: string | null | undefined): string {
   return new Date(value).toLocaleString();
 }
 
+/** 胶囊上只放相对时间，精确时间留给 tooltip。 */
+function relativeTime(value: string | null | undefined): string {
+  if (value === null || value === undefined) return "-";
+  const date = new Date(value);
+  const elapsed = now.value - date.getTime();
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (elapsed < minute) return "刚刚";
+  if (elapsed < hour) return `${String(Math.floor(elapsed / minute))} 分钟前`;
+  if (elapsed < day) return `${String(Math.floor(elapsed / hour))} 小时前`;
+  if (elapsed < 7 * day) return `${String(Math.floor(elapsed / day))} 天前`;
+  const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return `${String(date.getMonth() + 1)}/${String(date.getDate())} ${time}`;
+}
+
+const hasSync = computed(() => lastSync.value !== null);
+const syncFailed = computed(() => lastSync.value?.status === "failed");
+const syncActive = computed(() => syncRunning(lastSync.value));
+const syncMessage = computed(() => lastSync.value?.message ?? "");
+
+const syncChipLabel = computed(() => {
+  const sync = lastSync.value;
+  if (sync === null) return "";
+  if (sync.status === "queued") return "排队中…";
+  if (sync.status === "running") return "同步中…";
+  if (sync.status === "failed") return "同步失败";
+  return `已同步 · ${relativeTime(sync.finishedAt ?? sync.createdAt)}`;
+});
+
+/** tooltip / 失败弹层里的明细；套件增删为 0 时不占字数。 */
+const syncDetail = computed(() => {
+  const sync = lastSync.value;
+  if (sync === null) return "";
+  const parts = [shortSha(sync.commitSha), formatTime(sync.finishedAt ?? sync.createdAt)];
+  if (sync.suitesAdded !== 0 || sync.suitesRemoved !== 0) {
+    parts.push(`套件 +${String(sync.suitesAdded)} / -${String(sync.suitesRemoved)}`);
+  }
+  if (sync.casesAdded !== 0 || sync.casesRemoved !== 0) {
+    parts.push(`用例 +${String(sync.casesAdded)} / -${String(sync.casesRemoved)}`);
+  }
+  return parts.join(" · ");
+});
+
 function createCollection(): void {
   tab.value = "collections";
   // 面板是 v-if 挂载的，切过去之后组件才存在，等下一拍再调。
@@ -131,10 +170,15 @@ onMounted(async () => {
         .catch(() => undefined);
     }
   }, 2000);
+  // 相对时间每分钟重算一次，长时间挂着页面也不会停在「刚刚」。
+  clock = setInterval(() => {
+    now.value = Date.now();
+  }, 60_000);
 });
 
 onUnmounted(() => {
   if (poll !== null) clearInterval(poll);
+  if (clock !== null) clearInterval(clock);
 });
 </script>
 
@@ -146,6 +190,24 @@ onUnmounted(() => {
         <p>管理测试套件，执行接口自动化测试</p>
       </div>
       <div class="api-tests__header-actions">
+        <ElPopover v-if="syncFailed" placement="bottom-end" trigger="click" width="360">
+          <template #reference>
+            <button type="button" class="api-tests__sync-chip is-failed">
+              <span class="api-tests__sync-dot" />
+              {{ syncChipLabel }}
+            </button>
+          </template>
+          <div class="api-tests__sync-detail">
+            <p v-if="syncMessage" class="api-tests__sync-message">{{ syncMessage }}</p>
+            <p class="api-tests__sync-meta">{{ syncDetail }}</p>
+          </div>
+        </ElPopover>
+        <ElTooltip v-else-if="hasSync" placement="bottom-end" :content="syncDetail">
+          <span class="api-tests__sync-chip" :class="{ 'is-running': syncActive }">
+            <span class="api-tests__sync-dot" />
+            {{ syncChipLabel }}
+          </span>
+        </ElTooltip>
         <ElButton
           :loading="syncing || syncRunning(lastSync)"
           :disabled="syncRunning(lastSync)"
@@ -161,17 +223,6 @@ onUnmounted(() => {
         </ElButton>
       </div>
     </header>
-
-    <p v-if="lastSync !== null" class="api-tests__sync">
-      仓库 {{ syncLabels[lastSync.status] ?? lastSync.status }} ·
-      {{ shortSha(lastSync.commitSha) }} ·
-      {{ formatTime(lastSync.finishedAt ?? lastSync.createdAt) }} ·
-      套件 +{{ lastSync.suitesAdded }} / -{{ lastSync.suitesRemoved }}
-      <span v-if="lastSync.message" class="api-tests__sync-note">{{ lastSync.message }}</span>
-    </p>
-    <p v-else class="api-tests__sync">
-      还没有同步过用例仓库，点「同步用例」拉取上游 testcases。
-    </p>
 
     <RequestErrorAlert :error="error" class="api-tests__error" />
 
@@ -220,12 +271,7 @@ onUnmounted(() => {
           :suites="suites"
           :environments="environments"
         />
-        <SchedulesPanel
-          v-else
-          ref="schedulesRef"
-          :suites="suites"
-          :environments="environments"
-        />
+        <SchedulesPanel v-else ref="schedulesRef" :suites="suites" :environments="environments" />
       </div>
     </template>
   </section>
@@ -236,7 +282,7 @@ onUnmounted(() => {
   padding: 24px;
 }
 
-/* 测试集视图固定成一屏：标题/同步状态/tab 不动，左右两栏各自滚动。 */
+/* 测试集视图固定成一屏：标题/tab 不动，左右两栏各自滚动。 */
 .api-tests--fit {
   display: flex;
   flex-direction: column;
@@ -278,15 +324,57 @@ onUnmounted(() => {
   margin: 16px 0;
 }
 
-.api-tests__sync {
-  margin: 12px 0 0;
+.api-tests__sync-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
   color: var(--el-text-color-secondary);
+  font-size: 13px;
+  cursor: default;
+}
+
+button.api-tests__sync-chip {
+  cursor: pointer;
+}
+
+.api-tests__sync-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--el-text-color-placeholder);
+}
+
+.api-tests__sync-chip.is-running .api-tests__sync-dot {
+  background: var(--el-color-primary);
+}
+
+.api-tests__sync-chip.is-failed {
+  color: var(--el-color-danger);
+}
+
+.api-tests__sync-chip.is-failed .api-tests__sync-dot {
+  background: var(--el-color-danger);
+}
+
+.api-tests__sync-detail {
   font-size: 13px;
 }
 
-.api-tests__sync-note {
-  margin-left: 8px;
-  color: var(--el-color-warning);
+.api-tests__sync-detail p {
+  margin: 0;
+}
+
+.api-tests__sync-message {
+  margin-bottom: 4px !important;
+  color: var(--el-color-danger);
+}
+
+.api-tests__sync-meta {
+  color: var(--el-text-color-secondary);
 }
 
 .api-tests__loading {

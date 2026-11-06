@@ -12,6 +12,7 @@ import { useRouter } from "vue-router";
 
 import { apiClient, toApiFailure, type RequestFailure } from "../api.js";
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
+import CaseTree from "./CaseTree.vue";
 
 const props = defineProps<{
   suites: ApiTestSuiteResponseDto[];
@@ -29,8 +30,10 @@ const runs = ref<ApiTestRunResponseDto[]>([]);
 const suiteId = ref("");
 // 勾选只决定「组合执行」跑哪几个，行点击另管右侧详情，两者互不干扰。
 const selectedIds = ref<string[]>([]);
+// 当前测试集里勾选的文件/函数，和套件勾选互不影响。
+const selectedCaseIds = ref<string[]>([]);
 const keyword = ref("");
-const tab = ref<"overview" | "runs">("overview");
+const tab = ref<"overview" | "cases" | "runs">("overview");
 const starting = ref(false);
 const error = ref<RequestFailure | null>(null);
 let poll: ReturnType<typeof setInterval> | null = null;
@@ -100,14 +103,17 @@ function formatDuration(input: unknown): string {
   return `${String(Math.floor(seconds / 60))}m ${String(seconds % 60)}s`;
 }
 
-async function startRun(target: string[]): Promise<void> {
-  if (target.length === 0 || environmentId.value === "") return;
+async function startRun(body: {
+  suiteIds?: string[];
+  caseIds?: string[];
+}): Promise<void> {
+  if (environmentId.value === "") return;
   starting.value = true;
   error.value = null;
   try {
     const result = await createApiTestRuns({
       client: apiClient,
-      body: { suiteIds: target, environmentId: environmentId.value },
+      body: { ...body, environmentId: environmentId.value },
     });
     if (result.data === undefined) {
       error.value = toApiFailure(result.error);
@@ -127,7 +133,13 @@ async function startRun(target: string[]): Promise<void> {
 }
 
 function runSelected(): void {
-  void startRun([...selectedIds.value]);
+  if (selectedIds.value.length === 0) return;
+  void startRun({ suiteIds: [...selectedIds.value] });
+}
+
+function runSelectedCases(): void {
+  if (selectedCaseIds.value.length === 0) return;
+  void startRun({ caseIds: [...selectedCaseIds.value] });
 }
 
 /** 只给当前详情里的这一个套件建定时任务，带到定时 tab 里预填。 */
@@ -183,6 +195,8 @@ watch(
 );
 
 watch(suiteId, () => {
+  // 用例 id 只在所属测试集里有效，切走就清掉，避免拿旧选择去执行。
+  selectedCaseIds.value = [];
   void loadRuns().catch(() => undefined);
 });
 
@@ -222,9 +236,11 @@ onUnmounted(() => {
               type="button"
               class="suites__item"
               :class="{ 'is-active': suite.id === suiteId }"
+              :aria-label="suite.name"
               @click="selectSuite(suite.id)"
             >
-              {{ suite.name }}
+              <span class="suites__item-name">{{ suite.name }}</span>
+              <span class="suites__item-count">{{ suite.caseCount }}</span>
             </button>
           </li>
         </ul>
@@ -280,6 +296,14 @@ onUnmounted(() => {
           <button
             type="button"
             class="suites__tab"
+            :class="{ 'is-active': tab === 'cases' }"
+            @click="tab = 'cases'"
+          >
+            用例（{{ selectedSuite?.caseCount ?? 0 }}）
+          </button>
+          <button
+            type="button"
+            class="suites__tab"
             :class="{ 'is-active': tab === 'runs' }"
             @click="tab = 'runs'"
           >
@@ -314,6 +338,31 @@ onUnmounted(() => {
               <ElButton @click="openRun(latestRun)">查看报告</ElButton>
             </div>
           </section>
+        </div>
+
+        <div v-else-if="tab === 'cases'" class="suites__panel">
+          <div class="suites__cases-toolbar">
+            <span class="suites__stat">
+              已选用例 <strong>{{ selectedCaseIds.length }}</strong>
+            </span>
+            <ElButton :disabled="selectedCaseIds.length === 0" @click="selectedCaseIds = []">
+              清空
+            </ElButton>
+            <ElButton
+              type="primary"
+              :loading="starting"
+              :disabled="selectedCaseIds.length === 0 || environmentId === ''"
+              @click="runSelectedCases"
+            >
+              执行所选用例
+            </ElButton>
+          </div>
+          <CaseTree
+            v-if="selectedSuite !== null"
+            v-model="selectedCaseIds"
+            :suite-id="selectedSuite.id"
+            :disabled="starting"
+          />
         </div>
 
         <ElTable
@@ -436,7 +485,10 @@ onUnmounted(() => {
 }
 
 .suites__item {
+  display: flex;
   flex: 1;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
   padding: 10px 12px;
   border: none;
@@ -531,6 +583,30 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.suites__item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suites__item-count {
+  flex: none;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.suites__cases-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.suites__cases-toolbar .el-button:first-of-type {
+  margin-left: auto;
 }
 
 .suites__latest {

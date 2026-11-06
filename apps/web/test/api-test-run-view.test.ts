@@ -116,12 +116,171 @@ describe("api test run view", () => {
     expect(await screen.findByText("test_failed_one")).toBeInTheDocument();
     expect(screen.queryByText("test_passed_one")).not.toBeInTheDocument();
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "已折叠 2 条通过用例，点击展开" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: /通过用例/ }));
 
     expect(screen.getByText("test_passed_one")).toBeInTheDocument();
     expect(screen.getByText("test_passed_two")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "只看失败用例" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /通过用例/ })).toHaveTextContent("收起");
+
+    // 失败组默认展开，点一下收起。
+    await userEvent.click(screen.getByRole("button", { name: /失败用例/ }));
+
+    expect(screen.queryByText("test_failed_one")).not.toBeInTheDocument();
+  });
+
+  it("collapses skipped cases separately from passed cases", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(
+        jsonResponse({
+          ...runDetail("run-a", "认证"),
+          items: [
+            runItem("passed_one", "passed"),
+            runItem("forced_skip", "skipped"),
+            runItem("failed_one", "failed"),
+          ],
+        }),
+      ),
+    );
+
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: "/api-tests/runs/:runId",
+          name: "api-test-run",
+          component: ApiTestRunView,
+          props: (route) => ({ runId: String(route.params.runId) }),
+        },
+      ],
+    });
+    const Wrapper = { template: "<RouterView />" };
+
+    await router.push("/api-tests/runs/run-a");
+    render(Wrapper, { global: { plugins: [pinia, router] } });
+
+    expect(await screen.findByText("test_failed_one")).toBeInTheDocument();
+    expect(screen.queryByText("test_passed_one")).not.toBeInTheDocument();
+    expect(screen.queryByText("test_forced_skip")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /跳过用例/ }));
+
+    // 展开跳过用例不会连带展开通过用例。
+    expect(screen.getByText("test_forced_skip")).toBeInTheDocument();
+    expect(screen.queryByText("test_passed_one")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /跳过用例/ })).toHaveTextContent("收起");
+
+    await userEvent.click(screen.getByRole("button", { name: /通过用例/ }));
+
+    expect(screen.getByText("test_passed_one")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /通过用例/ })).toHaveTextContent("收起");
+  });
+
+  it("keeps the run error collapsed until it is expanded", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(
+        jsonResponse({
+          ...runDetail("run-a", "认证"),
+          status: "failed",
+          errorMessage: "collected 12 items\n\nFAILED testcases/auth/test_login.py::test_login",
+        }),
+      ),
+    );
+
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: "/api-tests/runs/:runId",
+          name: "api-test-run",
+          component: ApiTestRunView,
+          props: (route) => ({ runId: String(route.params.runId) }),
+        },
+      ],
+    });
+    const Wrapper = { template: "<RouterView />" };
+
+    await router.push("/api-tests/runs/run-a");
+    render(Wrapper, { global: { plugins: [pinia, router] } });
+
+    expect(await screen.findByText("collected 12 items")).toBeInTheDocument();
+    expect(screen.queryByText(/FAILED testcases/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "展开完整输出" }));
+
+    expect(screen.getByText(/FAILED testcases/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "收起" }));
+
+    expect(screen.queryByText(/FAILED testcases/)).not.toBeInTheDocument();
+  });
+});
+
+describe("api test run items table", () => {
+  async function renderItems(items: unknown[]): Promise<void> {
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(jsonResponse({ ...runDetail("run-a", "认证"), items })),
+    );
+
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: "/api-tests/runs/:runId",
+          name: "api-test-run",
+          component: ApiTestRunView,
+          props: (route) => ({ runId: String(route.params.runId) }),
+        },
+      ],
+    });
+    const Wrapper = { template: "<RouterView />" };
+
+    await router.push("/api-tests/runs/run-a");
+    render(Wrapper, { global: { plugins: [pinia, router] } });
+    await screen.findByText("test_failed_one");
+  }
+
+  async function expandRow(index: number): Promise<void> {
+    const icons = document.querySelectorAll(".el-table__expand-icon");
+    expect(icons.length).toBeGreaterThan(index);
+    await userEvent.click(icons[index] as Element);
+  }
+
+  it("skips the request/response block when nothing was captured", async () => {
+    await renderItems([{ ...runItem("failed_one", "failed"), failure: null }]);
+
+    await expandRow(0);
+
+    expect(screen.queryByRole("button", { name: "请求 / 响应" })).not.toBeInTheDocument();
+  });
+
+  it("shows the failure category instead of the raw traceback", async () => {
+    await renderItems([runItem("failed_one", "failed")]);
+
+    await expandRow(0);
+
+    expect(screen.getAllByText("断言不符")).not.toHaveLength(0);
+    expect(screen.getByText("期望 200，实际 500")).toBeInTheDocument();
+    expect(screen.queryByText(/AssertionError: 期望 200，实际 500/)).not.toBeInTheDocument();
+  });
+
+  it("shows the captured request/response for a failed case", async () => {
+    await renderItems([
+      {
+        ...runItem("failed_one", "failed"),
+        request: [{ method: "GET", url: "https://api.kitarx.com/api/v1/admin/users" }],
+        response: [{ status: 405, body: null }],
+      },
+    ]);
+
+    await expandRow(0);
+    await userEvent.click(screen.getByRole("button", { name: "请求 / 响应" }));
+
+    expect(screen.getByText(/"status": 405/)).toBeInTheDocument();
   });
 });

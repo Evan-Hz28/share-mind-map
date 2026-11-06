@@ -4,13 +4,14 @@ import {
   getApiTestRun,
   type ApiTestRunDetailResponseDto,
 } from "@share-mind-map/api-client";
-import { ElAlert, ElButton, ElDescriptions, ElDescriptionsItem, ElTag } from "element-plus";
+import { ElButton, ElDescriptions, ElDescriptionsItem, ElTag } from "element-plus";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import { apiClient, toApiFailure, type RequestFailure } from "../api.js";
 import { useAppTabsStore } from "../app/tabs.store.js";
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
+import ApiTestErrorOutput from "./ApiTestErrorOutput.vue";
 import ApiTestRunItemsTable from "./ApiTestRunItemsTable.vue";
 
 const props = defineProps<{ runId: string }>();
@@ -150,15 +151,11 @@ onUnmounted(() => {
         <ElDescriptionsItem label="跳过">{{ run.skippedCount }}</ElDescriptionsItem>
       </ElDescriptions>
 
-      <ElAlert
+      <ApiTestErrorOutput
         v-if="run?.errorMessage"
-        type="error"
-        :closable="false"
-        title="执行错误"
+        :message="run.errorMessage"
         class="api-test-run__error"
-      >
-        <pre class="api-test-run__pre">{{ run.errorMessage }}</pre>
-      </ElAlert>
+      />
 
       <ApiTestRunItemsTable v-if="run !== null" :items="run.items" class="api-test-run__table" />
     </div>

@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
-  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -10,20 +10,40 @@ import {
   IsUUID,
   Length,
   MaxLength,
+  ValidateNested,
 } from "class-validator";
 
 export class CreateApiTestRunDto {
   /** 可多选；后端按数组顺序建 run，worker 单并发天然串行执行。 */
-  @ApiProperty({ type: [String], format: "uuid" })
+  @ApiPropertyOptional({ type: [String], format: "uuid" })
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
   @ArrayMaxSize(50)
   @IsUUID("7", { each: true })
-  public suiteIds!: string[];
+  public suiteIds?: string[];
+
+  /** 单个文件或函数的用例 id；与 suiteIds 可同时传，服务端按测试集分组。 */
+  @ApiPropertyOptional({ type: [String], format: "uuid" })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(500)
+  @IsUUID("7", { each: true })
+  public caseIds?: string[];
 
   @ApiProperty({ type: String, format: "uuid" })
   @IsUUID("7")
   public environmentId!: string;
+}
+
+/** 集合成员：type=suite 表示整个测试集，type=case 表示一个文件或函数。 */
+export class ApiTestCollectionItemInputDto {
+  @ApiProperty({ type: String, enum: ["suite", "case"] })
+  @IsIn(["suite", "case"])
+  public type!: "suite" | "case";
+
+  @ApiProperty({ type: String, format: "uuid" })
+  @IsUUID("7")
+  public id!: string;
 }
 
 export class CreateApiTestCollectionDto {
@@ -38,12 +58,13 @@ export class CreateApiTestCollectionDto {
   @MaxLength(500)
   public description?: string;
 
-  /** 空数组合法：先建空集合，之后在详情页里添加套件。 */
-  @ApiProperty({ type: [String], format: "uuid" })
+  /** 空数组合法：先建空集合，之后在详情页里添加成员。 */
+  @ApiProperty({ type: [ApiTestCollectionItemInputDto] })
   @IsArray()
-  @ArrayMaxSize(50)
-  @IsUUID("7", { each: true })
-  public suiteIds!: string[];
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => ApiTestCollectionItemInputDto)
+  public items!: ApiTestCollectionItemInputDto[];
 }
 
 export class UpdateApiTestCollectionDto {
@@ -59,12 +80,13 @@ export class UpdateApiTestCollectionDto {
   public description?: string;
 }
 
-export class SetApiTestCollectionSuitesDto {
-  @ApiProperty({ type: [String], format: "uuid" })
+export class SetApiTestCollectionItemsDto {
+  @ApiProperty({ type: [ApiTestCollectionItemInputDto] })
   @IsArray()
-  @ArrayMaxSize(50)
-  @IsUUID("7", { each: true })
-  public suiteIds!: string[];
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => ApiTestCollectionItemInputDto)
+  public items!: ApiTestCollectionItemInputDto[];
 }
 
 export class RunApiTestCollectionDto {
@@ -188,14 +210,26 @@ export class ApiTestCollectionResponseDto {
   @ApiProperty({ type: String, format: "date-time" }) public updatedAt!: string;
 }
 
-export class ApiTestCollectionSuiteResponseDto {
-  @ApiProperty() public suiteId!: string;
-  @ApiProperty() public key!: string;
-  @ApiProperty() public name!: string;
-  @ApiProperty() public path!: string;
-  @ApiProperty() public enabled!: boolean;
+export class ApiTestCollectionItemResponseDto {
+  @ApiProperty() public id!: string;
   @ApiProperty() public position!: number;
-  @ApiPropertyOptional({ type: String, nullable: true }) public lastRunId!: string | null;
+  /** suite 表示整个测试集，case 表示一个文件或函数。 */
+  @ApiProperty({ type: String, enum: ["suite", "case"] })
+  public type!: "suite" | "case";
+  @ApiProperty() public suiteId!: string;
+  @ApiProperty() public suiteKey!: string;
+  @ApiProperty() public suiteName!: string;
+  @ApiProperty() public suitePath!: string;
+  @ApiProperty() public suiteEnabled!: boolean;
+  @ApiPropertyOptional({ type: String, format: "uuid", nullable: true })
+  public caseId!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) public caseNodeId!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) public caseName!: string | null;
+  @ApiPropertyOptional({ type: String, enum: ["file", "case"], nullable: true })
+  public caseKind!: "file" | "case" | null;
+  @ApiPropertyOptional({ type: Boolean, nullable: true }) public caseEnabled!: boolean | null;
+  @ApiPropertyOptional({ type: String, format: "uuid", nullable: true })
+  public lastRunId!: string | null;
   @ApiPropertyOptional({ type: String, nullable: true }) public lastRunStatus!: string | null;
   @ApiProperty() public totalCount!: number;
   @ApiProperty() public passedCount!: number;
@@ -206,8 +240,22 @@ export class ApiTestCollectionSuiteResponseDto {
 }
 
 export class ApiTestCollectionDetailResponseDto extends ApiTestCollectionResponseDto {
-  @ApiProperty({ type: [ApiTestCollectionSuiteResponseDto] })
-  public suites!: ApiTestCollectionSuiteResponseDto[];
+  @ApiProperty({ type: [ApiTestCollectionItemResponseDto] })
+  public items!: ApiTestCollectionItemResponseDto[];
+}
+
+export class ApiTestCaseResponseDto {
+  @ApiProperty() public id!: string;
+  @ApiProperty() public suiteId!: string;
+  @ApiProperty() public nodeId!: string;
+  @ApiProperty() public filePath!: string;
+  @ApiProperty() public name!: string;
+  @ApiProperty({ type: String, enum: ["file", "case"] }) public kind!: "file" | "case";
+  @ApiProperty() public ordinal!: number;
+}
+
+export class ApiTestCaseListResponseDto {
+  @ApiProperty({ type: [ApiTestCaseResponseDto] }) public cases!: ApiTestCaseResponseDto[];
 }
 
 export class ApiTestCollectionListResponseDto {
@@ -240,6 +288,9 @@ export class ApiTestSuiteResponseDto {
   @ApiProperty() public key!: string;
   @ApiProperty() public name!: string;
   @ApiProperty() public path!: string;
+  /** 编目到的函数数，不含测试文件行。 */
+  @ApiProperty() public caseCount!: number;
+  @ApiProperty() public fileCount!: number;
 }
 
 export class ApiTestEnvironmentResponseDto {
@@ -280,6 +331,10 @@ export class ApiTestRunResponseDto {
   @ApiProperty() public environmentName!: string;
   @ApiPropertyOptional({ type: String, format: "uuid", nullable: true })
   public batchId!: string | null;
+  @ApiPropertyOptional({ type: String, format: "uuid", nullable: true })
+  public collectionId!: string | null;
+  /** 执行范围：`{ path }` 为整个测试集，带 `nodeIds` 时只跑所选用例。 */
+  @ApiPropertyOptional({ type: Object, nullable: true }) public selection!: unknown;
   @ApiPropertyOptional({ type: String, nullable: true }) public repoCommit!: string | null;
   @ApiProperty() public status!: string;
   @ApiProperty() public cancelRequested!: boolean;
@@ -342,6 +397,8 @@ export class ApiTestSyncResponseDto {
   @ApiProperty() public changedFiles!: number;
   @ApiProperty() public suitesAdded!: number;
   @ApiProperty() public suitesRemoved!: number;
+  @ApiProperty() public casesAdded!: number;
+  @ApiProperty() public casesRemoved!: number;
   @ApiProperty() public requirementsChanged!: boolean;
   @ApiPropertyOptional({ type: String, nullable: true }) public message!: string | null;
   @ApiPropertyOptional({ type: String, format: "date-time", nullable: true })

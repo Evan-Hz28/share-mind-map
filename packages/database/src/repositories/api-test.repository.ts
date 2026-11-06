@@ -19,6 +19,8 @@ export interface ApiTestSyncRecord {
   changedFiles: number;
   suitesAdded: number;
   suitesRemoved: number;
+  casesAdded: number;
+  casesRemoved: number;
   requirementsChanged: boolean;
   message: string | null;
   startedAt: Date | null;
@@ -41,7 +43,24 @@ export interface ApiTestSuiteRecord {
   name: string;
   path: string;
   enabled: boolean;
+  /** 已编目的函数数，不含文件行。 */
+  caseCount: number;
+  fileCount: number;
   createdAt: Date;
+}
+
+export type ApiTestTargetKind = "file" | "case";
+
+/** 用例编目：node_id 是仓库相对路径，文件为 `a/b/test_x.py`，函数额外带 `::Class::func`。 */
+export interface ApiTestCaseRecord {
+  id: string;
+  suiteId: string;
+  nodeId: string;
+  filePath: string;
+  name: string;
+  kind: ApiTestTargetKind;
+  ordinal: number;
+  enabled: boolean;
 }
 
 export interface ApiTestRunRecord {
@@ -56,6 +75,8 @@ export interface ApiTestRunRecord {
   environmentBaseUrl: string;
   requestedBy: string;
   mode: "suite" | "selected";
+  /** 执行范围：`{ path }` 表示整个测试集，额外带 `nodeIds` 时只跑所选用例。 */
+  selection: unknown;
   /** 同一次多选执行共享一个批次；老记录为空。 */
   batchId: string | null;
   /** 从集合发起时记下集合；散跑为空。 */
@@ -100,13 +121,23 @@ export interface ApiTestCollectionRecord {
   updatedAt: Date;
 }
 
-export interface ApiTestCollectionSuiteRecord {
-  suiteId: string;
-  key: string;
-  name: string;
-  path: string;
-  enabled: boolean;
+/**
+ * 集合成员：caseId 为空表示整个测试集，否则是一条具体的文件/函数。
+ * 展示和执行都按 position 保持用户保存的顺序。
+ */
+export interface ApiTestCollectionItemRecord {
+  id: string;
   position: number;
+  suiteId: string;
+  suiteKey: string;
+  suiteName: string;
+  suitePath: string;
+  suiteEnabled: boolean;
+  caseId: string | null;
+  caseNodeId: string | null;
+  caseName: string | null;
+  caseKind: ApiTestTargetKind | null;
+  caseEnabled: boolean | null;
   lastRunId: string | null;
   lastRunStatus: ApiTestRunStatus | null;
   totalCount: number;
@@ -114,6 +145,65 @@ export interface ApiTestCollectionSuiteRecord {
   failedCount: number;
   skippedCount: number;
   lastRunAt: Date | null;
+}
+
+/** 执行目标：nodeIds 为空表示整个测试集，非空表示只跑这些用例。 */
+export interface ApiTestRunTarget {
+  suiteId: string;
+  path: string;
+  nodeIds: string[];
+}
+
+/**
+ * 把有序的集合成员整理成按测试集分组的执行目标。
+ * 同一测试集既被整体选中、又被单独选了用例时，整体优先；失效成员直接跳过。
+ */
+/** `file.py::Class::test` 是否已经被同一个文件行覆盖。 */
+function coveredByFile(nodeId: string, files: Set<string> | undefined): boolean {
+  if (files === undefined) return false;
+  const separator = nodeId.indexOf("::");
+  return separator !== -1 && files.has(nodeId.slice(0, separator));
+}
+
+export function groupCollectionTargets(
+  items: ApiTestCollectionItemRecord[],
+): ApiTestRunTarget[] {
+  const groups = new Map<string, ApiTestRunTarget>();
+  const wholeSuites = new Set(
+    items.filter((item) => item.suiteEnabled && item.caseId === null).map((item) => item.suiteId),
+  );
+  // 选了整个文件就不必再单独跑它下面的函数，否则同一个用例会执行两次。
+  const fileNodes = new Map<string, Set<string>>();
+  for (const item of items) {
+    if (!item.suiteEnabled || item.caseId === null || item.caseEnabled !== true) continue;
+    if (item.caseKind !== "file" || item.caseNodeId === null) continue;
+    const files = fileNodes.get(item.suiteId) ?? new Set<string>();
+    files.add(item.caseNodeId);
+    fileNodes.set(item.suiteId, files);
+  }
+  for (const item of items) {
+    if (!item.suiteEnabled) continue;
+    if (item.caseId === null) {
+      groups.set(item.suiteId, { suiteId: item.suiteId, path: item.suitePath, nodeIds: [] });
+      continue;
+    }
+    if (item.caseEnabled !== true || item.caseNodeId === null) continue;
+    if (wholeSuites.has(item.suiteId)) continue;
+    if (item.caseKind === "case" && coveredByFile(item.caseNodeId, fileNodes.get(item.suiteId))) {
+      continue;
+    }
+    const existing = groups.get(item.suiteId);
+    if (existing === undefined) {
+      groups.set(item.suiteId, {
+        suiteId: item.suiteId,
+        path: item.suitePath,
+        nodeIds: [item.caseNodeId],
+      });
+    } else if (!existing.nodeIds.includes(item.caseNodeId)) {
+      existing.nodeIds.push(item.caseNodeId);
+    }
+  }
+  return [...groups.values()];
 }
 
 /** 一次集合执行 = 一个批次，执行记录按批次聚合，不按单套件铺开。 */
@@ -168,7 +258,20 @@ interface SuiteRow extends Record<string, unknown> {
   name: string;
   path: string;
   enabled: boolean;
+  case_count: number;
+  file_count: number;
   created_at: Date | string;
+}
+
+interface CaseRow extends Record<string, unknown> {
+  id: string;
+  suite_id: string;
+  node_id: string;
+  file_path: string;
+  name: string;
+  kind: ApiTestTargetKind;
+  ordinal: number;
+  enabled: boolean;
 }
 
 interface EnvironmentRow extends Record<string, unknown> {
@@ -192,6 +295,7 @@ interface RunRow extends Record<string, unknown> {
   environment_base_url: string;
   requested_by: string;
   mode: "suite" | "selected";
+  selection: unknown;
   batch_id: string | null;
   collection_id: string | null;
   repo_commit: string | null;
@@ -233,13 +337,19 @@ interface CollectionRow extends Record<string, unknown> {
   updated_at: Date | string;
 }
 
-interface CollectionSuiteRow extends Record<string, unknown> {
-  suite_id: string;
-  key: string;
-  name: string;
-  path: string;
-  enabled: boolean;
+interface CollectionItemRow extends Record<string, unknown> {
+  id: string;
   position: number;
+  suite_id: string;
+  suite_key: string;
+  suite_name: string;
+  suite_path: string;
+  suite_enabled: boolean;
+  case_id: string | null;
+  case_node_id: string | null;
+  case_name: string | null;
+  case_kind: ApiTestTargetKind | null;
+  case_enabled: boolean | null;
   last_run_id: string | null;
   last_run_status: ApiTestRunStatus | null;
   total_count: number | null;
@@ -301,6 +411,8 @@ interface SyncRow extends Record<string, unknown> {
   changed_files: number;
   suites_added: number;
   suites_removed: number;
+  cases_added: number;
+  cases_removed: number;
   requirements_changed: boolean;
   message: string | null;
   started_at: Date | string | null;
@@ -320,7 +432,22 @@ function toSuite(row: SuiteRow): ApiTestSuiteRecord {
     name: row.name,
     path: row.path,
     enabled: row.enabled,
+    caseCount: row.case_count,
+    fileCount: row.file_count,
     createdAt: asDate(row.created_at) as Date,
+  };
+}
+
+function toCase(row: CaseRow): ApiTestCaseRecord {
+  return {
+    id: row.id,
+    suiteId: row.suite_id,
+    nodeId: row.node_id,
+    filePath: row.file_path,
+    name: row.name,
+    kind: row.kind,
+    ordinal: row.ordinal,
+    enabled: row.enabled,
   };
 }
 
@@ -348,6 +475,7 @@ function toRun(row: RunRow): ApiTestRunRecord {
     environmentBaseUrl: row.environment_base_url,
     requestedBy: row.requested_by,
     mode: row.mode,
+    selection: row.selection,
     batchId: row.batch_id,
     collectionId: row.collection_id,
     repoCommit: row.repo_commit,
@@ -394,14 +522,20 @@ function toCollection(row: CollectionRow): ApiTestCollectionRecord {
   };
 }
 
-function toCollectionSuite(row: CollectionSuiteRow): ApiTestCollectionSuiteRecord {
+function toCollectionItem(row: CollectionItemRow): ApiTestCollectionItemRecord {
   return {
-    suiteId: row.suite_id,
-    key: row.key,
-    name: row.name,
-    path: row.path,
-    enabled: row.enabled,
+    id: row.id,
     position: row.position,
+    suiteId: row.suite_id,
+    suiteKey: row.suite_key,
+    suiteName: row.suite_name,
+    suitePath: row.suite_path,
+    suiteEnabled: row.suite_enabled,
+    caseId: row.case_id,
+    caseNodeId: row.case_node_id,
+    caseName: row.case_name,
+    caseKind: row.case_kind,
+    caseEnabled: row.case_enabled,
     lastRunId: row.last_run_id,
     lastRunStatus: row.last_run_status,
     totalCount: row.total_count ?? 0,
@@ -469,6 +603,8 @@ function toSync(row: SyncRow): ApiTestSyncRecord {
     changedFiles: row.changed_files,
     suitesAdded: row.suites_added,
     suitesRemoved: row.suites_removed,
+    casesAdded: row.cases_added,
+    casesRemoved: row.cases_removed,
     requirementsChanged: row.requirements_changed,
     message: row.message,
     startedAt: asDate(row.started_at),
@@ -479,18 +615,28 @@ function toSync(row: SyncRow): ApiTestSyncRecord {
 
 const syncColumns = sql.raw(`
   id, branch, status, trigger, requested_by, commit_sha, previous_sha,
-  changed_files, suites_added, suites_removed, requirements_changed,
-  message, started_at, finished_at, created_at
+  changed_files, suites_added, suites_removed, cases_added, cases_removed,
+  requirements_changed, message, started_at, finished_at, created_at
 `);
 
 const runColumns = sql.raw(`
   r.id, r.suite_id, s.key AS suite_key, s.name AS suite_name, s.path AS suite_path,
   r.environment_id, e.key AS environment_key, e.name AS environment_name,
   e.base_url AS environment_base_url,
-  r.requested_by, r.mode, r.batch_id, r.collection_id, r.repo_commit,
+  r.requested_by, r.mode, r.selection, r.batch_id, r.collection_id, r.repo_commit,
   r.status, r.cancel_requested,
   r.total_count, r.passed_count, r.failed_count, r.skipped_count,
   r.error_message, r.created_at, r.started_at, r.finished_at
+`);
+
+/** 列表和详情都要展示用例数，统一走这个 lateral，避免把编目表铺开。 */
+const suiteCounts = sql.raw(`
+  LEFT JOIN LATERAL (
+    SELECT count(*) FILTER (WHERE c.kind = 'case')::int AS case_count,
+           count(*) FILTER (WHERE c.kind = 'file')::int AS file_count
+    FROM api_test_cases c
+    WHERE c.suite_id = s.id AND c.enabled = true
+  ) counts ON true
 `);
 
 const itemColumns = sql.raw(`
@@ -501,8 +647,8 @@ const itemColumns = sql.raw(`
 /** 目标名、环境名和上次结果都 join 出来，列表页一次查询就够。 */
 const scheduleSelect = sql.raw(`
   SELECT s.id, s.name, s.target_type, s.target_id,
-         COALESCE(su.name, c.name) AS target_name,
-         su.path AS target_path,
+         COALESCE(su.name, c.name, tc.name) AS target_name,
+         COALESCE(su.path, tc.node_id) AS target_path,
          s.environment_id, e.name AS environment_name, e.key AS environment_key,
          s.cron, s.timezone, s.sync_before_run, s.enabled,
          s.next_run_at, s.last_batch_id, s.last_run_at, s.last_error,
@@ -512,6 +658,7 @@ const scheduleSelect = sql.raw(`
   FROM api_test_schedules s
   LEFT JOIN api_test_suites su ON s.target_type = 'suite' AND su.id = s.target_id
   LEFT JOIN api_test_collections c ON s.target_type = 'collection' AND c.id = s.target_id
+  LEFT JOIN api_test_cases tc ON s.target_type = 'case' AND tc.id = s.target_id
   LEFT JOIN api_test_environments e ON e.id = s.environment_id
   LEFT JOIN LATERAL (
     SELECT CASE
@@ -532,10 +679,13 @@ const scheduleSelect = sql.raw(`
 export class ApiTestRepository {
   public async listSuites(database: Database): Promise<ApiTestSuiteRecord[]> {
     const result = await database.execute<SuiteRow>(sql`
-      SELECT id, key, name, path, enabled, created_at
-      FROM api_test_suites
-      WHERE enabled = true
-      ORDER BY key
+      SELECT s.id, s.key, s.name, s.path, s.enabled, s.created_at,
+             COALESCE(counts.case_count, 0) AS case_count,
+             COALESCE(counts.file_count, 0) AS file_count
+      FROM api_test_suites s
+      ${suiteCounts}
+      WHERE s.enabled = true
+      ORDER BY s.key
     `);
     return result.rows.map(toSuite);
   }
@@ -552,12 +702,104 @@ export class ApiTestRepository {
 
   public async findSuite(database: Database, id: string): Promise<ApiTestSuiteRecord | null> {
     const result = await database.execute<SuiteRow>(sql`
-      SELECT id, key, name, path, enabled, created_at
-      FROM api_test_suites
-      WHERE id = ${id} AND enabled = true
+      SELECT s.id, s.key, s.name, s.path, s.enabled, s.created_at,
+             COALESCE(counts.case_count, 0) AS case_count,
+             COALESCE(counts.file_count, 0) AS file_count
+      FROM api_test_suites s
+      ${suiteCounts}
+      WHERE s.id = ${id} AND s.enabled = true
     `);
     const row = result.rows[0];
     return row === undefined ? null : toSuite(row);
+  }
+
+  public async listCases(database: Database, suiteId: string): Promise<ApiTestCaseRecord[]> {
+    const result = await database.execute<CaseRow>(sql`
+      SELECT id, suite_id, node_id, file_path, name, kind, ordinal, enabled
+      FROM api_test_cases
+      WHERE suite_id = ${suiteId} AND enabled = true
+      ORDER BY file_path, ordinal, id
+    `);
+    return result.rows.map(toCase);
+  }
+
+  public async findCase(database: Database, id: string): Promise<ApiTestCaseRecord | null> {
+    const result = await database.execute<CaseRow>(sql`
+      SELECT id, suite_id, node_id, file_path, name, kind, ordinal, enabled
+      FROM api_test_cases
+      WHERE id = ${id} AND enabled = true
+    `);
+    const row = result.rows[0];
+    return row === undefined ? null : toCase(row);
+  }
+
+  /**
+   * 同步扫描结果是全量的，用一条语句批量 upsert；逐条 INSERT 在 6000+ 用例时太慢。
+   * 冲突时保留原 id，只刷新路径、名字和可见状态。
+   */
+  public async upsertCases(
+    database: Database,
+    cases: {
+      id: string;
+      suiteId: string;
+      nodeId: string;
+      filePath: string;
+      name: string;
+      kind: ApiTestTargetKind;
+      ordinal: number;
+      commit: string;
+    }[],
+  ): Promise<number> {
+    if (cases.length === 0) return 0;
+    const payload = JSON.stringify(
+      cases.map((item) => ({
+        id: item.id,
+        suite_id: item.suiteId,
+        node_id: item.nodeId,
+        file_path: item.filePath,
+        name: item.name,
+        kind: item.kind,
+        ordinal: item.ordinal,
+        commit: item.commit,
+      })),
+    );
+    const result = await database.execute<{ inserted: number }>(sql`
+      WITH upserted AS (
+        INSERT INTO api_test_cases (
+          id, suite_id, node_id, file_path, name, kind, ordinal,
+          enabled, discovered, last_seen_commit
+        )
+        SELECT row.id, row.suite_id, row.node_id, row.file_path, row.name,
+               row.kind, row.ordinal, true, true, row.commit
+        FROM jsonb_to_recordset(${payload}::jsonb) AS row(
+          id uuid, suite_id uuid, node_id text, file_path text, name text,
+          kind varchar, ordinal integer, commit varchar
+        )
+        ON CONFLICT (suite_id, node_id) DO UPDATE
+          SET file_path = excluded.file_path,
+              name = excluded.name,
+              kind = excluded.kind,
+              ordinal = excluded.ordinal,
+              enabled = true,
+              last_seen_commit = excluded.last_seen_commit
+        RETURNING (xmax = 0) AS inserted
+      )
+      SELECT count(*) FILTER (WHERE inserted)::int AS inserted FROM upserted
+    `);
+    return result.rows[0]?.inserted ?? 0;
+  }
+
+  /** 只有整轮扫描成功后才调用：本轮没见到的用例停用，历史记录和集合引用保留。 */
+  public async disableCasesMissing(database: Database, commit: string): Promise<number> {
+    const result = await database.execute<{ id: string }>(sql`
+      UPDATE api_test_cases
+      SET enabled = false
+      WHERE discovered = true
+        AND enabled = true
+        AND last_seen_commit IS DISTINCT FROM ${commit}
+      RETURNING id
+    `);
+    return result.rows.length;
   }
 
   public async findEnvironment(
@@ -660,19 +902,27 @@ export class ApiTestRepository {
              agg.last_run_at, agg.last_run_status
       FROM api_test_collections c
       LEFT JOIN LATERAL (
-        SELECT count(*)::int AS suite_count,
-               COALESCE(SUM(latest.total_count), 0)::int AS case_count,
+        SELECT count(DISTINCT item.suite_id)::int AS suite_count,
+               COALESCE(SUM(CASE
+                 WHEN item.case_id IS NULL THEN COALESCE(suite_cases.case_count, 0)
+                 ELSE 1
+               END), 0)::int AS case_count,
                MAX(latest.created_at) AS last_run_at,
                (ARRAY_AGG(latest.status ORDER BY latest.created_at DESC))[1] AS last_run_status
-        FROM api_test_collection_suites cs
+        FROM api_test_collection_items item
+        LEFT JOIN LATERAL (
+          SELECT count(*)::int AS case_count
+          FROM api_test_cases c
+          WHERE c.suite_id = item.suite_id AND c.enabled = true AND c.kind = 'case'
+        ) suite_cases ON true
         LEFT JOIN LATERAL (
           SELECT r.total_count, r.created_at, r.status
           FROM api_test_runs r
-          WHERE r.suite_id = cs.suite_id
+          WHERE r.suite_id = item.suite_id
           ORDER BY r.created_at DESC, r.id DESC
           LIMIT 1
         ) latest ON true
-        WHERE cs.collection_id = c.id
+        WHERE item.collection_id = c.id
       ) agg ON true
       ORDER BY c.updated_at DESC, c.id DESC
     `);
@@ -690,19 +940,27 @@ export class ApiTestRepository {
              agg.last_run_at, agg.last_run_status
       FROM api_test_collections c
       LEFT JOIN LATERAL (
-        SELECT count(*)::int AS suite_count,
-               COALESCE(SUM(latest.total_count), 0)::int AS case_count,
+        SELECT count(DISTINCT item.suite_id)::int AS suite_count,
+               COALESCE(SUM(CASE
+                 WHEN item.case_id IS NULL THEN COALESCE(suite_cases.case_count, 0)
+                 ELSE 1
+               END), 0)::int AS case_count,
                MAX(latest.created_at) AS last_run_at,
                (ARRAY_AGG(latest.status ORDER BY latest.created_at DESC))[1] AS last_run_status
-        FROM api_test_collection_suites cs
+        FROM api_test_collection_items item
+        LEFT JOIN LATERAL (
+          SELECT count(*)::int AS case_count
+          FROM api_test_cases tc
+          WHERE tc.suite_id = item.suite_id AND tc.enabled = true AND tc.kind = 'case'
+        ) suite_cases ON true
         LEFT JOIN LATERAL (
           SELECT r.total_count, r.created_at, r.status
           FROM api_test_runs r
-          WHERE r.suite_id = cs.suite_id
+          WHERE r.suite_id = item.suite_id
           ORDER BY r.created_at DESC, r.id DESC
           LIMIT 1
         ) latest ON true
-        WHERE cs.collection_id = c.id
+        WHERE item.collection_id = c.id
       ) agg ON true
       WHERE c.id = ${id}
     `);
@@ -746,20 +1004,19 @@ export class ApiTestRepository {
   }
 
   /** 成员整体替换：集合成员不多，重建比逐条 diff 简单，也天然处理顺序。 */
-  public async replaceCollectionSuites(
+  public async replaceCollectionItems(
     database: Database,
     collectionId: string,
-    suiteIds: string[],
+    items: { suiteId: string; caseId: string | null }[],
   ): Promise<void> {
     await database.transaction(async (transaction) => {
       await transaction.execute(
-        sql`DELETE FROM api_test_collection_suites WHERE collection_id = ${collectionId}`,
+        sql`DELETE FROM api_test_collection_items WHERE collection_id = ${collectionId}`,
       );
-      for (const [position, suiteId] of suiteIds.entries()) {
+      for (const [position, item] of items.entries()) {
         await transaction.execute(sql`
-          INSERT INTO api_test_collection_suites (collection_id, suite_id, position)
-          VALUES (${collectionId}, ${suiteId}, ${position})
-          ON CONFLICT (collection_id, suite_id) DO NOTHING
+          INSERT INTO api_test_collection_items (id, collection_id, suite_id, case_id, position)
+          VALUES (${newId()}, ${collectionId}, ${item.suiteId}, ${item.caseId}, ${position})
         `);
       }
       await transaction.execute(
@@ -768,17 +1025,22 @@ export class ApiTestRepository {
     });
   }
 
-  public async listCollectionSuites(
+  public async listCollectionItems(
     database: Database,
     collectionId: string,
-  ): Promise<ApiTestCollectionSuiteRecord[]> {
-    const result = await database.execute<CollectionSuiteRow>(sql`
-      SELECT s.id AS suite_id, s.key, s.name, s.path, s.enabled, cs.position,
+  ): Promise<ApiTestCollectionItemRecord[]> {
+    const result = await database.execute<CollectionItemRow>(sql`
+      SELECT item.id, item.position, item.suite_id,
+             s.key AS suite_key, s.name AS suite_name, s.path AS suite_path,
+             s.enabled AS suite_enabled,
+             item.case_id, c.node_id AS case_node_id, c.name AS case_name,
+             c.kind AS case_kind, c.enabled AS case_enabled,
              latest.id AS last_run_id, latest.status AS last_run_status,
              latest.total_count, latest.passed_count, latest.failed_count,
              latest.skipped_count, latest.created_at AS last_run_at
-      FROM api_test_collection_suites cs
-      JOIN api_test_suites s ON s.id = cs.suite_id
+      FROM api_test_collection_items item
+      JOIN api_test_suites s ON s.id = item.suite_id
+      LEFT JOIN api_test_cases c ON c.id = item.case_id
       LEFT JOIN LATERAL (
         SELECT r.id, r.status, r.total_count, r.passed_count, r.failed_count,
                r.skipped_count, r.created_at
@@ -787,10 +1049,10 @@ export class ApiTestRepository {
         ORDER BY r.created_at DESC, r.id DESC
         LIMIT 1
       ) latest ON true
-      WHERE cs.collection_id = ${collectionId}
-      ORDER BY cs.position, s.name
+      WHERE item.collection_id = ${collectionId}
+      ORDER BY item.position, item.id
     `);
-    return result.rows.map(toCollectionSuite);
+    return result.rows.map(toCollectionItem);
   }
 
   /** 执行记录按批次聚合：一次执行集合就是一批，不能按套件铺成 N 行。 */
@@ -1012,6 +1274,8 @@ export class ApiTestRepository {
       changedFiles: number;
       suitesAdded: number;
       suitesRemoved: number;
+      casesAdded: number;
+      casesRemoved: number;
       requirementsChanged: boolean;
       message: string | null;
     },
@@ -1024,6 +1288,8 @@ export class ApiTestRepository {
           changed_files = ${input.changedFiles},
           suites_added = ${input.suitesAdded},
           suites_removed = ${input.suitesRemoved},
+          cases_added = ${input.casesAdded},
+          cases_removed = ${input.casesRemoved},
           requirements_changed = ${input.requirementsChanged},
           message = ${input.message},
           finished_at = now()

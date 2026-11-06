@@ -6,12 +6,13 @@ import {
   listApiTestCollectionExecutions,
   listApiTestCollections,
   runApiTestCollection,
-  setApiTestCollectionSuites,
+  setApiTestCollectionItems,
   updateApiTestCollection,
+  type ApiTestCaseResponseDto,
   type ApiTestCollectionDetailResponseDto,
   type ApiTestCollectionExecutionResponseDto,
+  type ApiTestCollectionItemResponseDto,
   type ApiTestCollectionResponseDto,
-  type ApiTestCollectionSuiteResponseDto,
   type ApiTestEnvironmentResponseDto,
   type ApiTestSuiteResponseDto,
 } from "@share-mind-map/api-client";
@@ -29,6 +30,10 @@ import { useRouter } from "vue-router";
 
 import { apiClient, toApiFailure, type RequestFailure } from "../api.js";
 import RequestErrorAlert from "../components/RequestErrorAlert.vue";
+import CaseTree from "./CaseTree.vue";
+
+/** 集合成员：整个测试集，或一个具体的文件/函数。 */
+type MemberInput = { type: "suite" | "case"; id: string };
 
 const props = defineProps<{
   suites: ApiTestSuiteResponseDto[];
@@ -43,27 +48,39 @@ const collections = ref<ApiTestCollectionResponseDto[]>([]);
 const selectedId = ref("");
 const detail = ref<ApiTestCollectionDetailResponseDto | null>(null);
 const executions = ref<ApiTestCollectionExecutionResponseDto[]>([]);
-const detailTab = ref<"suites" | "executions">("suites");
+const detailTab = ref<"members" | "executions">("members");
 const keyword = ref("");
 const loading = ref(true);
 const busy = ref(false);
 const error = ref<RequestFailure | null>(null);
-// 成员表里勾选的行，用来批量移出集合。
-const checkedSuites = ref<string[]>([]);
+// 成员表里勾选的行（成员 id），用来批量移出集合。
+const checkedItems = ref<string[]>([]);
+// 展开过用例的测试集 -> 该测试集的用例 id，整测试集被勾选时据此剔除已选用例。
+const suiteCaseIds = ref<Map<string, string[]>>(new Map());
 let poll: ReturnType<typeof setInterval> | null = null;
 
 const dialog = ref<{
   open: boolean;
-  mode: "create" | "edit" | "suites";
+  mode: "create" | "edit" | "members";
   name: string;
   description: string;
-  suiteIds: string[];
-}>({ open: false, mode: "create", name: "", description: "", suiteIds: [] });
+  items: MemberInput[];
+}>({ open: false, mode: "create", name: "", description: "", items: [] });
+const expandedSuiteId = ref("");
 
 const dialogTitle = computed(() => {
   if (dialog.value.mode === "create") return "新建测试集合";
   if (dialog.value.mode === "edit") return "编辑测试集合";
-  return "添加测试集";
+  return "编辑集合成员";
+});
+
+/** 所有已选用例 id；CaseTree 只渲染当前测试集，但会原样保留其他测试集的 id。 */
+const dialogCaseIds = computed<string[]>({
+  get: () => dialog.value.items.filter((item) => item.type === "case").map((item) => item.id),
+  set: (ids) => {
+    const suites = dialog.value.items.filter((item) => item.type === "suite");
+    dialog.value.items = [...suites, ...ids.map((id) => ({ type: "case" as const, id }))];
+  },
 });
 
 const statusLabels: Record<string, string> = {
@@ -127,51 +144,84 @@ async function loadDetail(): Promise<void> {
   }
   detail.value = detailResult.data;
   executions.value = executionResult.data.executions;
-  checkedSuites.value = [];
+  checkedItems.value = [];
+}
+
+function memberInputs(): MemberInput[] {
+  return detail.value === null
+    ? []
+    : detail.value.items.map((item) =>
+        item.type === "suite"
+          ? { type: "suite", id: item.suiteId }
+          : { type: "case", id: item.caseId ?? "" },
+      );
+}
+
+function openDialog(mode: "create" | "edit" | "members"): void {
+  const isCreate = mode === "create";
+  dialog.value = {
+    open: true,
+    mode,
+    name: isCreate ? "" : (detail.value?.name ?? ""),
+    description: isCreate ? "" : (detail.value?.description ?? ""),
+    items: isCreate ? [] : memberInputs(),
+  };
+  expandedSuiteId.value = "";
 }
 
 function openCreate(): void {
-  dialog.value = { open: true, mode: "create", name: "", description: "", suiteIds: [] };
+  openDialog("create");
 }
 
 function openEdit(): void {
-  if (detail.value === null) return;
-  dialog.value = {
-    open: true,
-    mode: "edit",
-    name: detail.value.name,
-    description: detail.value.description,
-    suiteIds: detail.value.suites.map((suite) => suite.suiteId),
-  };
+  openDialog("edit");
 }
 
-function openAddSuites(): void {
-  if (detail.value === null) return;
-  dialog.value = {
-    open: true,
-    mode: "suites",
-    name: detail.value.name,
-    description: detail.value.description,
-    suiteIds: detail.value.suites.map((suite) => suite.suiteId),
-  };
+function openMembers(): void {
+  openDialog("members");
 }
 
-function toggleDialogSuite(id: string, checked: boolean): void {
-  const next = new Set(dialog.value.suiteIds);
-  if (checked) next.add(id);
-  else next.delete(id);
-  dialog.value.suiteIds = [...next];
+function dialogSuiteChecked(suiteId: string): boolean {
+  return dialog.value.items.some((item) => item.type === "suite" && item.id === suiteId);
+}
+
+function rememberSuiteCases(suiteId: string, cases: ApiTestCaseResponseDto[]): void {
+  const next = new Map(suiteCaseIds.value);
+  next.set(
+    suiteId,
+    cases.map((item) => item.id),
+  );
+  suiteCaseIds.value = next;
+}
+
+function toggleDialogSuite(suiteId: string, checked: boolean): void {
+  const rest = dialog.value.items.filter(
+    (item) => !(item.type === "suite" && item.id === suiteId),
+  );
+  if (!checked) {
+    dialog.value.items = rest;
+    return;
+  }
+  // 整个测试集被选中时，它下面的单条用例不再单独占位，执行时本来就以整体为准。
+  const known = new Set(suiteCaseIds.value.get(suiteId) ?? []);
+  const kept = rest.filter((item) => !(item.type === "case" && known.has(item.id)));
+  dialog.value.items = [{ type: "suite", id: suiteId }, ...kept];
+  if (expandedSuiteId.value === suiteId) expandedSuiteId.value = "";
+}
+
+function toggleExpanded(suiteId: string): void {
+  expandedSuiteId.value = expandedSuiteId.value === suiteId ? "" : suiteId;
 }
 
 async function saveDialog(): Promise<void> {
-  const { mode, name, description, suiteIds } = dialog.value;
+  const { mode, name, description, items } = dialog.value;
   busy.value = true;
   error.value = null;
   try {
     if (mode === "create") {
       const result = await createApiTestCollection({
         client: apiClient,
-        body: { name, description, suiteIds },
+        body: { name, description, items },
       });
       if (result.data === undefined) {
         error.value = toApiFailure(result.error);
@@ -191,10 +241,10 @@ async function saveDialog(): Promise<void> {
       }
       await loadCollections();
     } else {
-      const result = await setApiTestCollectionSuites({
+      const result = await setApiTestCollectionItems({
         client: apiClient,
         path: { collectionId: selectedId.value },
-        body: { suiteIds },
+        body: { items },
       });
       if (result.data === undefined) {
         error.value = toApiFailure(result.error);
@@ -232,18 +282,22 @@ async function removeCollection(): Promise<void> {
   }
 }
 
-async function removeCheckedSuites(): Promise<void> {
-  if (detail.value === null || checkedSuites.value.length === 0) return;
-  const remaining = detail.value.suites
-    .map((suite) => suite.suiteId)
-    .filter((id) => !checkedSuites.value.includes(id));
+async function removeCheckedItems(): Promise<void> {
+  if (detail.value === null || checkedItems.value.length === 0) return;
+  const remaining = detail.value.items
+    .filter((item) => !checkedItems.value.includes(item.id))
+    .map((item) =>
+      item.type === "suite"
+        ? { type: "suite" as const, id: item.suiteId }
+        : { type: "case" as const, id: item.caseId ?? "" },
+    );
   busy.value = true;
   error.value = null;
   try {
-    const result = await setApiTestCollectionSuites({
+    const result = await setApiTestCollectionItems({
       client: apiClient,
       path: { collectionId: selectedId.value },
-      body: { suiteIds: remaining },
+      body: { items: remaining },
     });
     if (result.data === undefined) {
       error.value = toApiFailure(result.error);
@@ -276,17 +330,45 @@ async function execute(): Promise<void> {
   }
 }
 
-function toggleCheckedSuite(id: string, checked: boolean): void {
-  const next = new Set(checkedSuites.value);
+function toggleCheckedItem(id: string, checked: boolean): void {
+  const next = new Set(checkedItems.value);
   if (checked) next.add(id);
   else next.delete(id);
-  checkedSuites.value = [...next];
+  checkedItems.value = [...next];
 }
 
-function openRun(run: unknown): void {
-  const latest = (run as ApiTestCollectionSuiteResponseDto).lastRunId;
-  if (latest === null) return;
-  void router.push({ name: "api-test-run", params: { runId: latest } });
+// 表格插槽的 row 是通用类型，读取前统一按成员结构转换一次。
+function asMember(row: unknown): ApiTestCollectionItemResponseDto {
+  return row as ApiTestCollectionItemResponseDto;
+}
+
+function memberName(row: unknown): string {
+  const item = asMember(row);
+  if (item.type === "suite") return item.suiteName;
+  return item.caseName ?? item.caseNodeId ?? "已失效用例";
+}
+
+function memberPath(row: unknown): string {
+  const item = asMember(row);
+  return item.type === "suite" ? item.suitePath : (item.caseNodeId ?? item.suitePath);
+}
+
+function memberCaseCount(row: unknown): number {
+  const item = asMember(row);
+  if (item.type === "case") return 1;
+  return props.suites.find((suite) => suite.id === item.suiteId)?.caseCount ?? item.totalCount;
+}
+
+function memberEnabled(row: unknown): boolean {
+  const item = asMember(row);
+  if (item.type === "suite") return item.suiteEnabled;
+  return item.caseId !== null && item.caseEnabled === true;
+}
+
+function openRun(row: unknown): void {
+  const item = asMember(row);
+  if (item.lastRunId === null) return;
+  void router.push({ name: "api-test-run", params: { runId: item.lastRunId } });
 }
 
 function openExecution(execution: unknown): void {
@@ -346,8 +428,9 @@ defineExpose({ openCreate });
             @click="selectedId = item.id"
           >
             <span class="collections__item-name">{{ item.name }}</span>
-            <span class="collections__item-desc">{{ item.description || "—" }}</span>
-            <span class="collections__item-count">{{ item.suiteCount }}</span>
+            <span v-if="item.description" class="collections__item-desc">
+              {{ item.description }}
+            </span>
           </button>
         </li>
       </ul>
@@ -383,7 +466,7 @@ defineExpose({ openCreate });
             <ElButton
               type="primary"
               :loading="busy"
-              :disabled="environmentId === '' || detail.suiteCount === 0"
+              :disabled="environmentId === '' || detail.items.length === 0"
               @click="execute"
             >
               执行集合
@@ -401,10 +484,10 @@ defineExpose({ openCreate });
           <button
             type="button"
             class="collections__tab"
-            :class="{ 'is-active': detailTab === 'suites' }"
-            @click="detailTab = 'suites'"
+            :class="{ 'is-active': detailTab === 'members' }"
+            @click="detailTab = 'members'"
           >
-            测试集列表（{{ detail.suiteCount }}）
+            成员（{{ detail.items.length }}）
           </button>
           <button
             type="button"
@@ -416,48 +499,51 @@ defineExpose({ openCreate });
           </button>
         </div>
 
-        <div v-if="detailTab === 'suites'">
+        <div v-if="detailTab === 'members'">
           <div class="collections__toolbar">
-            <span class="collections__hint">已选 {{ checkedSuites.length }}</span>
+            <span class="collections__hint">已选 {{ checkedItems.length }}</span>
             <ElButton
-              v-if="checkedSuites.length > 0"
+              v-if="checkedItems.length > 0"
               :disabled="busy"
-              @click="removeCheckedSuites"
+              @click="removeCheckedItems"
             >
               移除所选
             </ElButton>
-            <ElButton :disabled="busy" @click="openAddSuites">添加测试集</ElButton>
+            <ElButton :disabled="busy" @click="openMembers">添加测试集 / 用例</ElButton>
           </div>
 
-          <ElTable
-            :data="detail.suites"
-            row-key="suiteId"
-            empty-text="这个集合还没有测试集"
-          >
+          <ElTable :data="detail.items" row-key="id" empty-text="这个集合还没有成员">
             <ElTableColumn width="48">
               <template #default="{ row }">
                 <input
                   type="checkbox"
-                  :checked="checkedSuites.includes(row.suiteId)"
+                  :checked="checkedItems.includes(row.id)"
                   @change="
-                    toggleCheckedSuite(row.suiteId, ($event.target as HTMLInputElement).checked)
+                    toggleCheckedItem(row.id, ($event.target as HTMLInputElement).checked)
                   "
-                />
+                >
               </template>
             </ElTableColumn>
-            <ElTableColumn label="测试集名称" min-width="220">
+            <ElTableColumn label="成员" min-width="220">
               <template #default="{ row }">
                 <div class="collections__suite-name">
-                  {{ row.name }}
-                  <ElTag v-if="!row.enabled" type="info">已停用</ElTag>
+                  <ElTag :type="row.type === 'suite' ? 'primary' : 'success'" size="small">
+                    {{ row.type === "suite" ? "测试集" : "用例" }}
+                  </ElTag>
+                  <span class="collections__suite-label" :title="memberName(row)">
+                    {{ memberName(row) }}
+                  </span>
+                  <ElTag v-if="!memberEnabled(row)" type="info" size="small">已失效</ElTag>
                 </div>
-                <div class="collections__path">{{ row.path }}</div>
+                <div class="collections__path" :title="memberPath(row)">{{ memberPath(row) }}</div>
               </template>
             </ElTableColumn>
-            <ElTableColumn prop="totalCount" label="用例数" width="90" />
+            <ElTableColumn label="用例数" width="90">
+              <template #default="{ row }">{{ memberCaseCount(row) }}</template>
+            </ElTableColumn>
             <ElTableColumn label="最近执行结果" width="140">
               <template #default="{ row }">
-                <template v-if="row.lastRunStatus === null">-</template>
+                <template v-if="row.type !== 'suite' || row.lastRunStatus === null">-</template>
                 <template v-else>
                   <ElTag :type="statusTypes[row.lastRunStatus] ?? 'info'">
                     {{ statusLabels[row.lastRunStatus] ?? row.lastRunStatus }}
@@ -469,22 +555,16 @@ defineExpose({ openCreate });
               </template>
             </ElTableColumn>
             <ElTableColumn label="最近执行时间" min-width="170">
-              <template #default="{ row }">{{ formatTime(row.lastRunAt) }}</template>
+              <template #default="{ row }">
+                {{ row.type === "suite" ? formatTime(row.lastRunAt) : "-" }}
+              </template>
             </ElTableColumn>
-            <ElTableColumn label="操作" width="170">
+            <ElTableColumn label="操作" width="120">
               <template #default="{ row }">
                 <ElButton
                   link
                   type="primary"
-                  :disabled="environmentId === ''"
-                  @click="execute"
-                >
-                  执行
-                </ElButton>
-                <ElButton
-                  link
-                  type="primary"
-                  :disabled="row.lastRunId === null"
+                  :disabled="row.type !== 'suite' || row.lastRunId === null"
                   @click="openRun(row)"
                 >
                   查看报告
@@ -532,10 +612,12 @@ defineExpose({ openCreate });
 
     <ElDialog v-model="dialog.open" :title="dialogTitle" width="560px">
       <div class="collections__dialog">
-        <label class="collections__label">名称</label>
-        <ElInput v-model="dialog.name" maxlength="100" placeholder="例如：核心接口回归" />
+        <template v-if="dialog.mode !== 'members'">
+          <label class="collections__label">名称</label>
+          <ElInput v-model="dialog.name" maxlength="100" placeholder="例如：核心接口回归" />
+        </template>
 
-        <template v-if="dialog.mode !== 'suites'">
+        <template v-if="dialog.mode !== 'members'">
           <label class="collections__label">描述</label>
           <ElInput
             v-model="dialog.description"
@@ -546,19 +628,45 @@ defineExpose({ openCreate });
           />
         </template>
 
-        <label class="collections__label">测试集（已选 {{ dialog.suiteIds.length }}）</label>
-        <ul class="collections__picker">
-          <li v-for="suite in suites" :key="suite.id">
-            <label class="collections__pick">
-              <ElCheckbox
-                :model-value="dialog.suiteIds.includes(suite.id)"
-                @update:model-value="(checked) => toggleDialogSuite(suite.id, checked === true)"
+        <template v-if="dialog.mode !== 'edit'">
+          <label class="collections__label">成员（已选 {{ dialog.items.length }}）</label>
+          <p class="collections__hint">
+            勾选整个测试集，或展开后挑选具体的文件和用例；整测试集优先于它下面的用例。
+          </p>
+          <ul class="collections__picker">
+            <li v-for="suite in suites" :key="suite.id" class="collections__pick-suite">
+              <div class="collections__pick-row">
+                <label class="collections__pick">
+                  <ElCheckbox
+                    :model-value="dialogSuiteChecked(suite.id)"
+                    @update:model-value="
+                      (checked) => toggleDialogSuite(suite.id, checked === true)
+                    "
+                  />
+                  <span>{{ suite.name }}</span>
+                  <span class="collections__path">{{ suite.path }}</span>
+                </label>
+                <span class="collections__pick-count">{{ suite.caseCount }} 用例</span>
+                <ElButton
+                  link
+                  type="primary"
+                  :disabled="dialogSuiteChecked(suite.id)"
+                  @click="toggleExpanded(suite.id)"
+                >
+                  {{ expandedSuiteId === suite.id ? "收起用例" : "选择用例" }}
+                </ElButton>
+              </div>
+              <CaseTree
+                v-if="expandedSuiteId === suite.id"
+                v-model="dialogCaseIds"
+                :suite-id="suite.id"
+                :disabled="busy"
+                class="collections__case-tree"
+                @loaded="(loaded) => rememberSuiteCases(suite.id, loaded)"
               />
-              <span>{{ suite.name }}</span>
-              <span class="collections__path">{{ suite.path }}</span>
-            </label>
-          </li>
-        </ul>
+            </li>
+          </ul>
+        </template>
       </div>
 
       <template #footer>
@@ -642,11 +750,6 @@ defineExpose({ openCreate });
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.collections__item-count {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
 }
 
 .collections__detail {
@@ -747,13 +850,23 @@ defineExpose({ openCreate });
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   font-weight: 600;
 }
 
+.collections__suite-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .collections__path {
+  overflow: hidden;
   color: var(--el-text-color-secondary);
   font-family: var(--el-font-family-mono, monospace);
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .collections__result {
@@ -783,8 +896,8 @@ defineExpose({ openCreate });
 .collections__picker {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 220px;
+  gap: 10px;
+  max-height: 320px;
   margin: 0;
   padding: 8px;
   overflow: auto;
@@ -793,10 +906,38 @@ defineExpose({ openCreate });
   list-style: none;
 }
 
-.collections__pick {
+.collections__pick-suite {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.collections__pick-row {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.collections__pick {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   cursor: pointer;
+}
+
+.collections__pick-count {
+  flex: none;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.collections__case-tree {
+  max-height: 260px;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
 }
 </style>
