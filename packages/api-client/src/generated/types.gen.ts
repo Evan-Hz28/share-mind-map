@@ -1267,6 +1267,27 @@ export type ListApiTestEnvironmentsResponses = {
 
 export type ListApiTestEnvironmentsResponse = ListApiTestEnvironmentsResponses[keyof ListApiTestEnvironmentsResponses];
 
+export type RerunApiTestRunItemData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        itemId: string;
+    };
+    query?: never;
+    url: '/api/v1/api-tests/run-items/{itemId}/rerun';
+};
+
+export type RerunApiTestRunItemResponses = {
+    201: ApiTestRunCreateResponseDto;
+};
+
+export type RerunApiTestRunItemResponse = RerunApiTestRunItemResponses[keyof RerunApiTestRunItemResponses];
+
 export type ListApiTestRunsData = {
     body?: never;
     headers?: {

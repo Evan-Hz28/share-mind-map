@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { failureKind, parseFailure } from "../src/api-tests/failure.js";
+import {
+  curlFromRequest,
+  extractCurl,
+  failureKind,
+  parseFailure,
+} from "../src/api-tests/failure.js";
 
 const ASSERTION_WITH_MESSAGE = `self = <testcases.refund.test_refund_urgency_strict.TestRefundUrgencyStrictValidation object at 0x74c16c112b90>
 user_client = <common.http_client.HttpClient object at 0x74c16c122ad0>
@@ -173,6 +178,61 @@ describe("parseFailure", () => {
 
     expect(view?.kind).toBe("unknown");
     expect(view?.headline).toBe("只保留头部的旧数据，没有断言行");
+  });
+});
+
+describe("extractCurl", () => {
+  it("reads the multi-line CURL block and drops the pytest E column", () => {
+    const raw = [
+      "E       AssertionError: 期望状态码 400，实际 200，响应: {\"code\":1001}",
+      "E       ",
+      "E       CURL:",
+      "E       curl -X POST \\",
+      "E         -H 'Content-Type: application/json' \\",
+      "E         'https://api.example.com/api/v2/product/cart'",
+      "",
+      "common/assertions.py:14: AssertionError",
+    ].join("\n");
+
+    expect(extractCurl(raw)).toBe(
+      [
+        "curl -X POST \\",
+        "  -H 'Content-Type: application/json' \\",
+        "  'https://api.example.com/api/v2/product/cart'",
+      ].join("\n"),
+    );
+  });
+
+  it("returns null when the failure has no CURL block", () => {
+    expect(extractCurl("E       AssertionError: boom")).toBeNull();
+    expect(extractCurl(null)).toBeNull();
+  });
+});
+
+describe("curlFromRequest", () => {
+  it("builds a curl from the captured exchange", () => {
+    const curl = curlFromRequest([
+      {
+        method: "POST",
+        url: "https://api.example.com/api/v2/product/cart",
+        requestHeaders: { "Content-Type": "application/json" },
+        requestQuery: { page: 1 },
+        requestBody: { product_id: "TEST-0397" },
+      },
+    ]);
+
+    expect(curl).toBe(
+      [
+        "curl -X POST 'https://api.example.com/api/v2/product/cart?page=1' \\",
+        "  -H 'Content-Type: application/json' \\",
+        `  --data-raw '{"product_id":"TEST-0397"}'`,
+      ].join("\n"),
+    );
+  });
+
+  it("returns null without a captured request", () => {
+    expect(curlFromRequest(null)).toBeNull();
+    expect(curlFromRequest([])).toBeNull();
   });
 });
 

@@ -200,6 +200,17 @@ export class ApiTestsController {
     return this.apiTests.createRuns(getAuthContext(request), input);
   }
 
+  @Post("run-items/:itemId/rerun")
+  @ApiSecurity({ sessionCookie: [], csrfToken: [] })
+  @ApiOperation({ operationId: "rerunApiTestRunItem" })
+  @ApiResponse({ status: 201, type: ApiTestRunCreateResponseDto })
+  public rerunRunItem(
+    @Param("itemId", new ParseUUIDPipe({ version: "7" })) itemId: string,
+    @Req() request: Request,
+  ): Promise<ApiTestRunCreateResponseDto> {
+    return this.apiTests.rerunRunItem(getAuthContext(request), itemId);
+  }
+
   @Get("batches/:batchId")
   @ApiCookieAuth("sessionCookie")
   @ApiOperation({ operationId: "getApiTestBatch" })

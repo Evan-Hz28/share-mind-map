@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
+import { headlineOf, trimCutFragment } from "./error-output";
+
 const props = defineProps<{ message: string }>();
 
 const open = ref(false);
 
-/** 折叠时只留第一行非空内容，避免整段 pytest 输出把用例表格挤到屏幕外。 */
-const headline = computed(() => {
-  const line = props.message.split("\n").find((item) => item.trim() !== "");
-  return line ?? "";
-});
+// 日志尾巴可能从半行开始，展示前去掉那段残片。
+const message = computed(() => trimCutFragment(props.message));
+
+const headline = computed(() => headlineOf(props.message));
 </script>
 
 <template>

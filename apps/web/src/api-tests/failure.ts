@@ -128,6 +128,82 @@ function lastMatch(text: string, pattern: RegExp): string | null {
   return [...text.matchAll(pattern)].at(-1)?.[1] ?? null;
 }
 
+/**
+ * 上游断言助手会把 `_get_curl(resp)` 追加到消息末尾，pytest 原文里是
+ * `E       CURL:` 加若干 `E       curl ...` 行。这是失败那次请求的完整命令，
+ * 包括真实鉴权头，最适合直接复制到本机复现。
+ */
+export function extractCurl(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) return null;
+  const lines = raw.split("\n");
+  const start = lines.findIndex((line) => /^\s*E\s+CURL:\s*$/.test(line));
+  if (start === -1) return null;
+
+  // pytest 在每行前面加了 `E` 和缩进，续行的缩进也在里面；用最小缩进还原相对缩进。
+  const collected: Array<{ indent: number; text: string }> = [];
+  for (const line of lines.slice(start + 1)) {
+    const match = /^\s*E(\s+)(.*)$/.exec(line);
+    if (match === null) break;
+    const text = (match[2] ?? "").trimEnd();
+    if (text !== "") collected.push({ indent: (match[1] ?? "").length, text });
+  }
+  if (collected.length === 0) return null;
+  const base = Math.min(...collected.map((item) => item.indent));
+  const command = collected.map(
+    (item) => `${" ".repeat(item.indent - base)}${item.text.trim()}`,
+  );
+  const curl = command.join("\n").trim();
+  return curl.startsWith("curl ") ? curl : null;
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
+function urlWithQuery(url: string, query: unknown): string {
+  if (query === null || typeof query !== "object") return url;
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query as Record<string, unknown>)) {
+    if (value === null || value === undefined) continue;
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        params.append(key, typeof item === "string" ? item : JSON.stringify(item));
+      }
+    } else {
+      params.set(key, typeof value === "string" ? value : JSON.stringify(value));
+    }
+  }
+  const text = params.toString();
+  if (text === "") return url;
+  return `${url}${url.includes("?") ? "&" : "?"}${text}`;
+}
+
+/**
+ * 没有 CURL 块时（用例自己写裸 assert）退回用采集到的请求拼一个。
+ * harness 会把 Authorization / Cookie 打码，复制后需要手动补 token。
+ */
+export function curlFromRequest(request: unknown): string | null {
+  const exchange = firstExchange(request);
+  if (exchange === null) return null;
+  const method = exchangeText(exchange["method"]);
+  const url = exchangeText(exchange["url"]);
+  if (method === null || url === null) return null;
+
+  const parts = [`curl -X ${method} ${shellQuote(urlWithQuery(url, exchange["requestQuery"]))}`];
+  const headers = exchange["requestHeaders"];
+  if (headers !== null && typeof headers === "object" && !Array.isArray(headers)) {
+    for (const [key, value] of Object.entries(headers as Record<string, unknown>)) {
+      if (typeof value === "string") parts.push(`-H ${shellQuote(`${key}: ${value}`)}`);
+    }
+  }
+  const body = exchange["requestBody"];
+  if (body !== null && body !== undefined) {
+    const text = typeof body === "string" ? body : JSON.stringify(body);
+    if (text !== "") parts.push(`--data-raw ${shellQuote(text)}`);
+  }
+  return parts.join(" \\\n  ");
+}
+
 function classify(text: string, eLines: string[]): FailureKind {
   if (/fixture '[^']+' not found/.test(text)) return "not-run";
   if (

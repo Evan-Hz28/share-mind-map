@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import type { ApiTestRunItemResponseDto } from "@share-mind-map/api-client";
+import {
+  rerunApiTestRunItem,
+  type ApiTestRunItemResponseDto,
+} from "@share-mind-map/api-client";
 import { ElTag } from "element-plus";
 import { computed, ref } from "vue";
+import { useRouter } from "vue-router";
 
-import { parseFailure } from "./failure";
+import { apiClient, toApiFailure, type RequestFailure } from "../api.js";
+import { writeClipboard } from "../clipboard.js";
+import RequestErrorAlert from "../components/RequestErrorAlert.vue";
+import { curlFromRequest, extractCurl, parseFailure } from "./failure";
 
 const props = defineProps<{ item: ApiTestRunItemResponseDto }>();
+
+const router = useRouter();
 
 const view = computed(() =>
   parseFailure(props.item.failure, props.item.request, props.item.response),
@@ -13,6 +22,50 @@ const view = computed(() =>
 
 const showExchanges = ref(false);
 const showRaw = ref(false);
+
+const canRerun = computed(() => props.item.status === "failed" || props.item.status === "error");
+
+/** 优先用上游断言附带的完整 curl；没有时用采集到的请求拼，鉴权头已脱敏。 */
+const curlSource = computed<{ text: string; redacted: boolean } | null>(() => {
+  const fromRaw = extractCurl(view.value?.raw ?? null);
+  if (fromRaw !== null) return { text: fromRaw, redacted: false };
+  const fromCapture = curlFromRequest(props.item.request);
+  return fromCapture === null ? null : { text: fromCapture, redacted: true };
+});
+
+const curlCopied = ref(false);
+
+async function copyCurl(): Promise<void> {
+  const source = curlSource.value;
+  if (source === null) return;
+  curlCopied.value = await writeClipboard(source.text);
+}
+
+const rerunning = ref(false);
+const rerunError = ref<RequestFailure | null>(null);
+
+/** 沿用原 report 的测试集、环境和 node id，等于把这条结果原样再跑一次。 */
+async function rerun(): Promise<void> {
+  if (rerunning.value) return;
+  rerunning.value = true;
+  rerunError.value = null;
+  try {
+    const result = await rerunApiTestRunItem({
+      client: apiClient,
+      path: { itemId: props.item.id },
+    });
+    if (result.data === undefined) {
+      rerunError.value = toApiFailure(result.error);
+      return;
+    }
+    const run = result.data.runs[0];
+    if (run !== undefined) {
+      await router.push({ name: "api-test-run", params: { runId: run.id } });
+    }
+  } finally {
+    rerunning.value = false;
+  }
+}
 
 function hasData(value: unknown): boolean {
   if (Array.isArray(value)) return value.length > 0;
@@ -79,7 +132,31 @@ const rawLabel = computed(() => {
       <button v-if="view" type="button" class="item-detail__toggle" @click="showRaw = !showRaw">
         {{ showRaw ? "收起完整输出" : rawLabel }}
       </button>
+      <button
+        v-if="curlSource"
+        type="button"
+        class="item-detail__toggle"
+        :title="
+          curlSource.redacted
+            ? '鉴权头已脱敏，复制后需要手动补 token'
+            : '复制失败请求的 curl 命令'
+        "
+        @click="copyCurl"
+      >
+        {{ curlCopied ? "已复制 curl" : "复制 curl" }}
+      </button>
+      <button
+        v-if="canRerun"
+        type="button"
+        class="item-detail__toggle"
+        :disabled="rerunning"
+        @click="rerun"
+      >
+        {{ rerunning ? "重跑中…" : "重跑此用例" }}
+      </button>
     </div>
+
+    <RequestErrorAlert :error="rerunError" />
 
     <pre v-if="showExchanges" class="item-detail__pre">{{ exchangeText }}</pre>
     <pre v-if="view && showRaw" class="item-detail__pre">{{ view.raw }}</pre>
@@ -141,6 +218,7 @@ const rawLabel = computed(() => {
 
 .item-detail__toggles {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -151,6 +229,11 @@ const rawLabel = computed(() => {
   color: var(--el-color-primary);
   font-size: 12px;
   cursor: pointer;
+}
+
+.item-detail__toggle:disabled {
+  color: var(--el-text-color-disabled);
+  cursor: not-allowed;
 }
 
 .item-detail__pre {

@@ -394,6 +394,26 @@ export class ApiTestsService implements OnApplicationShutdown {
     return this.enqueueRuns(auth, targets, input.environmentId, null);
   }
 
+  /**
+   * 失败重跑：沿用原 run 的测试集、环境和精确 node id。
+   * node id 自带参数化后缀，所以 `[body2-400-1001]` 这类失败只重跑对应参数组合。
+   */
+  public async rerunRunItem(
+    auth: AuthContext,
+    itemId: string,
+  ): Promise<{ batchId: string; runs: ApiTestRunResponseDto[] }> {
+    const item = await this.repository.findRunItem(this.database, itemId);
+    if (item === null) throw new ApiError("API_TEST_RUN_ITEM_NOT_FOUND");
+    const run = await this.repository.findRun(this.database, item.runId);
+    if (run === null) throw new ApiError("API_TEST_RUN_NOT_FOUND");
+    return this.enqueueRuns(
+      auth,
+      [{ suiteId: run.suiteId, path: run.suitePath, nodeIds: [item.nodeId] }],
+      run.environmentId,
+      null,
+    );
+  }
+
   /** 集合和散跑共用：入队顺序就是执行顺序，worker 单并发，一批共享 batchId。 */
   private async enqueueRuns(
     auth: AuthContext,

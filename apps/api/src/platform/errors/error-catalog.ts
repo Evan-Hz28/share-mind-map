@@ -55,6 +55,7 @@ export const errorCatalog = {
   API_TEST_RUN_TARGET_REQUIRED: { status: 400, message: "请至少选择一个测试集或用例。" },
   API_TEST_ENVIRONMENT_NOT_FOUND: { status: 404, message: "接口测试环境不存在。" },
   API_TEST_RUN_NOT_FOUND: { status: 404, message: "接口测试执行记录不存在。" },
+  API_TEST_RUN_ITEM_NOT_FOUND: { status: 404, message: "接口测试用例执行结果不存在。" },
   API_TEST_RUN_STATE_CONFLICT: { status: 409, message: "当前执行状态不允许此操作。" },
   API_TEST_BATCH_NOT_FOUND: { status: 404, message: "接口测试批次不存在。" },
   API_TEST_COLLECTION_NOT_FOUND: { status: 404, message: "测试集合不存在。" },

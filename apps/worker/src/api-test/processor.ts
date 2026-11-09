@@ -8,13 +8,11 @@ import { ApiTestRepository, type Database } from "@share-mind-map/database";
 import { z } from "zod";
 
 import type { WorkerConfig } from "../config.js";
+import { clipTail, OUTPUT_HOLD } from "./output.js";
 
 export interface ApiTestRunJob {
   runId: string;
 }
-
-// pytest 把收集错误、用例失败都写到 stdout，只有崩溃才走 stderr，两边都要留。
-const OUTPUT_LIMIT = 8 * 1024;
 
 const exchangeSchema = z
   .object({
@@ -227,11 +225,11 @@ export async function processApiTestRun(
 
   // stdout 必须读走，否则管道写满后 pytest 会卡住。
   child.stdout?.on("data", (chunk: Buffer) => {
-    stdout = (stdout + chunk.toString("utf8")).slice(-OUTPUT_LIMIT);
+    stdout = (stdout + chunk.toString("utf8")).slice(-OUTPUT_HOLD);
   });
 
   child.stderr?.on("data", (chunk: Buffer) => {
-    stderr = (stderr + chunk.toString("utf8")).slice(-OUTPUT_LIMIT);
+    stderr = (stderr + chunk.toString("utf8")).slice(-OUTPUT_HOLD);
   });
 
   const eventStream = child.stdio[3] as Readable | null;
@@ -293,7 +291,7 @@ export async function processApiTestRun(
   const runTimeoutMs = config.apiTestRunTimeoutSeconds * 1000;
   const hardTimeout = setTimeout(() => {
     stderr = `${stderr}\n执行超过 ${String(config.apiTestRunTimeoutSeconds)} 秒，已强制结束。`.slice(
-      -OUTPUT_LIMIT,
+      -OUTPUT_HOLD,
     );
     child.kill("SIGKILL");
   }, runTimeoutMs);
@@ -301,7 +299,7 @@ export async function processApiTestRun(
   const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
     (resolveExit) => {
       child.once("error", (error) => {
-        stderr = `${stderr}\n${error.message}`.slice(-OUTPUT_LIMIT);
+        stderr = `${stderr}\n${error.message}`.slice(-OUTPUT_HOLD);
         resolveExit({ code: null, signal: null });
       });
       child.once("close", (code, signal) => {
@@ -321,7 +319,7 @@ export async function processApiTestRun(
   const failed = finishCounts.failed;
   const errored = finishCounts.error;
   const succeeded = exit.code === 0 && failed === 0 && errored === 0;
-  const output = stderr.trim() === "" ? stdout.trim() : stderr.trim();
+  const output = clipTail(stderr.trim() === "" ? stdout.trim() : stderr.trim());
   const message = succeeded
     ? null
     : output === ""

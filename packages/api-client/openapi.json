@@ -3763,6 +3763,46 @@
         ]
       }
     },
+    "/api/v1/api-tests/run-items/{itemId}/rerun": {
+      "post": {
+        "operationId": "rerunApiTestRunItem",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "itemId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTestRunCreateResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "api-tests"
+        ]
+      }
+    },
     "/api/v1/api-tests/runs": {
       "get": {
         "operationId": "listApiTestRuns",

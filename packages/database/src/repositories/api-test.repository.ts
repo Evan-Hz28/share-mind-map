@@ -1098,6 +1098,20 @@ export class ApiTestRepository {
     return result.rows.map(toItem);
   }
 
+  /** 单条用例结果：失败重跑要沿用它所属 run 的测试集、环境和精确 node id。 */
+  public async findRunItem(
+    database: Database,
+    id: string,
+  ): Promise<ApiTestRunItemRecord | null> {
+    const result = await database.execute<ItemRow>(sql`
+      SELECT ${itemColumns}
+      FROM api_test_run_items
+      WHERE id = ${id}
+    `);
+    const row = result.rows[0];
+    return row === undefined ? null : toItem(row);
+  }
+
   /** 只有 queued 才能进入 running，防止取消与启动竞争时把已取消的 run 重开。 */
   public async markRunning(database: Database, runId: string): Promise<boolean> {
     const result = await database.execute<{ id: string }>(sql`

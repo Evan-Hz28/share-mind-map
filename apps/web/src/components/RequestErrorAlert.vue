@@ -26,6 +26,7 @@ const message = computed<string>(() => {
 const safeMessages: Record<string, string> = {
   API_TEST_ENVIRONMENT_NOT_FOUND: "接口测试环境不存在。",
   API_TEST_RUN_NOT_FOUND: "接口测试执行记录不存在。",
+  API_TEST_RUN_ITEM_NOT_FOUND: "接口测试用例执行结果不存在。",
   API_TEST_RUN_STATE_CONFLICT: "当前执行状态不允许此操作。",
   API_TEST_SUITE_NOT_FOUND: "接口测试套件不存在。",
   API_TEST_SYNC_IN_PROGRESS: "已有同步任务在执行，请稍后重试。",
