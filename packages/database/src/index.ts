@@ -4,6 +4,7 @@ export { migrateDatabase } from "./migrate.js";
 export { schema } from "./schema/index.js";
 export * from "./schema/index.js";
 export {
+  API_TEST_SYNC_STALE_SECONDS,
   ApiTestRepository,
   groupCollectionTargets,
   type ApiTestRunTarget,

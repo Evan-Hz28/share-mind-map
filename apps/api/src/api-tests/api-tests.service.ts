@@ -1,4 +1,5 @@
 import {
+  API_TEST_SYNC_STALE_SECONDS,
   ApiTestRepository,
   groupCollectionTargets,
   newId,
@@ -649,17 +650,64 @@ export class ApiTestsService implements OnApplicationShutdown {
     return mapRun(updated);
   }
 
+  /**
+   * 队列里已经没有活 job 的同步记录会永久挡住下一次同步，发现就标记失败。
+   * 真正在排队或运行中的任务仍然返回 409。
+   */
+  private async releaseOrphanSync(active: ApiTestSyncRecord): Promise<boolean> {
+    const stale = Date.now() - active.createdAt.getTime() > API_TEST_SYNC_STALE_SECONDS * 1000;
+    if (stale) {
+      return this.repository.expireSync(
+        this.database,
+        active.id,
+        "同步任务超过 30 分钟没有进展，已自动标记失败。",
+      );
+    }
+    // 定时任务里的同步在 worker 进程内直接执行、不进队列，不能按「队列里没有 job」判定为孤儿。
+    if (active.trigger !== "manual") return false;
+    const job = await this.syncQueue.getJob(active.id);
+    const state = job == null ? null : await job.getState();
+    const live =
+      state === "active" ||
+      state === "delayed" ||
+      state === "prioritized" ||
+      state === "waiting" ||
+      state === "waiting-children";
+    if (live) return false;
+    return this.repository.expireSync(
+      this.database,
+      active.id,
+      "同步任务已中断（队列中已无对应任务），已自动标记失败。",
+    );
+  }
+
   /** 只有手动触发：前端点「同步用例」。 */
   public async syncRepository(requestedBy: string | null): Promise<ApiTestSyncResponseDto> {
-    const active = await this.repository.findActiveSync(this.database);
-    if (active !== null) throw new ApiError("API_TEST_SYNC_IN_PROGRESS");
+    // 先清掉中断留下的孤儿记录，避免一条旧数据让同步永远报「已有任务在执行」。
+    for (
+      let active = await this.repository.findActiveSync(this.database);
+      active !== null;
+      active = await this.repository.findActiveSync(this.database)
+    ) {
+      if (!(await this.releaseOrphanSync(active))) throw new ApiError("API_TEST_SYNC_IN_PROGRESS");
+    }
     const sync = await this.repository.createSync(this.database, {
       id: newId(),
       branch: "main",
       trigger: "manual",
       requestedBy,
     });
-    await this.syncQueue.add("sync", { syncId: sync.id }, { jobId: sync.id });
+    try {
+      await this.syncQueue.add("sync", { syncId: sync.id }, { jobId: sync.id });
+    } catch (error) {
+      // 记录已经落库，入队失败必须补偿，否则又留下一条永远 queued 的孤儿。
+      await this.repository.expireSync(
+        this.database,
+        sync.id,
+        "同步任务入队失败，已自动标记失败。",
+      );
+      throw error;
+    }
     return mapSync(sync);
   }
 

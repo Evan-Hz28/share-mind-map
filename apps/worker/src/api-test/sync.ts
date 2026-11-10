@@ -223,21 +223,30 @@ export async function processApiTestSync(
   if (sync === null) return;
   if (!(await repository.markSyncRunning(database, job.syncId))) return;
 
+  // 只改 queued/running 的记录：重投或并发补偿时不会把已完成的同步改回失败。
   const fail = async (message: string): Promise<void> => {
-    await repository.finishSync(database, job.syncId, {
-      status: "failed",
-      commitSha: null,
-      previousSha: null,
-      changedFiles: 0,
-      suitesAdded: 0,
-      suitesRemoved: 0,
-      casesAdded: 0,
-      casesRemoved: 0,
-      requirementsChanged: false,
-      message: tail(message),
-    });
+    await repository.expireSync(database, job.syncId, tail(message));
   };
 
+  try {
+    await syncRepositoryToHead(job, { database, config, repository, fail });
+  } catch (error) {
+    // 未预期的异常也要落成 failed，否则记录会一直停在 running 挡住后续同步。
+    await fail(`同步中断: ${(error as Error).message}`);
+    throw error;
+  }
+}
+
+async function syncRepositoryToHead(
+  job: ApiTestSyncJob,
+  context: {
+    database: Database;
+    config: WorkerConfig;
+    repository: ApiTestRepository;
+    fail: (message: string) => Promise<void>;
+  },
+): Promise<void> {
+  const { database, config, repository, fail } = context;
   const repo = config.apiTestRoot;
   try {
     await mkdir(repo, { recursive: true });

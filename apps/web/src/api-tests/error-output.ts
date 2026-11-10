@@ -21,11 +21,3 @@ export function trimCutFragment(message: string): string {
   if (PYTEST_LINE.test(first)) return message;
   return message.slice(newline + 1);
 }
-
-/** 折叠时只留第一行完整内容，避免整段 pytest 输出把用例表格挤到屏幕外。 */
-export function headlineOf(message: string): string {
-  const line = trimCutFragment(message)
-    .split("\n")
-    .find((item) => item.trim() !== "");
-  return line ?? "";
-}

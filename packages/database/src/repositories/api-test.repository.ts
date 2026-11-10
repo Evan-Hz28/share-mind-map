@@ -8,6 +8,12 @@ export type ApiTestItemStatus = "passed" | "failed" | "skipped" | "error";
 export type ApiTestSyncStatus = "queued" | "running" | "succeeded" | "failed";
 export type ApiTestSyncTrigger = "manual" | "webhook" | "schedule";
 
+/**
+ * 同步正常是秒级，最慢的 git 命令也有 5 分钟超时；超过这个时长还没结束，
+ * 基本就是 worker 重启、队列丢失这类中断，按失败处理，避免永久挡住下一次同步。
+ */
+export const API_TEST_SYNC_STALE_SECONDS = 30 * 60;
+
 export interface ApiTestSyncRecord {
   id: string;
   branch: string;
@@ -1268,14 +1274,45 @@ export class ApiTestRepository {
     return row === undefined ? null : toSync(row);
   }
 
+  /**
+   * 标记开始执行。`running` 也接受：worker 重启后 BullMQ 会重投 stalled 的 job，
+   * 只认 `queued` 会把重试静默丢掉，记录就永远停在运行中。
+   */
   public async markSyncRunning(database: Database, id: string): Promise<boolean> {
     const result = await database.execute<{ id: string }>(sql`
       UPDATE api_test_syncs
-      SET status = 'running', started_at = now()
-      WHERE id = ${id} AND status = 'queued'
+      SET status = 'running', started_at = COALESCE(started_at, now())
+      WHERE id = ${id} AND status IN ('queued', 'running')
       RETURNING id
     `);
     return result.rows.length > 0;
+  }
+
+  /** 队列里已经没有对应 job 的记录会被标记失败，否则会一直挡住新同步。 */
+  public async expireSync(database: Database, id: string, message: string): Promise<boolean> {
+    const result = await database.execute<{ id: string }>(sql`
+      UPDATE api_test_syncs
+      SET status = 'failed', finished_at = now(), message = ${message}
+      WHERE id = ${id} AND status IN ('queued', 'running')
+      RETURNING id
+    `);
+    return result.rows.length > 0;
+  }
+
+  /** 兜底清理：超过时限还没有进展的同步记录，多半是 worker 重启或队列丢失留下的。 */
+  public async expireStaleSyncs(
+    database: Database,
+    staleSeconds: number,
+    message: string,
+  ): Promise<number> {
+    const result = await database.execute<{ id: string }>(sql`
+      UPDATE api_test_syncs
+      SET status = 'failed', finished_at = now(), message = ${message}
+      WHERE status IN ('queued', 'running')
+        AND created_at < now() - make_interval(secs => ${staleSeconds})
+      RETURNING id
+    `);
+    return result.rows.length;
   }
 
   public async finishSync(

@@ -206,7 +206,9 @@ describe("api test run view", () => {
     await router.push("/api-tests/runs/run-a");
     render(Wrapper, { global: { plugins: [pinia, router] } });
 
-    expect(await screen.findByText("collected 12 items")).toBeInTheDocument();
+    // 折叠状态只留标题，日志内容一律不展示。
+    expect(await screen.findByRole("button", { name: "展开完整输出" })).toBeInTheDocument();
+    expect(screen.queryByText("collected 12 items")).not.toBeInTheDocument();
     expect(screen.queryByText(/FAILED testcases/)).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "展开完整输出" }));

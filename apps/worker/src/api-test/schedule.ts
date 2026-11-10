@@ -1,4 +1,5 @@
 import {
+  API_TEST_SYNC_STALE_SECONDS,
   ApiTestRepository,
   groupCollectionTargets,
   newId,
@@ -58,6 +59,12 @@ async function waitForActiveSync(
   repository: ApiTestRepository,
   database: Database,
 ): Promise<boolean> {
+  // worker 重启留下的僵尸记录不会自己消失，先清理，否则每一轮都要白等 10 分钟。
+  await repository.expireStaleSyncs(
+    database,
+    API_TEST_SYNC_STALE_SECONDS,
+    "同步任务超过 30 分钟没有进展，已自动标记失败。",
+  );
   const deadline = Date.now() + SYNC_WAIT_LIMIT_MS;
   while (Date.now() < deadline) {
     if ((await repository.findActiveSync(database)) === null) return true;
@@ -82,7 +89,11 @@ async function syncBeforeRun(
     trigger: "schedule",
     requestedBy,
   });
-  await processApiTestSync({ syncId: sync.id }, { database, config });
+  try {
+    await processApiTestSync({ syncId: sync.id }, { database, config });
+  } catch (error) {
+    return `执行前同步失败：${(error as Error).message}`;
+  }
   const finished = await repository.findSync(database, sync.id);
   if (finished === null || finished.status !== "succeeded") {
     // 拿旧代码出的报告没有意义，宁可跳过这一轮。

@@ -1,23 +1,20 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
-import { headlineOf, trimCutFragment } from "./error-output";
+import { trimCutFragment } from "./error-output";
 
 const props = defineProps<{ message: string }>();
 
 const open = ref(false);
 
-// 日志尾巴可能从半行开始，展示前去掉那段残片。
+// 折叠时只显示标题，完整输出点开再看；日志尾巴可能从半行开始，展开前去掉那段残片。
 const message = computed(() => trimCutFragment(props.message));
-
-const headline = computed(() => headlineOf(props.message));
 </script>
 
 <template>
   <section class="error-output">
     <div class="error-output__bar">
       <span class="error-output__title">执行错误</span>
-      <span v-if="!open" class="error-output__headline">{{ headline }}</span>
       <button type="button" class="error-output__toggle" @click="open = !open">
         {{ open ? "收起" : "展开完整输出" }}
       </button>
@@ -45,15 +42,6 @@ const headline = computed(() => headlineOf(props.message));
 .error-output__title {
   flex: none;
   font-weight: 600;
-}
-
-.error-output__headline {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--el-text-color-secondary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .error-output__toggle {
