@@ -74,7 +74,7 @@ describe("XMind validation processor", () => {
     const dependencies = await loadProcessorDependencies(fixtureRoot);
 
     await expect(
-      processJob(job({ fixtureName: "../../target.md" }), dependencies),
+      processJob(job({ fixtureName: "../../package.json" }), dependencies),
     ).rejects.toMatchObject({ code: "FIXTURE_NOT_ALLOWED" });
   });
 
