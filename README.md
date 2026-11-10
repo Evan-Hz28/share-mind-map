@@ -2,7 +2,7 @@
 
 面向团队内部的共享思维导图平台：在浏览器里浏览用例库、导入和导出 XMind、以单编辑锁协作编辑思维导图，并由管理员维护成员与权限。
 
-项目已完成阶段 0–4（技术验证、平台基础、工作台与权限、XMind 导入导出、正式编辑与实时同步），阶段 5 已交付多级文件夹与首页概览。历史版本、全局搜索、回收站、分享链接、评论和测试执行管理尚未实现，范围见[分阶段开发计划](docs/04-分阶段开发计划.md)。
+项目已完成阶段 0–4（技术验证、平台基础、工作台与权限、XMind 导入导出、正式编辑与实时同步），阶段 5 已交付多级文件夹与首页概览，并额外交付了接口测试模块。历史版本、全局搜索、回收站、分享链接和评论尚未实现；当前范围与现状见[项目交接文档](docs/06-项目交接文档.md)。
 
 ## 核心功能
 
@@ -16,17 +16,19 @@
 | 查看与编辑 | `mind-elixir` 画布、增删改节点、撤销/重做、展开收起、缩放适配、PNG/JPEG/WebP 图片                  | 桌面端 Editor/Admin 单编辑锁；Reader 与移动端只读；单张图片 5 MiB          |
 | 协作一致性 | Redis 编辑锁、心跳续租、串行保存、基准版本校验、本机草稿、Socket.IO 已提交快照广播                 | 锁默认 15 分钟过期；版本冲突或断网立即停止写入并保留草稿                   |
 | 权限与审计 | Reader/Editor/Admin 三级角色、编辑权限申请与审批、即时撤销、平台通知、审计查询、用量与导入失败记录 | 权限在服务端校验，前端隐藏控件不作为安全边界                               |
+| 接口测试   | 同步上游 pytest 用例、按套件/用例执行、测试集合、失败重跑、cron 定时执行、报告与 curl              | 仅 Admin；Worker 单并发；出站域名白名单                                    |
 
 ## 技术栈
 
-| 层级 | 选型                                                                                           |
-| ---- | ---------------------------------------------------------------------------------------------- |
-| 前端 | Vue 3、TypeScript、Vite、Element Plus、Pinia、Vue Router                                       |
-| 画布 | `mind-elixir`（ADR 见 [docs/adr/0001-canvas-component.md](docs/adr/0001-canvas-component.md)） |
-| 后端 | NestJS 11、Express 5、Socket.IO、BullMQ                                                        |
-| 数据 | PostgreSQL 17、Drizzle ORM、Redis 7、MinIO                                                     |
-| 契约 | REST + OpenAPI，`@hey-api/openapi-ts` 生成 TypeScript Client                                   |
-| 工程 | pnpm workspace、Vitest、Playwright、ESLint、Prettier、Docker Compose                           |
+| 层级     | 选型                                                                                           |
+| -------- | ---------------------------------------------------------------------------------------------- |
+| 前端     | Vue 3、TypeScript、Vite、Element Plus、Pinia、Vue Router                                       |
+| 画布     | `mind-elixir`（ADR 见 [docs/adr/0001-canvas-component.md](docs/adr/0001-canvas-component.md)） |
+| 后端     | NestJS 11、Express 5、Socket.IO、BullMQ                                                        |
+| 数据     | PostgreSQL 17、Drizzle ORM、Redis 7、MinIO                                                     |
+| 契约     | REST + OpenAPI，`@hey-api/openapi-ts` 生成 TypeScript Client                                   |
+| 接口测试 | pytest + Python 3 venv，Worker 运行时同步上游用例仓库                                          |
+| 工程     | pnpm workspace、Vitest、Playwright、ESLint、Prettier、Docker Compose                           |
 
 ## 快速开始
 
@@ -136,6 +138,16 @@ docker compose --env-file .env down   # 移除容器与网络，保留命名卷
 
 「成员管理」创建 Reader/Editor/Admin、一次性重置临时密码、禁用/恢复账号和撤销全部会话；「权限与审计」处理编辑权限申请与即时撤销，查看审计记录、存储用量与导入失败记录。系统拒绝禁用最后一个有效 Admin。
 
+### 接口测试（Admin）
+
+「接口测试」页仅管理员可见可执行。上游 pytest 仓库是唯一用例来源，Worker 在运行时把它同步到 `api-test-repo` 命名卷：
+
+- 「同步用例」按 `testcases/` 一级目录更新套件，仓库里消失的套件只停用不删除。
+- 可以按套件或单个用例执行；「测试集合」的成员可以是整个套件、文件或单个用例，整组按批次执行。失败项逐条重跑。
+- 「定时任务」用 5 段 cron（默认 `Asia/Shanghai`）触发，可选择执行前先同步；`api_test_schedules` 是真源，Worker 启动时按库重建调度。
+- 报告包含状态、耗时、失败堆栈、请求/响应摘要和可复制 curl，敏感头脱敏。
+- 结果没有自动清理任务，会持续增长；无失败告警和跨轮次趋势。实现细节与运维命令见[交接文档 §10](docs/06-项目交接文档.md#10-接口测试模块专题)。
+
 ## 系统架构
 
 ```mermaid
@@ -146,9 +158,10 @@ flowchart LR
     A --> PG[(PostgreSQL)]
     A --> RD[(Redis)]
     A --> MO[(MinIO)]
-    A -->|BullMQ 导入队列| W[XMind Worker]
+    A -->|BullMQ 导入队列| W[Worker：XMind 导入 / 接口测试]
     W --> PG
     W --> MO
+    W -->|spawn pytest| T[pytest + 上游用例仓库]
     A -.->|SMTP| MP[Mailpit / SMTP]
 ```
 
@@ -158,35 +171,38 @@ flowchart LR
 - **异步导入流水线**：API 预检并流式上传到 MinIO `tmp/`，写入导入任务后投递 BullMQ；Worker 以并发 3 安全解压（条目数、解压大小、压缩比、节点数、超时上限）、解析当前 `content.json` 或旧版 `content.xml`、转换、持久化快照并生成兼容性报告。原文件与 SHA-256 保留，用于查重与排查。
 - **编辑一致性**：Redis 保存锁令牌与代次，API 在事务中写入保存请求并校验基准版本，成功提交后才广播快照；前端保存队列保证串行，断线或冲突保留本地草稿。
 - **契约驱动前端**：NestJS Swagger 输出 `packages/api-client/openapi.json`，再生成 TypeScript Client；`pnpm api:check` 在临时目录重新生成并做字节级比较，防止契约与客户端漂移。
+- **接口测试执行**：上游 pytest 仓库由 Worker 同步到命名卷，管理员按套件、用例或测试集合入队；Worker 单并发 spawn pytest，通过 fd3 NDJSON 增量写入结果，支持逐条重跑失败项和 cron 定时执行。
 - **安全边界**：Argon2id 口令、服务端会话、内存 CSRF、登录与上传限流、单一 CORS Origin、CSP 与安全响应头、对象下载鉴权、私有 Bucket、非 root 容器，以及生产配置强校验。
 
 主要 REST 端点（前缀 `/api/v1`）：
 
-| 分组     | 路径                                                                                                 |
-| -------- | ---------------------------------------------------------------------------------------------------- |
-| 认证     | `auth/login`、`auth/csrf`、`auth/password`、`auth/logout`、`me`                                      |
-| 工作区   | `workspaces/:workspaceId/folders`、`documents`、`overview`                                           |
-| 导入导出 | `workspaces/:workspaceId/import-batches`、`documents/:documentId/export`                             |
-| 编辑     | `documents/:documentId/lock`、`documents/:documentId/snapshots`、`assets`                            |
-| 管理     | `admin/members`、`admin/edit-requests`、`admin/audit-logs`、`admin/storage`、`admin/import-failures` |
+| 分组     | 路径                                                                                                                                  |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 认证     | `auth/login`、`auth/csrf`、`auth/password`、`auth/logout`、`me`                                                                       |
+| 工作区   | `workspaces/:workspaceId/folders`、`documents`、`overview`                                                                            |
+| 导入导出 | `workspaces/:workspaceId/import-batches`、`documents/:documentId/export`                                                              |
+| 编辑     | `documents/:documentId/lock`、`documents/:documentId/snapshots`、`assets`                                                             |
+| 管理     | `admin/members`、`admin/edit-requests`、`admin/audit-logs`、`admin/storage`、`admin/import-failures`                                  |
+| 接口测试 | `api-tests/suites`、`cases`、`runs`、`batches/:batchId`、`run-items/:itemId/rerun`、`sync(s)`、`collections`、`schedules`（仅 Admin） |
 
 ## 目录结构
 
 ```text
 share-mind-map/
 ├── apps/
-│   ├── web/                  Vue 3 前端（工作台、文档页、编辑器适配层）
-│   ├── api/                  NestJS API、Socket.IO Gateway、CLI 与导入编排
-│   └── worker/               BullMQ XMind 导入 Worker
+│   ├── web/                  Vue 3 前端（工作台、文档页、编辑器适配层、接口测试页）
+│   ├── api/                  NestJS API、Socket.IO Gateway、CLI、导入编排与接口测试入口
+│   └── worker/               BullMQ Worker：XMind 导入、接口测试执行/同步/调度
 ├── packages/
 │   ├── database/             Drizzle Schema、仓储、SQL 迁移
 │   ├── document-model/       CloudDocumentV1 Schema、不变量与快照工具
 │   ├── xmind/                XMind 解析、转换、兼容性检查与导出
 │   ├── storage/              MinIO 对象存储封装
 │   └── api-client/           OpenAPI 与生成的 TypeScript Client
+├── api-tests/               接口测试的上游同步、pytest 执行环境与 Worker 依赖
 ├── infra/                    Nginx 配置、API/Worker 容器入口脚本
 ├── deploy/                   离线包与 arm64 打包、目标机部署脚本
-├── docs/                     产品、架构、接口、阶段计划、ADR、验收与基准
+├── docs/                     接口测试设计、交接文档、ADR 与画布基准
 ├── tests/                    跨包测试、Compose 结构测试、Playwright e2e
 ├── scripts/                  生成、校验、基准与健康检查脚本
 ├── compose.yaml              本地开发编排
@@ -213,7 +229,7 @@ pnpm --filter @share-mind-map/worker start
 pnpm --filter @share-mind-map/web dev
 ```
 
-前端 dev server 使用 `http://127.0.0.1:5173`，需先把 `.env` 的 `WEB_ORIGIN` 临时改为该地址。宿主机进程使用 `DATABASE_URL`、`REDIS_URL`、`MINIO_ENDPOINT` 等本地地址；Compose 容器使用对应的 `COMPOSE_*` 服务名 URL，不能写 `localhost`。宿主机运行 Worker 时要把 `XMIND_FIXTURE_ROOT` 改成仓库内 `tests/fixtures/xmind` 的绝对路径。
+前端 dev server 使用 `http://127.0.0.1:5173`，需先把 `.env` 的 `WEB_ORIGIN` 临时改为该地址。宿主机进程使用 `DATABASE_URL`、`REDIS_URL`、`MINIO_ENDPOINT` 等本地地址；Compose 容器使用对应的 `COMPOSE_*` 服务名 URL，不能写 `localhost`。宿主机运行 Worker 时要把 `XMIND_FIXTURE_ROOT` 改成仓库内 `tests/fixtures/xmind` 的绝对路径。接口测试依赖 Worker 镜像内的 Python venv 和运行时同步的上游仓库，调试时建议直接用 Compose 的 Worker；宿主机直跑需要自行准备 `api-tests` 的 venv。
 
 ### 质量门禁
 
@@ -241,7 +257,6 @@ pnpm --filter @share-mind-map/database test:integration
 ```bash
 pnpm exec playwright test tests/e2e --project=chromium
 pnpm exec playwright test tests/e2e/responsive.spec.ts --project=mobile-chrome
-pnpm verify:phase-0-1   # 校验阶段 0–1 验收证据文件是否齐全
 ```
 
 ### 契约、样本与画布证据
@@ -307,22 +322,20 @@ deploy/make-arm64-bundle.sh --only web --skip-build
 
 ## 范围与限制
 
-- 历史版本、全局搜索、回收站、分享链接、评论、测试执行管理和完整后台系统状态页尚未实现；删除文档与文件夹当前是不可恢复的永久删除。
+- 历史版本、全局搜索、回收站、分享链接、评论和完整后台系统状态页尚未实现；删除文档与文件夹当前是不可恢复的永久删除。
 - XMind 兼容性结论基于合成样本，尚未用真实业务文档和真实图片分布做 Pilot 验收；单文件上限 20 MB、20,000 节点、解析超时 5 分钟。
 - MinIO 当前为单节点本地卷，未验证生产对象存储的版本控制、跨区复制与恢复；Redis 保存会话、限流与队列协调状态，未提供高可用或故障切换。
 - 本地 Compose 不是生产编排方案；生产需要 TLS 终止、备份恢复、监控告警、容量规划、漏洞扫描与最小权限网络策略。
 - 浏览器证据来自 Playwright Chromium，真实 Chrome/Edge 多版本兼容矩阵尚未完成。
+- 接口测试仅 Admin 可用，Worker 单并发；`api_test_runs` / `api_test_run_items` 没有清理任务会持续增长，无失败告警和跨轮次趋势。生产机出网、上游仓库可达和 token 有效是硬依赖。
 
 ## 文档导航
 
-| 文档                                                                   | 内容                                                |
-| ---------------------------------------------------------------------- | --------------------------------------------------- |
-| [docs/01-产品需求文档.md](docs/01-产品需求文档.md)                     | 角色、功能范围、业务规则与验收标准                  |
-| [docs/02-技术架构方案.md](docs/02-技术架构方案.md)                     | 架构原则、模块划分、数据职责、导入/保存/锁/搜索设计 |
-| [docs/03-数据库与接口设计.md](docs/03-数据库与接口设计.md)             | 表结构、索引、REST 端点与权限                       |
-| [docs/04-分阶段开发计划.md](docs/04-分阶段开发计划.md)                 | 阶段 0–6 交付范围、测试策略与上线检查               |
-| [docs/adr/0001-canvas-component.md](docs/adr/0001-canvas-component.md) | 画布组件选型与基准证据                              |
-| [docs/verification/](docs/verification/)                               | 各阶段验收记录与截图                                |
-| [docs/benchmarks/canvas/](docs/benchmarks/canvas/)                     | 画布性能与许可证原始结果                            |
-| [deploy/README.md](deploy/README.md)                                   | 离线打包、部署、更新与 arm64 标签约定               |
-| [CLAUDE.md](CLAUDE.md)                                                 | 本机环境、验证命令与部署操作手册                    |
+| 文档                                                                   | 内容                                             |
+| ---------------------------------------------------------------------- | ------------------------------------------------ |
+| [docs/05-接口测试模块设计.md](docs/05-接口测试模块设计.md)             | 接口测试模块 P0 历史设计稿（harness 与安全细节） |
+| [docs/06-项目交接文档.md](docs/06-项目交接文档.md)                     | 项目现状、代码地图、核心机制、部署与已知问题     |
+| [docs/adr/0001-canvas-component.md](docs/adr/0001-canvas-component.md) | 画布组件选型与基准证据                           |
+| [docs/benchmarks/canvas/](docs/benchmarks/canvas/)                     | 画布性能与许可证原始结果                         |
+| [deploy/README.md](deploy/README.md)                                   | 离线打包、部署、更新与 arm64 标签约定            |
+| [CLAUDE.md](CLAUDE.md)                                                 | 本机环境、验证命令与部署操作手册                 |

@@ -53,7 +53,7 @@ test("renders login, workspace, and administration at the supported viewport", a
   await expect(page.getByRole("heading", { name: "登录" })).toBeVisible();
   await expectStableLayout(page, mobile);
   await page.screenshot({
-    path: `docs/verification/screenshots/login-${testInfo.project.name}.png`,
+    path: `test-results/screenshots/login-${testInfo.project.name}.png`,
     fullPage: true,
   });
 
@@ -63,7 +63,7 @@ test("renders login, workspace, and administration at the supported viewport", a
   await expect(page).toHaveURL(/\/home$/u);
   await expectStableLayout(page, mobile);
   await page.screenshot({
-    path: `docs/verification/screenshots/home-${testInfo.project.name}.png`,
+    path: `test-results/screenshots/home-${testInfo.project.name}.png`,
     fullPage: true,
   });
 
@@ -76,7 +76,7 @@ test("renders login, workspace, and administration at the supported viewport", a
   await expect(page.getByRole("heading", { name: "成员管理" })).toBeVisible();
   await expectStableLayout(page, mobile);
   await page.screenshot({
-    path: `docs/verification/screenshots/members-${testInfo.project.name}.png`,
+    path: `test-results/screenshots/members-${testInfo.project.name}.png`,
     fullPage: true,
   });
   diagnostics.assertClean();
