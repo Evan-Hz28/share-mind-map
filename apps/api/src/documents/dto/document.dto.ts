@@ -48,6 +48,25 @@ export class DocumentResponseDto {
   public document!: DocumentDto;
 }
 
+export class DocumentFolderCountDto {
+  @ApiProperty({ format: "uuid" })
+  public folderId!: string;
+
+  @ApiProperty()
+  public documentCount!: number;
+}
+
+export class DocumentCountsResponseDto {
+  @ApiProperty()
+  public total!: number;
+
+  @ApiProperty()
+  public unfiled!: number;
+
+  @ApiProperty({ type: [DocumentFolderCountDto] })
+  public folders!: DocumentFolderCountDto[];
+}
+
 export class DocumentDetailDto extends DocumentDto {
   @ApiProperty({ type: Object })
   public snapshot!: Record<string, unknown>;

@@ -13,6 +13,7 @@ import {
   deleteDocument as deleteWorkspaceDocument,
   deleteFolder as deleteWorkspaceFolder,
   getImportBatch,
+  listDocumentCounts,
   listDocuments,
   listFolders,
   listNotifications,
@@ -59,11 +60,26 @@ function importPollRounds(totalJobs: number): number {
   return Math.min(Math.max(600, Math.trunc(totalJobs) * 60), 7_200);
 }
 
+interface DocumentCountSummary {
+  total: number;
+  unfiled: number;
+  folderCounts: Record<string, number>;
+}
+
 interface WorkspaceState {
   workspaceId: string | null;
   folders: FolderDto[];
   documents: DocumentDto[];
   documentCursor: string | null;
+  /** 侧栏当前选中的范围:"all" / "unassigned" / 文件夹 id。 */
+  activeScope: string;
+  /** 文件夹范围自己的分页结果,和全局 documents 分开维护。 */
+  scopedDocuments: DocumentDto[];
+  scopedCursor: string | null;
+  scopedLoading: boolean;
+  /** 服务端返回的精确文档计数;null 表示还没拿到。 */
+  documentCounts: DocumentCountSummary | null;
+  scopeRequestSeq: number;
   sort: "updatedAt" | "name";
   loading: boolean;
   loadingMore: boolean;
@@ -94,6 +110,12 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
     folders: [],
     documents: [],
     documentCursor: null,
+    activeScope: "all",
+    scopedDocuments: [],
+    scopedCursor: null,
+    scopedLoading: false,
+    documentCounts: null,
+    scopeRequestSeq: 0,
     sort: "updatedAt",
     loading: false,
     loadingMore: false,
@@ -117,19 +139,27 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
   actions: {
     async loadWorkspace(workspaceId: string, sort?: "updatedAt" | "name"): Promise<void> {
       const requestedSort = sort ?? this.sort;
+      if (this.workspaceId !== null && this.workspaceId !== workspaceId) {
+        this.activeScope = "all";
+        this.scopedDocuments = [];
+        this.scopedCursor = null;
+        this.documentCounts = null;
+      }
       this.workspaceId = workspaceId;
       this.sort = requestedSort;
       this.loading = true;
       this.error = null;
       this.documentCursor = null;
       try {
-        const [folders, documents] = await Promise.all([
+        const [folders, documents, counts] = await Promise.all([
           listFolders({ client: apiClient, path: { workspaceId } }),
           listDocuments({
             client: apiClient,
             path: { workspaceId },
             query: { sort: requestedSort, limit: 50 },
           }),
+          // 计数是辅助信息,失败时不影响工作区主体加载。
+          listDocumentCounts({ client: apiClient, path: { workspaceId } }).catch(() => undefined),
         ]);
         if (folders.data === undefined || documents.data === undefined) {
           this.error = toApiFailure(folders.error ?? documents.error);
@@ -138,11 +168,99 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
         this.folders = folders.data.folders;
         this.documents = documents.data.documents;
         this.documentCursor = documents.data.nextCursor ?? null;
+        if (counts?.data !== undefined) this.applyDocumentCounts(counts.data);
+        if (this.activeScope !== "all") await this.loadScopedDocuments(this.activeScope);
       } catch {
         this.error = toApiFailure(undefined);
       } finally {
         this.loading = false;
       }
+    },
+
+    applyDocumentCounts(counts: {
+      total: number;
+      unfiled: number;
+      folders: Array<{ folderId: string; documentCount: number }>;
+    }): void {
+      const folderCounts: Record<string, number> = {};
+      for (const folder of counts.folders) folderCounts[folder.folderId] = folder.documentCount;
+      this.documentCounts = {
+        total: counts.total,
+        unfiled: counts.unfiled,
+        folderCounts,
+      };
+    },
+
+    async refreshDocumentCounts(): Promise<void> {
+      if (this.workspaceId === null) return;
+      try {
+        const result = await listDocumentCounts({
+          client: apiClient,
+          path: { workspaceId: this.workspaceId },
+        });
+        if (result.data !== undefined) this.applyDocumentCounts(result.data);
+      } catch {
+        // 计数失败不阻塞已经成功的增删改操作。
+      }
+    },
+
+    /**
+     * 切换侧栏范围。文件夹/未归档由服务端过滤并各自分页,
+     * 不再在已经加载的前 50 篇里做客户端筛选。
+     */
+    async setScope(scope: string): Promise<void> {
+      this.activeScope = scope;
+      this.scopeRequestSeq += 1;
+      this.scopedDocuments = [];
+      this.scopedCursor = null;
+      this.scopedLoading = false;
+      if (scope === "all") return;
+      await this.loadScopedDocuments(scope);
+    },
+
+    async loadScopedDocuments(scope: string, cursor: string | null = null): Promise<void> {
+      if (this.workspaceId === null || scope === "all") return;
+      const workspaceId = this.workspaceId;
+      const requestSeq = this.scopeRequestSeq + 1;
+      this.scopeRequestSeq = requestSeq;
+      if (cursor === null) this.scopedDocuments = [];
+      this.scopedLoading = true;
+      try {
+        const query =
+          scope === "unassigned"
+            ? { sort: this.sort, scope: "unfiled" as const, limit: 50 }
+            : { sort: this.sort, scope: "folder" as const, folderId: scope, limit: 50 };
+        const result = await listDocuments({
+          client: apiClient,
+          path: { workspaceId },
+          query: { ...query, ...(cursor === null ? {} : { cursor }) },
+        });
+        if (requestSeq !== this.scopeRequestSeq || this.activeScope !== scope) return;
+        if (result.data === undefined) {
+          this.error = toApiFailure(result.error);
+          return;
+        }
+        this.scopedDocuments =
+          cursor === null
+            ? result.data.documents
+            : [...this.scopedDocuments, ...result.data.documents];
+        this.scopedCursor = result.data.nextCursor ?? null;
+      } catch {
+        if (requestSeq === this.scopeRequestSeq) this.error = toApiFailure(undefined);
+      } finally {
+        if (requestSeq === this.scopeRequestSeq) this.scopedLoading = false;
+      }
+    },
+
+    async loadMoreScopedDocuments(): Promise<void> {
+      if (this.activeScope === "all" || this.scopedCursor === null || this.scopedLoading) return;
+      await this.loadScopedDocuments(this.activeScope, this.scopedCursor);
+    },
+
+    /** 文档增删改后刷新计数;当前正在看文件夹时顺手重拉它的第一页。 */
+    async refreshAfterDocumentMutation(): Promise<void> {
+      await this.refreshDocumentCounts();
+      if (this.activeScope !== "all") await this.loadScopedDocuments(this.activeScope);
     },
 
     async changeSort(sort: "updatedAt" | "name"): Promise<void> {
@@ -343,6 +461,12 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
           const target = document.folderId;
           return target === null || target === undefined || !removed.has(target);
         });
+        if (removed.has(this.activeScope)) {
+          this.activeScope = "all";
+          this.scopedDocuments = [];
+          this.scopedCursor = null;
+        }
+        await this.refreshAfterDocumentMutation();
         return true;
       } finally {
         this.mutating = false;
@@ -364,6 +488,7 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
           return false;
         }
         this.documents.unshift(result.data.document);
+        await this.refreshAfterDocumentMutation();
         return true;
       } finally {
         this.mutating = false;
@@ -389,6 +514,7 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
         }
         const index = this.documents.findIndex((document) => document.id === documentId);
         if (index >= 0) this.documents[index] = result.data.document;
+        await this.refreshAfterDocumentMutation();
         return true;
       } finally {
         this.mutating = false;
@@ -409,6 +535,7 @@ const useWorkspaceStoreDefinition = defineStore("workspace", {
           return false;
         }
         this.documents = this.documents.filter((document) => document.id !== documentId);
+        await this.refreshAfterDocumentMutation();
         return true;
       } finally {
         this.mutating = false;

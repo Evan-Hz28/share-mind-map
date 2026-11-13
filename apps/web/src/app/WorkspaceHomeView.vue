@@ -342,16 +342,12 @@ const folderSelectOptions = computed<Array<{ id: string; path: string; depth: nu
 const canReorderFolders = computed(
   () => canEdit.value && normalizedFolderQuery.value === "" && !workspace.mutating,
 );
-/**
- * A 段没有按文件夹查询的 API,这里只统计已加载的文档。
- * 文档数超过一页时,「全部文件」用 `50+` 标出还有未加载的部分。
- */
+/** 文档计数来自服务端,不再受「已加载前 50 篇」限制。 */
 const documentCounts = computed(() => {
   const counts = new Map<string, number>();
-  for (const document of workspace.documents) {
-    if (document.folderId === null || document.folderId === undefined) continue;
-    counts.set(document.folderId, (counts.get(document.folderId) ?? 0) + 1);
-  }
+  const source = workspace.documentCounts?.folderCounts;
+  if (source === undefined) return counts;
+  for (const [folderId, count] of Object.entries(source)) counts.set(folderId, count);
   return counts;
 });
 /** 文件夹计数按整棵子树聚合,侧栏能看出文件夹总共装了多少文档。 */
@@ -375,25 +371,15 @@ const directChildFolders = computed<FolderDto[]>(() => {
   if (selectedFolder.value === null) return [];
   return folderChildren.value.get(selectedFolder.value.id) ?? [];
 });
-const unassignedCount = computed(
-  () =>
-    workspace.documents.filter(
-      (document) => document.folderId === null || document.folderId === undefined,
-    ).length,
+const unassignedCount = computed(() => workspace.documentCounts?.unfiled ?? 0);
+const totalCountLabel = computed(() =>
+  String(workspace.documentCounts?.total ?? workspace.documents.length),
 );
-const totalCountLabel = computed(
-  () =>
-    `${String(workspace.documents.length)}${workspace.documentCursor === null ? "" : "+"}`,
-);
+/** 文件夹/未归档的范围数据由服务端按 scope 分页返回。 */
 const scopedDocuments = computed(() => {
   if (selectedFolderId.value === "all") return workspace.documents;
-  if (selectedFolderId.value === "unassigned") {
-    return workspace.documents.filter(
-      (document) => document.folderId === null || document.folderId === undefined,
-    );
-  }
   // 选中文件夹只看直接属于它的文档;子文件夹在内容区单独列出,点击再下钻。
-  return workspace.documents.filter((document) => document.folderId === selectedFolderId.value);
+  return workspace.scopedDocuments;
 });
 const visibleDocuments = computed(() => {
   const query = documentSearch.value.trim().toLocaleLowerCase("zh-CN");
@@ -412,15 +398,30 @@ const pagedDocuments = computed(() => {
 const pageNumbers = computed(() =>
   Array.from({ length: documentPageCount.value }, (_, index) => index + 1),
 );
+const activeDocumentCursor = computed(() =>
+  selectedFolderId.value === "all" ? workspace.documentCursor : workspace.scopedCursor,
+);
 watch([selectedFolderId, documentSearch, documentPageSize, () => workspace.sort], () => {
   documentPage.value = 1;
 });
+watch(
+  selectedFolderId,
+  (scope) => {
+    void workspace.setScope(scope);
+  },
+  { immediate: true },
+);
 watch(documentPageCount, (count) => {
   if (documentPage.value > count) documentPage.value = count;
 });
 
 function goToDocumentPage(page: number): void {
   documentPage.value = Math.min(Math.max(1, page), documentPageCount.value);
+}
+
+function loadMoreDocuments(): void {
+  if (selectedFolderId.value === "all") void workspace.loadMoreDocuments();
+  else void workspace.loadMoreScopedDocuments();
 }
 
 const showLibraryLayout = computed(
@@ -431,6 +432,7 @@ const showLibraryLayout = computed(
 );
 const documentEmptyMessage = computed(() => {
   if (documentSearch.value.trim() !== "") return "没有匹配的文档。";
+  if (selectedFolderId.value !== "all" && workspace.scopedLoading) return "正在加载文档…";
   if (selectedFolderId.value !== "all") return "此文件夹还没有文档。";
   return "暂无文档。";
 });
@@ -1213,7 +1215,7 @@ onUnmounted(() => {
                 <span class="library-tree__name" :title="row.folder.name">{{ row.folder.name }}</span>
                 <span
                   class="library-tree__count"
-                  :title="`已加载 ${folderCount(row.folder.id)} 篇`"
+                  :title="`${folderCount(row.folder.id)} 篇文档`"
                   >{{ folderCount(row.folder.id) }}</span
                 >
               </button>
@@ -1531,9 +1533,9 @@ onUnmounted(() => {
           <div class="library-footer__summary">
             <span
               >共 {{ visibleDocuments.length
-              }}{{ workspace.documentCursor === null ? "" : "+" }} 篇</span
+              }}{{ activeDocumentCursor === null ? "" : "+" }} 篇</span
             >
-            <ElButton v-if="workspace.documentCursor" text @click="workspace.loadMoreDocuments"
+            <ElButton v-if="activeDocumentCursor" text @click="loadMoreDocuments"
               >加载更多</ElButton
             >
           </div>

@@ -396,6 +396,12 @@ export type CsrfResponseDto = {
     readonly csrfToken: string;
 };
 
+export type DocumentCountsResponseDto = {
+    folders: Array<DocumentFolderCountDto>;
+    total: number;
+    unfiled: number;
+};
+
 export type DocumentDetailDto = {
     compatibilityStatus: 'full' | 'partial' | 'unsupported_online';
     createdAt: string;
@@ -429,6 +435,11 @@ export type DocumentDto = {
     schemaVersion: number;
     updatedAt: string;
     workspaceId: string;
+};
+
+export type DocumentFolderCountDto = {
+    documentCount: number;
+    folderId: string;
 };
 
 export type DocumentListResponseDto = {
@@ -1761,6 +1772,11 @@ export type ListDocumentsData = {
     };
     query?: {
         sort?: 'name' | 'updatedAt';
+        scope?: 'all' | 'folder' | 'unfiled';
+        /**
+         * Only used when scope=folder.
+         */
+        folderId?: string;
         cursor?: string;
         limit?: number;
     };
@@ -2115,6 +2131,27 @@ export type SaveDocumentSnapshotResponses = {
 };
 
 export type SaveDocumentSnapshotResponse = SaveDocumentSnapshotResponses[keyof SaveDocumentSnapshotResponses];
+
+export type ListDocumentCountsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Optional caller-provided request correlation identifier.
+         */
+        'X-Request-ID'?: string;
+    };
+    path: {
+        workspaceId: string;
+    };
+    query?: never;
+    url: '/api/v1/workspaces/{workspaceId}/documents/counts';
+};
+
+export type ListDocumentCountsResponses = {
+    200: DocumentCountsResponseDto;
+};
+
+export type ListDocumentCountsResponse = ListDocumentCountsResponses[keyof ListDocumentCountsResponses];
 
 export type CreateEditPermissionRequestData = {
     body?: never;

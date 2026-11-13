@@ -12,11 +12,27 @@ import {
   MinLength,
 } from "class-validator";
 
+export type DocumentListScope = "all" | "folder" | "unfiled";
+
 export class DocumentListQueryDto {
   @ApiPropertyOptional({ enum: ["updatedAt", "name"], default: "updatedAt" })
   @IsOptional()
   @IsIn(["updatedAt", "name"])
   public sort: "updatedAt" | "name" = "updatedAt";
+
+  @ApiPropertyOptional({ enum: ["all", "folder", "unfiled"], default: "all" })
+  @IsOptional()
+  @IsIn(["all", "folder", "unfiled"])
+  public scope: DocumentListScope = "all";
+
+  @ApiPropertyOptional({
+    type: String,
+    format: "uuid",
+    description: "Only used when scope=folder.",
+  })
+  @IsOptional()
+  @IsUUID("7")
+  public folderId?: string;
 
   @ApiPropertyOptional({ type: String })
   @IsOptional()

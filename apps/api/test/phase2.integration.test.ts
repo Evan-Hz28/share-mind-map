@@ -262,4 +262,93 @@ describe("Phase 2 workspace and permission APIs", () => {
     expect(auditQuery.status).toBe(200);
     expect(JSON.stringify(responseBody(auditQuery))).not.toContain("actorSessionId");
   });
+
+  it("filters document lists by folder scope and returns exact counts", async () => {
+    const workspace = workspaceId(admin);
+    const folderResponse = await request(runtime.server)
+      .post(`/api/v1/workspaces/${workspace}/folders`)
+      .set("Cookie", admin.cookie)
+      .set("X-CSRF-Token", admin.csrfToken)
+      .send({ name: "Scoped Folder" });
+    expect(folderResponse.status).toBe(201);
+    const folderId = (folderResponse.body as { folder: { id: string } }).folder.id;
+
+    const createDocument = async (
+      name: string,
+      targetFolderId: string | null,
+    ): Promise<void> => {
+      const created = await request(runtime.server)
+        .post(`/api/v1/workspaces/${workspace}/documents`)
+        .set("Cookie", admin.cookie)
+        .set("X-CSRF-Token", admin.csrfToken)
+        .send({ name, folderId: targetFolderId });
+      expect(created.status).toBe(201);
+    };
+    await createDocument("Scoped One", folderId);
+    await createDocument("Scoped Two", folderId);
+    await createDocument("Unfiled One", null);
+
+    const folderList = await request(runtime.server)
+      .get(
+        `/api/v1/workspaces/${workspace}/documents?scope=folder&folderId=${folderId}&sort=name`,
+      )
+      .set("Cookie", admin.cookie);
+    expect(folderList.status).toBe(200);
+    const folderDocuments = responseBody(folderList) as {
+      documents: Array<{ name: string; folderId: string | null }>;
+    };
+    expect(folderDocuments.documents.map((document) => document.name)).toEqual([
+      "Scoped One",
+      "Scoped Two",
+    ]);
+    expect(folderDocuments.documents.every((document) => document.folderId === folderId)).toBe(true);
+
+    const unfiledList = await request(runtime.server)
+      .get(`/api/v1/workspaces/${workspace}/documents?scope=unfiled`)
+      .set("Cookie", admin.cookie);
+    expect(unfiledList.status).toBe(200);
+    expect(
+      (responseBody(unfiledList) as { documents: Array<{ name: string }> }).documents.map(
+        (document) => document.name,
+      ),
+    ).toEqual(["Unfiled One"]);
+
+    const firstPage = await request(runtime.server)
+      .get(`/api/v1/workspaces/${workspace}/documents?scope=folder&folderId=${folderId}&sort=name&limit=1`)
+      .set("Cookie", admin.cookie);
+    expect(firstPage.status).toBe(200);
+    const firstPageBody = responseBody(firstPage) as {
+      documents: Array<{ name: string }>;
+      nextCursor: string | null;
+    };
+    expect(firstPageBody.documents.map((document) => document.name)).toEqual(["Scoped One"]);
+    expect(firstPageBody.nextCursor).not.toBeNull();
+    const secondPage = await request(runtime.server)
+      .get(
+        `/api/v1/workspaces/${workspace}/documents?scope=folder&folderId=${folderId}&sort=name&limit=1&cursor=${String(firstPageBody.nextCursor)}`,
+      )
+      .set("Cookie", admin.cookie);
+    expect(secondPage.status).toBe(200);
+    expect(
+      (responseBody(secondPage) as { documents: Array<{ name: string }> }).documents.map(
+        (document) => document.name,
+      ),
+    ).toEqual(["Scoped Two"]);
+
+    const missingFolder = await request(runtime.server)
+      .get(`/api/v1/workspaces/${workspace}/documents?scope=folder`)
+      .set("Cookie", admin.cookie);
+    expect(missingFolder.status).toBe(400);
+    expect(responseBody(missingFolder)).toMatchObject({ error: { code: "INVALID_INPUT" } });
+
+    const counts = await request(runtime.server)
+      .get(`/api/v1/workspaces/${workspace}/documents/counts`)
+      .set("Cookie", admin.cookie);
+    expect(counts.status).toBe(200);
+    expect(responseBody(counts)).toMatchObject({
+      total: 3,
+      unfiled: 1,
+      folders: [{ folderId, documentCount: 2 }],
+    });
+  });
 });

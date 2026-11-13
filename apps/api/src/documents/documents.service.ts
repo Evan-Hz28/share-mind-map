@@ -40,6 +40,7 @@ import type {
   UpdateDocumentDto,
 } from "./dto/document-input.dto.js";
 import type {
+  DocumentCountsResponseDto,
   DocumentDetailDto,
   DocumentDetailResponseDto,
   DocumentDto,
@@ -285,13 +286,34 @@ export class DocumentsService {
     query: DocumentListQueryDto,
   ): Promise<DocumentListResponseDto> {
     this.assertWorkspace(auth, workspaceId);
+    if (query.scope === "folder" && query.folderId === undefined) {
+      throw new ApiError("INVALID_INPUT");
+    }
     const result = await this.documents.list(this.database, {
       workspaceId,
+      scope: query.scope,
+      folderId: query.scope === "folder" ? (query.folderId ?? null) : null,
       sort: query.sort,
       limit: query.limit,
       cursor: query.cursor ?? null,
     });
     return { documents: result.documents.map(toDto), nextCursor: result.nextCursor };
+  }
+
+  public async counts(
+    auth: AuthContext,
+    workspaceId: string,
+  ): Promise<DocumentCountsResponseDto> {
+    this.assertWorkspace(auth, workspaceId);
+    const result = await this.documents.countByFolder(this.database, workspaceId);
+    return {
+      total: result.total,
+      unfiled: result.unfiled,
+      folders: result.folders.map((folder) => ({
+        folderId: folder.folderId,
+        documentCount: folder.documentCount,
+      })),
+    };
   }
 
   public async detail(

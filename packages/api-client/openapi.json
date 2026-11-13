@@ -1456,6 +1456,28 @@
         ],
         "type": "object"
       },
+      "DocumentCountsResponseDto": {
+        "properties": {
+          "folders": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentFolderCountDto"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "number"
+          },
+          "unfiled": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "folders",
+          "total",
+          "unfiled"
+        ],
+        "type": "object"
+      },
       "DocumentDetailDto": {
         "properties": {
           "compatibilityStatus": {
@@ -1590,6 +1612,22 @@
           "schemaVersion",
           "updatedAt",
           "workspaceId"
+        ],
+        "type": "object"
+      },
+      "DocumentFolderCountDto": {
+        "properties": {
+          "documentCount": {
+            "type": "number"
+          },
+          "folderId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "documentCount",
+          "folderId"
         ],
         "type": "object"
       },
@@ -4702,6 +4740,30 @@
           },
           {
             "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "folder",
+                "unfiled"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only used when scope=folder.",
+            "in": "query",
+            "name": "folderId",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
             "name": "cursor",
             "required": false,
             "schema": {
@@ -5532,6 +5594,45 @@
         "security": [
           {
             "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/counts": {
+      "get": {
+        "operationId": "listDocumentCounts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentCountsResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
             "sessionCookie": []
           }
         ],

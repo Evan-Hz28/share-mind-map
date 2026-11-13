@@ -38,6 +38,7 @@ import {
 } from "./dto/document-input.dto.js";
 import { DraftExportDto, SaveSnapshotDto } from "./dto/document-save.dto.js";
 import {
+  DocumentCountsResponseDto,
   DocumentDetailResponseDto,
   DocumentListResponseDto,
   DocumentResponseDto,
@@ -80,6 +81,18 @@ export class DocumentsController {
       input,
       getRequestId(request),
     );
+  }
+
+  @Get("counts")
+  @Roles("reader")
+  @ApiCookieAuth("sessionCookie")
+  @ApiOperation({ operationId: "listDocumentCounts" })
+  @ApiResponse({ status: 200, type: DocumentCountsResponseDto })
+  public counts(
+    @Param("workspaceId", new ParseUUIDPipe({ version: "7" })) workspaceId: string,
+    @Req() request: Request,
+  ): Promise<DocumentCountsResponseDto> {
+    return this.documents.counts(getAuthContext(request), workspaceId);
   }
 
   @Get(":documentId")

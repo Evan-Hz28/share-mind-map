@@ -143,14 +143,51 @@ function installWorkspaceApi(
               : jsonResponse({ folders: folderState }),
         );
       }
+      if (url.pathname.endsWith(`/workspaces/${workspaceId}/documents/counts`)) {
+        const documents = (options.documents ?? [documentRecord]) as Array<
+          Record<string, unknown>
+        >;
+        const folderCounts = new Map<string, number>();
+        let unfiled = 0;
+        for (const document of documents) {
+          const folderId = document.folderId;
+          if (typeof folderId === "string") {
+            folderCounts.set(folderId, (folderCounts.get(folderId) ?? 0) + 1);
+          } else {
+            unfiled += 1;
+          }
+        }
+        return Promise.resolve(
+          jsonResponse({
+            total: documents.length,
+            unfiled,
+            folders: [...folderCounts].map(([folderId, documentCount]) => ({
+              folderId,
+              documentCount,
+            })),
+          }),
+        );
+      }
       if (url.pathname.endsWith(`/workspaces/${workspaceId}/documents`)) {
+        const documents = (options.documents ?? [documentRecord]) as Array<
+          Record<string, unknown>
+        >;
+        const scope = url.searchParams.get("scope");
+        const folderId = url.searchParams.get("folderId");
+        const scoped =
+          scope === "unfiled"
+            ? documents.filter((document) => document.folderId === null)
+            : scope === "folder"
+              ? documents.filter((document) => document.folderId === folderId)
+              : documents;
+        const limit = Number(url.searchParams.get("limit") ?? 50);
         return Promise.resolve(
           options.failure
             ? apiError("PERMISSION_DENIED", "denied", 403)
             : options.requestFailure
               ? apiError("INTERNAL_ERROR", "failed", 500)
               : jsonResponse({
-                  documents: options.documents ?? [documentRecord],
+                  documents: scoped.slice(0, limit),
                   nextCursor: null,
                 }),
         );
@@ -263,7 +300,7 @@ describe("workspace home", () => {
     await userEvent.click(await screen.findByRole("button", { name: /^测试文件夹/u }));
 
     expect(screen.getByRole("heading", { level: 1, name: "测试文件夹" })).toBeInTheDocument();
-    expect(screen.getByRole("row", { name: /客户端登录用例/u })).toBeInTheDocument();
+    expect(await screen.findByRole("row", { name: /客户端登录用例/u })).toBeInTheDocument();
     expect(
       screen.queryByRole("row", { name: /ViewHistory客户端测试用例/u }),
     ).not.toBeInTheDocument();
@@ -272,6 +309,36 @@ describe("workspace home", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "全部文件" })).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /ViewHistory客户端测试用例/u })).toBeInTheDocument();
+  });
+
+  it("loads folder documents from the server instead of filtering the first page", async () => {
+    // 51 篇里文件夹文档排在最后,全局第一页(limit 50)取不到它;
+    // 文件夹视图必须靠服务端 scope 查询单独取回来。
+    const olderDocuments = Array.from({ length: 50 }, (_, index) => ({
+      ...documentRecord,
+      id: `00000000-0000-7000-8000-${String(200 + index).padStart(12, "0")}`,
+      name: `较早文档 ${String(index + 1).padStart(2, "0")}`,
+    }));
+    const folderDocument = {
+      ...documentRecord,
+      id: "00000000-0000-7000-8000-000000000099",
+      folderId: folder.id,
+      name: "第二页的文件夹文档",
+    };
+    installWorkspaceApi({
+      folders: [{ ...folder, parentId: null }],
+      documents: [...olderDocuments, folderDocument],
+    });
+    const rendered = await renderWorkspace();
+
+    expect(await screen.findByText("较早文档 01")).toBeInTheDocument();
+    expect(screen.queryByText("第二页的文件夹文档")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /^测试文件夹/u }));
+
+    expect(await screen.findByRole("row", { name: /第二页的文件夹文档/u })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "加载更多" })).not.toBeInTheDocument();
+    rendered.unmount();
   });
 
   it("renders the full folder path in the breadcrumb and under document names", async () => {
@@ -379,7 +446,7 @@ describe("workspace home", () => {
     const rootRow = screen
       .getByRole("button", { name: /^测试文件夹/u })
       .closest(".library-tree__row");
-    expect(within(rootRow as HTMLElement).getByTitle("已加载 2 篇")).toBeInTheDocument();
+    expect(within(rootRow as HTMLElement).getByTitle("2 篇文档")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /^测试文件夹/u }));
 
@@ -396,7 +463,7 @@ describe("workspace home", () => {
 
     await userEvent.click(within(subfolders).getByRole("button", { name: /^子目录/u }));
     expect(screen.getByRole("heading", { level: 1, name: "子目录" })).toBeInTheDocument();
-    expect(screen.getByRole("row", { name: /子目录用例/u })).toBeInTheDocument();
+    expect(await screen.findByRole("row", { name: /子目录用例/u })).toBeInTheDocument();
     expect(screen.queryByRole("row", { name: /深层用例/u })).not.toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: "子文件夹" })).getByRole("button", {
@@ -410,7 +477,7 @@ describe("workspace home", () => {
       }),
     );
     expect(screen.getByRole("heading", { level: 1, name: "深层目录" })).toBeInTheDocument();
-    expect(screen.getByRole("row", { name: /深层用例/u })).toBeInTheDocument();
+    expect(await screen.findByRole("row", { name: /深层用例/u })).toBeInTheDocument();
   });
 
   it("moves a folder into another folder when dropped on the middle of its row", async () => {

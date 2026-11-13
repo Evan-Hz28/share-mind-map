@@ -118,6 +118,8 @@ describe("folder and document repositories", () => {
     await createDocument("Second");
     const page = await documents.list(runtime.db, {
       workspaceId,
+      scope: "all",
+      folderId: null,
       sort: "name",
       limit: 1,
       cursor: null,
@@ -126,6 +128,8 @@ describe("folder and document repositories", () => {
     expect(page.nextCursor).not.toBeNull();
     const next = await documents.list(runtime.db, {
       workspaceId,
+      scope: "all",
+      folderId: null,
       sort: "name",
       limit: 1,
       cursor: page.nextCursor,

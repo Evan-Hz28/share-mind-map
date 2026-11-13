@@ -40,6 +40,12 @@ export interface DocumentListResult {
   nextCursor: string | null;
 }
 
+export interface DocumentCountResult {
+  total: number;
+  unfiled: number;
+  folders: Array<{ folderId: string; documentCount: number }>;
+}
+
 export interface DocumentDeletionResult {
   objectKeys: string[];
   documentCount: number;
@@ -550,6 +556,8 @@ export class DocumentRepository {
     database: Database,
     input: {
       workspaceId: string;
+      scope: "all" | "folder" | "unfiled";
+      folderId: string | null;
       sort: "updatedAt" | "name";
       limit: number;
       cursor: string | null;
@@ -557,13 +565,20 @@ export class DocumentRepository {
   ): Promise<DocumentListResult> {
     const limit = Math.min(Math.max(input.limit, 1), 100);
     const values: unknown[] = [input.workspaceId];
+    let scopeClause = "";
+    if (input.scope === "folder") {
+      values.push(input.folderId);
+      scopeClause = `AND folder_id = $${String(values.length)}::uuid`;
+    } else if (input.scope === "unfiled") {
+      scopeClause = "AND folder_id IS NULL";
+    }
     let cursorClause = "";
     if (input.cursor !== null) {
       const cursor = decodeCursor(input.cursor);
       values.push(cursor.sortValue, cursor.id);
       const sortColumn = input.sort === "name" ? "name_normalized" : "updated_at";
       const direction = input.sort === "name" ? ">" : "<";
-      cursorClause = `AND (${sortColumn}, id) ${direction} ($2, $3::uuid)`;
+      cursorClause = `AND (${sortColumn}, id) ${direction} ($${String(values.length - 1)}, $${String(values.length)}::uuid)`;
     }
     values.push(limit + 1);
     const sort = input.sort === "name" ? "name_normalized ASC, id ASC" : "updated_at DESC, id DESC";
@@ -571,7 +586,7 @@ export class DocumentRepository {
       `SELECT id, workspace_id, folder_id, name, name_normalized, current_version,
               schema_version, compatibility_status, node_count, image_bytes, created_by, updated_by, created_at, updated_at
        FROM documents
-       WHERE workspace_id = $1 AND trashed_at IS NULL ${cursorClause}
+       WHERE workspace_id = $1 AND trashed_at IS NULL ${scopeClause} ${cursorClause}
        ORDER BY ${sort}
        LIMIT $${String(values.length)}`,
       values,
@@ -588,6 +603,35 @@ export class DocumentRepository {
       });
     }
     return { documents, nextCursor };
+  }
+
+  public async countByFolder(
+    database: Database,
+    workspaceId: string,
+  ): Promise<DocumentCountResult> {
+    const result = await database.$client.query<{
+      folder_id: string | null;
+      count: number | string;
+    }>(
+      `SELECT folder_id, count(*)::int AS count
+       FROM documents
+       WHERE workspace_id = $1 AND trashed_at IS NULL
+       GROUP BY folder_id`,
+      [workspaceId],
+    );
+    let total = 0;
+    let unfiled = 0;
+    const folders: Array<{ folderId: string; documentCount: number }> = [];
+    for (const row of result.rows) {
+      const count = Number(row.count);
+      total += count;
+      if (row.folder_id === null) {
+        unfiled += count;
+      } else {
+        folders.push({ folderId: row.folder_id, documentCount: count });
+      }
+    }
+    return { total, unfiled, folders };
   }
 
   public async findDetail(

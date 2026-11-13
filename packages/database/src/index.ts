@@ -47,6 +47,7 @@ export {
 } from "./repositories/phase2.types.js";
 export {
   DocumentRepository,
+  type DocumentCountResult,
   type DocumentDetail,
   type DocumentListResult,
   type DocumentRecord,
